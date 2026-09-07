@@ -279,9 +279,12 @@ def search_memories(
         params.append(workspace_id)
     where = " AND ".join(clauses)
     limit_sql = f" LIMIT {int(limit)}" if limit is not None else ""
-    flat_columns = " ".join(_SELECT_MEMORY_COLUMNS.split())
+    # Prefix all memories columns with m. to avoid ambiguity with memories_fts.content
+    _SELECT_MEMORY_COLUMNS_PREFIXED = ", ".join(
+        f"m.{col.strip()}" for col in _SELECT_MEMORY_COLUMNS.split(",")
+    )
     sql = (
-        f"SELECT {flat_columns} "
+        f"SELECT {_SELECT_MEMORY_COLUMNS_PREFIXED} "
         f"FROM memories m JOIN memories_fts f ON f.rowid = m.rowid "
         f"WHERE {where} "
         f"ORDER BY rank, m.importance_score DESC{limit_sql}"
