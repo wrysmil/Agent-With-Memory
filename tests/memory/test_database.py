@@ -141,3 +141,70 @@ class TestSchema:
                 if r['pk'] > 0
             ]
         assert pk_cols == ['user_id', 'workspace_id']
+
+
+class TestFts5:
+    def test_memories_fts_table_exists(self, workspace: Path):
+        db = MemoryDatabase(workspace)
+        db.init_schema()
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'"
+            ).fetchone()
+        assert row is not None
+
+    def test_memories_fts_insert_trigger_works(self, workspace: Path):
+        db = MemoryDatabase(workspace)
+        db.init_schema()
+        now = "2026-09-07T10:00:00"
+        with db.connect() as conn:
+            conn.execute(
+                "INSERT INTO memories (id, content, subject, predicate, tags, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("m1", "用户喜欢 Python", "用户", "喜欢", '["编程"]', now, now),
+            )
+            count = conn.execute(
+                "SELECT COUNT(*) FROM memories_fts WHERE memories_fts MATCH ?",
+                ("Python",),
+            ).fetchone()[0]
+        assert count == 1
+
+    def test_memories_fts_delete_trigger_removes_entry(self, workspace: Path):
+        db = MemoryDatabase(workspace)
+        db.init_schema()
+        now = "2026-09-07T10:00:00"
+        with db.connect() as conn:
+            conn.execute(
+                "INSERT INTO memories (id, content, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                ("m1", "用户喜欢 Python", now, now),
+            )
+            conn.execute("DELETE FROM memories WHERE id = 'm1'")
+            count = conn.execute(
+                "SELECT COUNT(*) FROM memories_fts WHERE memories_fts MATCH ?",
+                ("Python",),
+            ).fetchone()[0]
+        assert count == 0
+
+    def test_memories_fts_update_trigger_reindexes(self, workspace: Path):
+        db = MemoryDatabase(workspace)
+        db.init_schema()
+        now = "2026-09-07T10:00:00"
+        with db.connect() as conn:
+            conn.execute(
+                "INSERT INTO memories (id, content, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                ("m1", "用户喜欢 Python", now, now),
+            )
+            conn.execute(
+                "UPDATE memories SET content = ? WHERE id = ?",
+                ("用户喜欢 Rust", "m1"),
+            )
+            py_count = conn.execute(
+                "SELECT COUNT(*) FROM memories_fts WHERE memories_fts MATCH ?",
+                ("Python",),
+            ).fetchone()[0]
+            rust_count = conn.execute(
+                "SELECT COUNT(*) FROM memories_fts WHERE memories_fts MATCH ?",
+                ("Rust",),
+            ).fetchone()[0]
+        assert py_count == 0
+        assert rust_count == 1

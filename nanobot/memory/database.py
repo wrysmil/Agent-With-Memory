@@ -95,6 +95,38 @@ _SCHEMA_STATEMENTS = [
         PRIMARY KEY (user_id, workspace_id)
     )
     """,
+    # ----- memories_fts + triggers -----
+    """
+    CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+        content,
+        subject,
+        predicate,
+        tags,
+        content='memories',
+        content_rowid='rowid',
+        tokenize='unicode61 remove_diacritics 2'
+    )
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+        INSERT INTO memories_fts(rowid, content, subject, predicate, tags)
+        VALUES (new.rowid, new.content, new.subject, new.predicate, new.tags);
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, subject, predicate, tags)
+        VALUES ('delete', old.rowid, old.content, old.subject, old.predicate, old.tags);
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, subject, predicate, tags)
+        VALUES ('delete', old.rowid, old.content, old.subject, old.predicate, old.tags);
+        INSERT INTO memories_fts(rowid, content, subject, predicate, tags)
+        VALUES (new.rowid, new.content, new.subject, new.predicate, new.tags);
+    END
+    """,
 ]
 
 
