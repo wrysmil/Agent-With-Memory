@@ -37,6 +37,13 @@ class TestAddMemory:
             row = conn.execute("SELECT id FROM memories WHERE id=?", ("m1",)).fetchone()
         assert row['id'] == 'm1'
 
+    def test_inserts_priority_column(self, db):
+        m = _sample(priority=MemoryPriority.SHORT_TERM)
+        with db.connect() as conn:
+            add_memory(conn, m)
+            row = conn.execute("SELECT priority FROM memories WHERE id=?", ("m1",)).fetchone()
+        assert row['priority'] == 'short_term'
+
     def test_inserts_with_complex_type_field(self, db):
         m = _sample(type=MemoryType.SKILL)
         with db.connect() as conn:
@@ -68,6 +75,7 @@ class TestGetMemory:
         assert m is not None
         assert m.id == "m1"
         assert m.type == MemoryType.PREFERENCE
+        assert m.priority == MemoryPriority.LONG_TERM
         assert m.tags == []
 
     def test_returns_none_when_missing(self, db):
