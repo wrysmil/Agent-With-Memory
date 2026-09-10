@@ -1661,6 +1661,7 @@ class SessionManager:
         self._overflow_cache: WeakValueDictionary[str, Session] = WeakValueDictionary()
         self._max_cached_sessions = SESSION_CACHE_MAX_SIZE
         self._delete_observer: Callable[[str], None] | None = None
+        self._delete_session_observer: Callable[[Session], None] | None = None
 
     def _remember(self, session: Session) -> None:
         """Keep recent sessions strongly cached without duplicating live objects."""
@@ -1689,6 +1690,18 @@ class SessionManager:
     def set_delete_observer(self, observer: Callable[[str], None]) -> None:
         """Observe explicit session deletion for process-local state cleanup."""
         self._delete_observer = observer
+
+    def set_delete_session_observer(self, observer: Callable[[Session], None]) -> None:
+        """Observe explicit session deletion with the pre-deletion session snapshot.
+
+        Distinct from :meth:`set_delete_observer`, which is a single slot that
+        only receives the deleted key. This observer receives the ``Session``
+        object captured from the cache before invalidation, so callers can run
+        finalization work (e.g. memory extraction) against the last known
+        transcript. It runs after the file is deleted, must not block, and any
+        exception it raises is contained here.
+        """
+        self._delete_session_observer = observer
 
     @staticmethod
     def safe_key(key: str) -> str:
@@ -1869,11 +1882,33 @@ class SessionManager:
 
     def delete_session(self, key: str) -> bool:
         """Delete a persisted session and invalidate its cache entry."""
+        # Capture before invalidation: the deletion observer needs the last
+        # known transcript, which the cache eviction below would discard.
+        captured = self.get_cached(key)
         self.invalidate(key)
         deleted = self._store.delete(key)
         if self._delete_observer is not None:
             self._delete_observer(key)
+        self._notify_delete_session_observer(key, captured)
         return deleted
+
+    def _notify_delete_session_observer(self, key: str, session: Session | None) -> None:
+        """Hand a captured session to the deletion observer without blocking.
+
+        Called from :meth:`delete_session` after the file is gone. Missing cache
+        entries (e.g. deletion of a never-loaded session) are skipped silently;
+        observer failures never surface to the caller.
+        """
+        observer = self._delete_session_observer
+        if observer is None:
+            return
+        if session is None:
+            logger.debug("No cached session for '{}'; skipping deletion observer", key)
+            return
+        try:
+            observer(session)
+        except Exception:
+            logger.warning("Session deletion observer failed for '{}'", key, exc_info=True)
 
     def restore_sessions_to_workspace(self) -> SessionRestoreResult:
         """Restore session files to the pre-relocation path for an explicit rollback."""

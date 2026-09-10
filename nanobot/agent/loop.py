@@ -123,10 +123,14 @@ if TYPE_CHECKING:
     )
     from nanobot.cron.service import CronService
     from nanobot.triggers.local_store import LocalTriggerStore
+    from nanobot.webui.memory_services import MemoryServices
 
 _T = TypeVar("_T")
 _SUBAGENT_PROVIDER_TASK_META = "subagent_provider_task_id"
 _SUBAGENT_TERMINAL_WAIT_SECONDS = 300.0
+# Workspace label for the SQLite memory store, matching the WebUI gateway
+# (``nanobot/webui/gateway_services.py`` uses the same literal).
+_MEMORY_WORKSPACE_ID = "default"
 
 
 class TurnKind(Enum):
@@ -304,6 +308,8 @@ class AgentLoop:
         local_trigger_store: LocalTriggerStore | None = None,
         idle_compact_check_interval_seconds: int = 0,
         recovery_admission: RecoveryAdmission | None = None,
+        memory_extraction_enabled: bool = False,
+        memory_services: MemoryServices | None = None,
     ):
         from nanobot.config.schema import ToolsConfig
 
@@ -446,11 +452,21 @@ class AgentLoop:
                 unified_session=unified_session,
             ),
         )
+        # Phase 2 memory extraction is opt-in (plan §12): with the flag off, no
+        # hook factory is registered, no deletion observer is installed and
+        # AutoCompact receives no Quick Facts callback, so behaviour is identical
+        # to the pre-extraction loop. Strong refs to in-flight deletion
+        # extraction tasks live here so the event loop cannot GC them early.
+        self._memory_extraction_tasks: set[asyncio.Task[Any]] = set()
+        quick_facts_hook: Callable[[Session], int] | None = None
+        if memory_extraction_enabled:
+            quick_facts_hook = self._wire_memory_extraction(memory_services)
         self.auto_compact = AutoCompact(
             sessions=self.sessions,
             consolidator=self.consolidator,
             session_ttl_minutes=session_ttl_minutes,
             bind_events=self._idle_events,
+            quick_facts_hook=quick_facts_hook,
         )
         self._idle_compact_check_interval_s = idle_compact_check_interval_seconds
         self._next_idle_compact_check_at = time.monotonic()
@@ -459,6 +475,116 @@ class AgentLoop:
         self._register_default_tools(provider_snapshot_loader=provider_snapshot_loader)
         self.commands = CommandRouter()
         register_builtin_commands(self.commands)
+
+    def _wire_memory_extraction(
+        self,
+        memory_services: MemoryServices | None,
+    ) -> Callable[[Session], int]:
+        """Wire Phase 2 memory extraction into this loop (plan §7.1, §9, §12).
+
+        Only invoked when ``memory_extraction_enabled`` is True. Registers the
+        per-turn hook factory (T0/T1/T5), the session-deletion observer (T2) and
+        returns the Quick Facts callback for ``AutoCompact`` (T3).
+
+        Every side effect here is failure-isolated: the hook factory, the
+        per-turn providers and the deletion task catch their own exceptions so
+        extraction failures never reach the agent main loop.
+
+        Returns:
+            ``Callable[[Session], int]`` bound to a regex-only ``MemoryExtractor``
+            (Quick Facts never calls the LLM).
+        """
+        from nanobot.agent.hooks.memory_extraction import (
+            create_memory_extraction_hook_factory,
+        )
+        from nanobot.memory.extractor import MemoryExtractor
+        from nanobot.memory.scratchpad_writer import ScratchpadWriter
+
+        services = memory_services or MemoryServices.for_workspace(
+            _MEMORY_WORKSPACE_ID,
+            self.workspace,
+        )
+        scratchpad_writer = ScratchpadWriter(
+            services.database,
+            workspace_id=services.workspace_id,
+        )
+
+        def _build_extractor(runtime: LLMRuntime) -> MemoryExtractor:
+            return MemoryExtractor(
+                services.database,
+                runtime,
+                workspace_id=services.workspace_id,
+            )
+
+        def _runtime_for_key(session_key: str) -> LLMRuntime | None:
+            """Resolve the session's LLM runtime; ``None`` degrades T5 to a warning."""
+            try:
+                session = self.sessions.get_or_create(session_key)
+                return self.runtime_for_session(session)
+            except Exception as exc:
+                logger.warning(
+                    "memory extraction: runtime resolution failed for session {}: {}",
+                    session_key,
+                    exc,
+                )
+                return None
+
+        def _extractor_provider(session_key: str) -> MemoryExtractor:
+            runtime = _runtime_for_key(session_key)
+            return _build_extractor(runtime if runtime is not None else self.llm_runtime())
+
+        self._hook_factories.append(
+            create_memory_extraction_hook_factory(
+                extractor_provider=_extractor_provider,
+                scratchpad_writer=scratchpad_writer,
+                runtime_provider=_runtime_for_key,
+            )
+        )
+
+        async def _extract_on_deletion(session: Session) -> None:
+            # ``recover_removed=False``: the session file is already deleted, so a
+            # removed-preset fallback must not re-save and resurrect it.
+            try:
+                runtime = self.runtime_for_session(session, recover_removed=False)
+            except Exception:
+                runtime = self.llm_runtime()
+            try:
+                await _build_extractor(runtime).extract_session(session, source="deletion")
+            except Exception:
+                logger.warning(
+                    "memory extraction failed for session {} source=deletion",
+                    session.key,
+                )
+                return
+            logger.info(
+                "memory extraction finished for session {} source=deletion",
+                session.key,
+            )
+
+        def _on_session_deleted(session: Session) -> None:
+            """T2 observer: non-blocking, only schedules a task on the running loop."""
+            try:
+                running = asyncio.get_running_loop()
+            except RuntimeError:
+                logger.debug(
+                    "memory extraction skipped on deletion: no running event loop for {}",
+                    session.key,
+                )
+                return
+            try:
+                task = running.create_task(_extract_on_deletion(session))
+            except Exception:
+                logger.exception(
+                    "memory extraction: failed to schedule deletion extraction for {}",
+                    session.key,
+                )
+                return
+            self._memory_extraction_tasks.add(task)
+            task.add_done_callback(self._memory_extraction_tasks.discard)
+
+        self.sessions.set_delete_session_observer(_on_session_deleted)
+
+        return _build_extractor(self.llm_runtime()).extract_quick_facts
 
     @classmethod
     def from_config(
