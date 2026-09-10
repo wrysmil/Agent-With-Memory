@@ -168,6 +168,7 @@ const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
   "apps",
   "automations",
   "skills",
+  "memory",
   "runtime",
   "advanced",
 ];

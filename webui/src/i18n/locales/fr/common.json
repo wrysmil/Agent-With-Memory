@@ -102,7 +102,8 @@
       "mcp": "MCP",
       "apps": "Applications",
       "automations": "Automatisations",
-      "skills": "Compétences"
+      "skills": "Compétences",
+      "memory": "Mémoire"
     },
     "sections": {
       "interface": "Interface utilisateur",

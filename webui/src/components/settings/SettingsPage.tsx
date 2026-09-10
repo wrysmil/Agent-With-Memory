@@ -9,6 +9,7 @@ import {
   ModelPresetDeleteDialog,
   ModelsSettings,
 } from "@/components/settings/models/ModelsSettings";
+import { MemorySection } from "@/components/settings/memory/MemorySection";
 import {
   ProviderOAuthLoginDialog,
   ProvidersSettings,
@@ -477,6 +478,8 @@ export function SettingsPage({
         );
       case "skills":
         return <SkillsCatalogSettings skills={skills} />;
+      case "memory":
+        return <MemorySection />;
       case "runtime":
         return (
           <RuntimeSettings

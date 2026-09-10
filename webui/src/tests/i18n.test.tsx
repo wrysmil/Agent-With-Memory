@@ -47,6 +47,7 @@ const SETTINGS_NAV_KEYS = [
   "automations",
   "runtime",
   "advanced",
+  "memory",
 ];
 const LOCALIZED_SETTINGS_COPY_KEYS = [
   "settings.backToChat",
