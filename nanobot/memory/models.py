@@ -26,6 +26,7 @@ class EpisodeOutcome(str, Enum):
     COMPLETED = 'completed'
     FAILED = 'failed'
     PARTIAL = 'partial'
+    ONGOING = 'ongoing'
 
 
 class EpisodeSource(str, Enum):
