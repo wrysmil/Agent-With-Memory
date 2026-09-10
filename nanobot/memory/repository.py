@@ -1,4 +1,15 @@
-"""SQLite CRUD 操作：memories / episodes / scratchpad。"""
+"""SQLite CRUD 操作：memories / episodes / scratchpad。
+
+Public API surface (all take a sqlite3.Connection as first arg):
+    memories:
+        add_memory, get_memory, list_memories, search_memories,
+        update_memory, delete_memory
+    episodes:
+        add_episode, get_episode, list_episodes, list_episodes_by_session,
+        update_episode, delete_episode
+    scratchpad:
+        upsert_scratchpad, get_scratchpad
+"""
 
 from __future__ import annotations
 
@@ -126,6 +137,65 @@ def delete_memory(conn: sqlite3.Connection, memory_id: str) -> None:
     conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
 
 
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
+
+
+def update_memory(
+    conn: sqlite3.Connection,
+    memory_id: str,
+    *,
+    content: str | None = None,
+    type: MemoryType | None = None,
+    priority: MemoryPriority | None = None,
+    importance_score: float | None = None,
+    tags: list[str] | None = None,
+    subject: str | None = None,
+    predicate: str | None = None,
+    confidence: float | None = None,
+    decay_rate: float | None = None,
+    expires_at: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Partially update a memory row by id.
+
+    FTS5 triggers keep ``memories_fts`` in sync. Raises ``KeyError`` if the
+    row does not exist.
+    """
+    sets: list[str] = []
+    params: list[Any] = []
+    now = _now_iso()
+    field_map: dict[str, Any] = {
+        "content": content,
+        "type": type.value if isinstance(type, MemoryType) else type,
+        "priority": priority.value if isinstance(priority, MemoryPriority) else priority,
+        "importance_score": importance_score,
+        "tags": json.dumps(tags, ensure_ascii=False) if tags is not None else None,
+        "subject": subject,
+        "predicate": predicate,
+        "confidence": confidence,
+        "decay_rate": decay_rate,
+        "expires_at": expires_at,
+        "metadata": json.dumps(metadata, ensure_ascii=False) if metadata is not None else None,
+    }
+    for column, value in field_map.items():
+        if value is None:
+            continue
+        sets.append(f"{column} = ?")
+        params.append(value)
+    sets.append("updated_at = ?")
+    params.append(now)
+    params.append(memory_id)
+    cur = conn.execute(
+        f"UPDATE memories SET {', '.join(sets)} WHERE id = ?",
+        params,
+    )
+    if cur.rowcount == 0:
+        raise KeyError(f"memory not found: {memory_id}")
+
+
 # ---------- episodes ----------
 
 _INSERT_EPISODE_SQL = """
@@ -204,6 +274,71 @@ def list_episodes_by_session(
     )
     rows = conn.execute(sql, (session_id,)).fetchall()
     return [_row_to_episode(r) for r in rows]
+
+
+def list_episodes(
+    conn: sqlite3.Connection,
+    *,
+    session_id: str | None = None,
+    limit: int | None = None,
+) -> list[Episode]:
+    """List episodes, most recent first. Optionally filter by session_id."""
+    flat = " ".join(_SELECT_EPISODE_COLUMNS.split())
+    clauses: list[str] = []
+    params: list[Any] = []
+    if session_id is not None:
+        clauses.append("session_id = ?")
+        params.append(session_id)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    limit_sql = f" LIMIT {int(limit)}" if limit is not None else ""
+    sql = (
+        f"SELECT {flat} FROM episodes {where} "
+        f"ORDER BY started_at DESC{limit_sql}"
+    )
+    rows = conn.execute(sql, params).fetchall()
+    return [_row_to_episode(r) for r in rows]
+
+
+def update_episode(
+    conn: sqlite3.Connection,
+    episode_id: str,
+    *,
+    summary: str | None = None,
+    goal: str | None = None,
+    outcome: EpisodeOutcome | None = None,
+    tags: list[str] | None = None,
+    importance_score: float | None = None,
+) -> None:
+    """Partially update an episode row by id. Raises KeyError if missing."""
+    sets: list[str] = []
+    params: list[Any] = []
+    field_map: dict[str, Any] = {
+        "summary": summary,
+        "goal": goal,
+        "outcome": outcome.value if isinstance(outcome, EpisodeOutcome) else outcome,
+        "tags": json.dumps(tags, ensure_ascii=False) if tags is not None else None,
+        "importance_score": importance_score,
+    }
+    for column, value in field_map.items():
+        if value is None:
+            continue
+        sets.append(f"{column} = ?")
+        params.append(value)
+    if not sets:
+        return
+    params.append(episode_id)
+    cur = conn.execute(
+        f"UPDATE episodes SET {', '.join(sets)} WHERE id = ?",
+        params,
+    )
+    if cur.rowcount == 0:
+        raise KeyError(f"episode not found: {episode_id}")
+
+
+def delete_episode(conn: sqlite3.Connection, episode_id: str) -> None:
+    cur = conn.execute("DELETE FROM episodes WHERE id = ?", (episode_id,))
+    if cur.rowcount == 0:
+        raise KeyError(f"episode not found: {episode_id}")
 
 
 # ---------- scratchpad ----------
