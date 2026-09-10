@@ -25,13 +25,15 @@ class AutoCompact:
 
     def __init__(self, sessions: SessionManager, consolidator: Consolidator,
                  session_ttl_minutes: int = 0,
-                 bind_events: SessionEventFactory | None = None):
+                 bind_events: SessionEventFactory | None = None,
+                 quick_facts_hook: Callable[[Session], int] | None = None):
         self.sessions = sessions
         self.consolidator = consolidator
         self._ttl = session_ttl_minutes
         self._archiving: set[str] = set()
         self._summaries: dict[str, SessionSummary] = {}
         self._bind_events = bind_events
+        self._quick_facts_hook = quick_facts_hook
 
     def _is_expired(self, ts: datetime | str | None,
                     now: datetime | None = None) -> bool:
@@ -91,6 +93,7 @@ class AutoCompact:
         if self._is_internal_session(key):
             self._archiving.discard(key)
             return
+        compacted = False
         try:
             summary = await self.consolidator.compact_idle_session(
                 key,
@@ -98,6 +101,7 @@ class AutoCompact:
                 max_suffix=self._RECENT_SUFFIX_MESSAGES,
                 events=self._bind_events(key) if self._bind_events else NO_EVENTS,
             )
+            compacted = True
             if summary and summary != "(nothing)":
                 session = self.sessions.get_or_create(key)
                 stored = session_summary_from_metadata(
@@ -110,6 +114,19 @@ class AutoCompact:
             logger.exception("Auto-compact: failed for {}", key)
         finally:
             self._archiving.discard(key)
+
+        if compacted:
+            self._run_quick_facts(key)
+
+    def _run_quick_facts(self, key: str) -> None:
+        """压缩成功后触发 Quick Facts 提取；无回调或失败均不影响压缩结果。"""
+        hook = self._quick_facts_hook
+        if hook is None:
+            return
+        try:
+            hook(self.sessions.get_or_create(key))
+        except Exception as exc:
+            logger.warning("Auto-compact: quick facts hook failed for {}: {}", key, exc)
 
     def prepare_session(self, session: Session, key: str) -> tuple[Session, SessionSummary | None]:
         if self._is_internal_session(key):
