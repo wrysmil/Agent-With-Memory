@@ -139,7 +139,7 @@ def is_ai_self_talk(content: str) -> bool:
 
 
 def compute_content_hash(content: str, subject: str, predicate: str) -> str:
-    """计算内容的 SHA256 哈希值（用于精确去重）。
+    """计算内容的 SHA-1 哈希值（用于精确去重）。
 
     哈希因子包含：
     - content: 记忆主体内容
@@ -152,7 +152,7 @@ def compute_content_hash(content: str, subject: str, predicate: str) -> str:
         predicate: 谓词。
 
     Returns:
-        40 位 SHA1 十六进制字符串（取 SHA256 前 20 字节，hexlify 产生 40 字符）。
+        SHA-1 hex digest of ``content|subject|predicate`` (40 chars).
     """
     normalized = f"{content.strip()}|{subject.strip()}|{predicate.strip()}"
     return hashlib.sha1(normalized.encode("utf-8")).hexdigest()

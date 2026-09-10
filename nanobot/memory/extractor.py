@@ -50,6 +50,7 @@ from nanobot.memory.repository import (
     add_memory,
     get_scratchpad,
     list_memories,
+    update_memory_source_episode,
 )
 
 if TYPE_CHECKING:
@@ -893,6 +894,18 @@ class MemoryExtractor:
                     saved_episode_ids.append(episode_id)
                 except Exception as exc:  # noqa: BLE001 - episode 失败不回滚已写 memory
                     logger.error("episode insert failed: {}", exc)
+                else:
+                    # FIX-6 Rev-M-4：反向回填 source_episode_id（同一事务）。
+                    # 单条失败仅 warning，不影响 episode 持久化或后续回填。
+                    for memory_id in linked_ids:
+                        try:
+                            update_memory_source_episode(conn, memory_id, episode_id)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "memory source_episode_id backfill failed for {}: {}",
+                                memory_id,
+                                exc,
+                            )
 
         return PersistenceResult(
             memory_ids=saved_memory_ids,

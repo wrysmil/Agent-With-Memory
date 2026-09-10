@@ -137,6 +137,26 @@ def delete_memory(conn: sqlite3.Connection, memory_id: str) -> None:
     conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
 
 
+def update_memory_source_episode(
+    conn: sqlite3.Connection,
+    memory_id: str,
+    episode_id: str,
+) -> None:
+    """反向回填：将 ``Memory.source_episode_id`` 设置为本次 episode 的 id。
+
+    FIX-6 Rev-M-4：阶段 4a 先写 memory 再写 episode，episode 才知道 linked_memory_ids；
+    反向回填在 episode 写入成功后逐条把 source_episode_id 写回对应 memory，
+    让任一 memory 行都能反查来源 episode。无行被更新（如 memory_id 不存在）时
+    ``rowcount == 0``，调用方负责记录 / 忽略。
+    """
+    cur = conn.execute(
+        "UPDATE memories SET source_episode_id = ? WHERE id = ?",
+        (episode_id, memory_id),
+    )
+    if cur.rowcount == 0:
+        raise KeyError(f"memory not found: {memory_id}")
+
+
 def _now_iso() -> str:
     from datetime import datetime, timezone
 
