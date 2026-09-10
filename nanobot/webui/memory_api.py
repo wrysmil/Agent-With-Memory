@@ -44,6 +44,7 @@ from nanobot.memory.repository import (
     update_memory as _repo_update_memory,
 )
 from nanobot.webui.memory_services import MemoryServices
+from nanobot.webui.settings_contracts import WebUISettingsError
 
 _DEFAULT_USER_ID = "default"
 _VALID_MEMORY_TYPES = {t.value for t in MemoryType}
@@ -51,13 +52,12 @@ _VALID_MEMORY_PRIORITIES = {p.value for p in MemoryPriority}
 _VALID_OUTCOMES = {o.value for o in EpisodeOutcome}
 
 
-class WebUIMemoryError(Exception):
-    """User-facing memory validation failure with explicit HTTP status."""
+class WebUIMemoryError(WebUISettingsError):
+    """User-facing memory validation failure with an explicit HTTP status.
 
-    def __init__(self, message: str, *, status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.status = status
+    Subclass of ``WebUISettingsError`` so the settings router's single error
+    path catches memory-domain failures alongside the rest of the settings API.
+    """
 
 
 # ---- payload converters -----------------------------------------------------

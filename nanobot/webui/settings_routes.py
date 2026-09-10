@@ -18,6 +18,7 @@ from nanobot.bus.queue import MessageBus
 from nanobot.channels.registry import load_channel_plugin
 from nanobot.channels.validation import validate_channel_config
 from nanobot.pairing import approve_code, deny_code, list_pending
+from nanobot.webui import memory_routes as memory_domain
 from nanobot.webui import settings_capabilities as capability_domain
 from nanobot.webui import settings_contracts as contracts
 from nanobot.webui import settings_models as model_domain
@@ -30,6 +31,7 @@ from nanobot.webui.mcp_presets_api import (
     ensure_mcp_oauth_server,
     mcp_presets_settings_action,
 )
+from nanobot.webui.memory_routes import MemorySettingsOperations
 from nanobot.webui.nanobot_features_api import (
     nanobot_feature_instance_target,
     nanobot_features_action,
@@ -61,6 +63,7 @@ from nanobot.webui.settings_contracts import (
     QueryParams,
     SettingsRequest,
     SettingsRouteResult,
+    WebUISettingsError,
 )
 from nanobot.webui.settings_services import WebUISettingsServices
 from nanobot.webui.version_check import check_for_update
@@ -141,11 +144,33 @@ _SYSTEM_ROUTES = {
     "/api/settings/pairing/deny": "pairing-deny",
     "/api/settings/mcp-presets": "mcp-list",
     "/api/settings/version-check": "version-check",
+    "/api/settings/memory/memories": "memory-list",
+    "/api/settings/memory/memories/search": "memory-search",
+    "/api/settings/memory/memories/get": "memory-get",
+    "/api/settings/memory/memories/create": "memory-create",
+    "/api/settings/memory/memories/update": "memory-update",
+    "/api/settings/memory/memories/delete": "memory-delete",
+    "/api/settings/memory/episodes": "episode-list",
+    "/api/settings/memory/episodes/get": "episode-get",
+    "/api/settings/memory/episodes/update": "episode-update",
+    "/api/settings/memory/episodes/delete": "episode-delete",
+    "/api/settings/memory/scratchpad": "scratchpad-get",
+    "/api/settings/memory/scratchpad/save": "scratchpad-save",
+    "/api/settings/memory/stats": "memory-stats",
     **{
         path: f"mcp-{action}"
         for path, action in _MCP_PRESET_ACTIONS_BY_PATH.items()
     },
 }
+
+_MEMORY_MUTATION_PATHS = frozenset({
+    "/api/settings/memory/memories/create",
+    "/api/settings/memory/memories/update",
+    "/api/settings/memory/memories/delete",
+    "/api/settings/memory/episodes/update",
+    "/api/settings/memory/episodes/delete",
+    "/api/settings/memory/scratchpad/save",
+})
 
 _SETTINGS_MUTATION_PATHS = frozenset({
     "/api/settings/update",
@@ -179,6 +204,7 @@ _SETTINGS_MUTATION_PATHS = frozenset({
     "/api/settings/mcp-oauth/complete",
     "/api/settings/mcp-oauth/cancel",
     *_MCP_PRESET_ACTIONS_BY_PATH,
+    *_MEMORY_MUTATION_PATHS,
 })
 
 
@@ -208,6 +234,30 @@ def _payload_query(payload: dict[str, Any]) -> QueryParams:
     }
 
 
+def _null_memory_operations() -> MemorySettingsOperations:
+    """Fallback operations so the memory domain still responds when the
+    gateway hasn't injected a real store yet (everything returns 503)."""
+
+    def _unavailable(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise WebUISettingsError("memory service is not configured", status=503)
+
+    return MemorySettingsOperations(
+        list_memories=_unavailable,
+        search_memories=_unavailable,
+        fetch_memory=_unavailable,
+        list_episodes=_unavailable,
+        fetch_episode=_unavailable,
+        fetch_scratchpad=_unavailable,
+        fetch_stats=_unavailable,
+        create_memory=_unavailable,
+        update_memory=_unavailable,
+        delete_memory=_unavailable,
+        update_episode=_unavailable,
+        delete_episode=_unavailable,
+        save_scratchpad=_unavailable,
+    )
+
+
 class WebUISettingsRouter:
     """Authenticate and dispatch settings requests to transport-neutral domains."""
 
@@ -228,6 +278,7 @@ class WebUISettingsRouter:
         mcp_runtime_status: Callable[[], Mapping[str, str]] | None = None,
         mcp_reload: Callable[[], Awaitable[dict[str, Any]]] | None = None,
         mcp_oauth_redirect_uri: Callable[[WsRequest], str] | None = None,
+        memory_operations: MemorySettingsOperations | None = None,
     ) -> None:
         self.settings = settings
         self.bus = bus
@@ -251,6 +302,9 @@ class WebUISettingsRouter:
             logger,
         )
         self._system = system_domain.SystemSettingsHandler(settings, logger)
+        self._memory = memory_domain.MemorySettingsHandler(
+            memory_operations if memory_operations is not None else _null_memory_operations()
+        )
 
     async def dispatch(
         self,
@@ -312,6 +366,12 @@ class WebUISettingsRouter:
                 action,
                 domain_request,
                 self._capability_operations(),
+            )
+        elif action in memory_domain.MEMORY_ACTION_NAMES:
+            # Memory lives under the system route table; route it to its own
+            # transport-neutral handler with the injected operations.
+            result = await asyncio.to_thread(
+                lambda: self._memory.handle(action, domain_request),
             )
         else:
             channel_connect = _channel_connect_route(path)
