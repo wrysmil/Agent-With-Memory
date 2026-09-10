@@ -21,15 +21,66 @@ def db(tmp_path: Path) -> MemoryDatabase:
 # ------------------------------------------------------------------
 
 class TestScratchpadWriterInit:
-    def test_default_user_workspace(self, db):
-        writer = ScratchpadWriter(db)
-        assert writer.user_id == "default"
-        assert writer.workspace_id == "default"
+    def test_user_id_is_required(self, db):
+        """FIX-1: 缺 user_id 抛出 TypeError（防止串数据到默认用户）。"""
+        with pytest.raises(TypeError):
+            ScratchpadWriter(db)  # type: ignore[call-arg]
 
     def test_custom_user_workspace(self, db):
         writer = ScratchpadWriter(db, user_id="alice", workspace_id="proj-x")
         assert writer.user_id == "alice"
         assert writer.workspace_id == "proj-x"
+
+
+# ------------------------------------------------------------------
+# FIX-1 Sec-C-α: 不同 session_key 写入独立 row
+# ------------------------------------------------------------------
+
+
+class TestScratchpadWriterPerSessionKey:
+    """FIX-1: 不同 session_key 写入后应产生独立 scratchpad 行（用 chat_id 区分）。"""
+
+    def test_update_focus_isolates_per_session_key(self, db):
+        """两个不同 session_key 写 focus，scratchpad 表产生两行独立 row。"""
+        import asyncio
+
+        async def _run() -> None:
+            writer_a = ScratchpadWriter(
+                db,
+                user_id=ScratchpadWriter.user_id_for_key("telegram:chat-alice"),
+                workspace_id="ws",
+            )
+            writer_b = ScratchpadWriter(
+                db,
+                user_id=ScratchpadWriter.user_id_for_key("telegram:chat-bob"),
+                workspace_id="ws",
+            )
+            await writer_a.update_focus("telegram:chat-alice", "Alice 的任务")
+            await writer_b.update_focus("telegram:chat-bob", "Bob 的任务")
+
+        asyncio.run(_run())
+
+        with db.connect() as conn:
+            alice_entry = get_scratchpad(conn, "chat-alice", "ws")
+            bob_entry = get_scratchpad(conn, "chat-bob", "ws")
+            count = conn.execute("SELECT COUNT(*) FROM scratchpad").fetchone()[0]
+
+        assert count == 2
+        assert alice_entry is not None
+        assert bob_entry is not None
+        assert alice_entry.current_focus == "Alice 的任务"
+        assert bob_entry.current_focus == "Bob 的任务"
+        assert alice_entry.user_id == "chat-alice"
+        assert bob_entry.user_id == "chat-bob"
+
+    def test_user_id_for_key_parses_channel_chat_id(self):
+        """channel:chat_id 格式的 session_key 解析 user_id 为 chat_id。"""
+        assert ScratchpadWriter.user_id_for_key("telegram:chat-123") == "chat-123"
+        assert ScratchpadWriter.user_id_for_key("discord:user-abc") == "user-abc"
+
+    def test_user_id_for_key_falls_back_for_unknown_format(self):
+        """无 ':' 分隔符时回落到整体 session_key（向后兼容）。"""
+        assert ScratchpadWriter.user_id_for_key("plain-session") == "plain-session"
 
 
 # ------------------------------------------------------------------
@@ -40,7 +91,7 @@ class TestScratchpadWriterInit:
 class TestUpdateFocus:
     async def test_update_focus_sets_current_focus(self, db):
         """update_focus 后 get_scratchpad 读到 current_focus。"""
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
         await writer.update_focus(session_key="s1", new_focus="Implement authentication")
 
         with db.connect() as conn:
@@ -51,7 +102,7 @@ class TestUpdateFocus:
 
     async def test_update_focus_truncates_long_focus(self, db):
         """new_focus 超过 200 字符时被截断。"""
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
         long_focus = "x" * 500
         await writer.update_focus(session_key="s1", new_focus=long_focus)
 
@@ -64,7 +115,7 @@ class TestUpdateFocus:
 
     async def test_update_focus_rolls_old_focus_to_active_projects(self, db):
         """旧 focus 入 active_projects，带日期前缀。"""
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
 
         # 第一次更新
         await writer.update_focus(session_key="s1", new_focus="First task")
@@ -85,7 +136,7 @@ class TestUpdateFocus:
 
     async def test_update_focus_same_focus_no_duplicate(self, db):
         """两次相同 focus 不产生重复 active_projects 条目。"""
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
 
         await writer.update_focus(session_key="s1", new_focus="Same task")
         await writer.update_focus(session_key="s1", new_focus="Same task")
@@ -100,7 +151,7 @@ class TestUpdateFocus:
 
     async def test_update_focus_empty_to_non_empty(self, db):
         """从空 focus 更新到非空，不产生 active_projects 条目（无旧 focus 可归档）。"""
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
 
         await writer.update_focus(session_key="s1", new_focus="First focus")
 
@@ -113,7 +164,7 @@ class TestUpdateFocus:
 
     async def test_active_projects_max_5_entries(self, db):
         """active_projects 最多 5 条，超出时移除最旧的。"""
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
 
         # 更新 7 次，产生 6 个 historical 项目
         for i in range(7):
@@ -153,7 +204,7 @@ class TestArchiveCompleted:
 
             upsert_scratchpad(conn, initial)
 
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
         await writer.archive_completed(resolved_items=["Q1: Auth bug", "Q3: UI glitch"])
 
         with db.connect() as conn:
@@ -177,7 +228,7 @@ class TestArchiveCompleted:
 
             upsert_scratchpad(conn, initial)
 
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
         await writer.archive_completed(resolved_items=[])
 
         with db.connect() as conn:
@@ -201,7 +252,7 @@ class TestArchiveCompleted:
 
             upsert_scratchpad(conn, initial)
 
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
         await writer.archive_completed(resolved_items=["Q9: Non-existent"])
 
         with db.connect() as conn:
@@ -225,7 +276,7 @@ class TestArchiveCompleted:
 
             upsert_scratchpad(conn, initial)
 
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
         await writer.archive_completed(resolved_items=["Q1", "Q99"])  # Q99 不存在
 
         with db.connect() as conn:

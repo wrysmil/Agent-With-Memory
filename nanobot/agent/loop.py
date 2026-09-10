@@ -504,10 +504,15 @@ class AgentLoop:
             _MEMORY_WORKSPACE_ID,
             self.workspace,
         )
-        scratchpad_writer = ScratchpadWriter(
-            services.database,
-            workspace_id=services.workspace_id,
-        )
+        # FIX-1 Sec-C-α：ScratchpadWriter 改为 per-session_key 闭包工厂，
+        # 从 session_key（格式 ``channel:chat_id``）派生 user_id，避免跨用户串数据。
+        # ``_scratchpad_writer_for_key`` 接受 ``session_key`` 返回 ``ScratchpadWriter``。
+        def _scratchpad_writer_for_key(session_key: str) -> ScratchpadWriter:
+            return ScratchpadWriter(
+                services.database,
+                user_id=ScratchpadWriter.user_id_for_key(session_key),
+                workspace_id=services.workspace_id,
+            )
 
         def _build_extractor(runtime: LLMRuntime) -> MemoryExtractor:
             return MemoryExtractor(
@@ -536,7 +541,7 @@ class AgentLoop:
         self._hook_factories.append(
             create_memory_extraction_hook_factory(
                 extractor_provider=_extractor_provider,
-                scratchpad_writer=scratchpad_writer,
+                scratchpad_writer_for_key=_scratchpad_writer_for_key,
                 runtime_provider=_runtime_for_key,
             )
         )

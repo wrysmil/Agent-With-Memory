@@ -70,7 +70,6 @@ if TYPE_CHECKING:
     from nanobot.memory.scratchpad_writer import ScratchpadWriter
     from nanobot.utils.llm_runtime import LLMRuntime
 
-
 # ---------------------------------------------------------------------------
 # 模块级后台任务强引用
 # ---------------------------------------------------------------------------
@@ -450,7 +449,8 @@ class MemoryExtractionHook(AgentHook):
 def create_memory_extraction_hook_factory(
     *,
     extractor_provider: Callable[[str], MemoryExtractor],
-    scratchpad_writer: ScratchpadWriter,
+    scratchpad_writer: ScratchpadWriter | None = None,
+    scratchpad_writer_for_key: Callable[[str], ScratchpadWriter] | None = None,
     runtime_provider: Callable[[str], LLMRuntime | None] | None = None,
 ) -> AgentTurnHookFactory:
     """返回 ``AgentTurnHookFactory``：从 ``AgentTurnHookContext`` 取 ``session_key``
@@ -458,7 +458,10 @@ def create_memory_extraction_hook_factory(
 
     Args:
         extractor_provider: ``session_key -> MemoryExtractor``，为每个会话解析提取器。
-        scratchpad_writer: 共享的 scratchpad 写入器。
+        scratchpad_writer: 共享的 scratchpad 写入器（向后兼容单实例场景，如单测）。
+        scratchpad_writer_for_key: ``session_key -> ScratchpadWriter``，FIX-1 Sec-C-α
+            推荐入口；优先使用本参数以实现 per-session 隔离。若两者同时给出，
+            ``scratchpad_writer_for_key`` 胜出。
         runtime_provider: 可选的 ``session_key -> LLMRuntime | None``，用于 T5 话题切换
             检测；缺省时回落 ``extractor.runtime``。
 
@@ -466,6 +469,15 @@ def create_memory_extraction_hook_factory(
         ``AgentTurnHookFactory``：``session_key`` 缺失或 provider 失败时返回 ``None``，
         由 ``build_agent_turn_hook`` 静默跳过。
     """
+    writer_factory = scratchpad_writer_for_key
+    if writer_factory is None:
+        if scratchpad_writer is None:
+            raise ValueError(
+                "create_memory_extraction_hook_factory requires either "
+                "scratchpad_writer or scratchpad_writer_for_key"
+            )
+        # 共享单实例：所有会话共用同一 writer（向后兼容单测 / 单用户场景）。
+        writer_factory = lambda _key: scratchpad_writer  # noqa: E731
 
     def _factory(context: AgentTurnHookContext) -> AgentHook | None:
         session_key = context.session_key
@@ -483,6 +495,15 @@ def create_memory_extraction_hook_factory(
         if extractor is None:
             return None
 
+        try:
+            writer = writer_factory(session_key)
+        except Exception:
+            logger.exception(
+                "memory extraction hook factory: scratchpad_writer_for_key failed for {}",
+                session_key,
+            )
+            return None
+
         runtime: LLMRuntime | None = None
         if runtime_provider is not None:
             try:
@@ -496,7 +517,7 @@ def create_memory_extraction_hook_factory(
         return MemoryExtractionHook(
             extractor,
             session_key,
-            scratchpad_writer,
+            writer,
             runtime=runtime,
         )
 

@@ -679,7 +679,22 @@ class TestFiltersAndPersistence:
             deletion_ep = get_episode(conn, deletion_result.episode_ids[0])
         assert default_ep is not None and default_ep.source is EpisodeSource.SESSION_END
         assert compress_ep is not None and compress_ep.source is EpisodeSource.CONTEXT_COMPRESS
-        assert deletion_ep is not None and deletion_ep.source is EpisodeSource.SESSION_END
+        assert deletion_ep is not None and deletion_ep.source is EpisodeSource.DELETION
+
+    async def test_deletion_source_persists_to_db_column(self, db):
+        """FIX-2 Sec-C-β：``source="deletion"`` 持久化后 DB 行 ``source`` 列 = ``"deletion"``。"""
+        provider = _FakeProvider(semantic=_semantic_json(), episode=EPISODE_JSON)
+        extractor = _make_extractor(db, provider)
+
+        result = await extractor.extract_session(_plain_session(), source="deletion")
+
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT source FROM episodes WHERE id = ?",
+                (result.episode_ids[0],),
+            ).fetchone()
+        assert row is not None
+        assert row["source"] == "deletion"
 
     @pytest.mark.parametrize(
         ("raw_outcome", "expected"),

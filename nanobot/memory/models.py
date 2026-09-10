@@ -33,6 +33,7 @@ class EpisodeSource(str, Enum):
     SESSION_END = 'session_end'
     CONTEXT_COMPRESS = 'context_compress'
     DAILY_CONSOLIDATION = 'daily_consolidation'
+    DELETION = 'deletion'
 
 
 def _default_now() -> str:

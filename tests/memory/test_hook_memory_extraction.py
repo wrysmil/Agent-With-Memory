@@ -361,7 +361,7 @@ class TestTopicChangeDetection:
     async def test_topic_change_archives_previous_focus_in_real_scratchpad(self, tmp_path: Path):
         db = MemoryDatabase(tmp_path)
         db.init_schema()
-        writer = ScratchpadWriter(db)
+        writer = ScratchpadWriter(db, user_id="default")
         # 预置上一轮 T0 写入的旧 focus
         await writer.update_focus("s1", "帮我写排序算法")
 

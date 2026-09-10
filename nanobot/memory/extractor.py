@@ -79,12 +79,12 @@ _VALID_PRIORITIES = frozenset(p.value for p in MemoryPriority)
 # L2 去重阈值（plan §5.2 防线3）
 _HIGH_SIMILARITY = 0.8
 
-# source 字符串 → EpisodeSource 映射（models.EpisodeSource 无 "deletion"，
-# 故 deletion 回落到 SESSION_END；详见模块 docstring 与交付说明）
+# source 字符串 → EpisodeSource 映射（FIX-2 Sec-C-β：``deletion`` 现在有专属枚举，
+# 不再折叠到 SESSION_END；保留 provenance 用于审计 / 调优）
 _SOURCE_MAP: dict[str, EpisodeSource] = {
     "session_end": EpisodeSource.SESSION_END,
     "context_compress": EpisodeSource.CONTEXT_COMPRESS,
-    "deletion": EpisodeSource.SESSION_END,
+    "deletion": EpisodeSource.DELETION,
     "daily_consolidation": EpisodeSource.DAILY_CONSOLIDATION,
 }
 

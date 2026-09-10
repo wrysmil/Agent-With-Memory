@@ -31,14 +31,14 @@ class ScratchpadWriter:
 
     Args:
         database: MemoryDatabase 实例。
-        user_id: 用户 ID，默认为 "default"。
+        user_id: 用户 ID，必传；用于跨用户隔离 scratchpad 行（FIX-1 Sec-C-α）。
         workspace_id: 工作区 ID，默认为 "default"。
     """
 
     def __init__(
         self,
         database: MemoryDatabase,
-        user_id: str = "default",
+        user_id: str,
         workspace_id: str = "default",
     ) -> None:
         self.database = database
@@ -48,6 +48,20 @@ class ScratchpadWriter:
     # ------------------------------------------------------------------
     # 内部工具
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def user_id_for_key(session_key: str) -> str:
+        """从 ``session_key``（格式 ``channel:chat_id``）派生 ``user_id``。
+
+        FIX-1 Sec-C-α：避免所有会话共用 ``"default"`` 导致的跨用户数据串扰。
+        对 ``channel:chat_id`` 格式返回 ``chat_id``；其他格式（如无冒号的单段 key）
+        整体回退，保证向后兼容。
+        """
+        if ":" in session_key:
+            _, _, tail = session_key.partition(":")
+            if tail:
+                return tail
+        return session_key
 
     @staticmethod
     def _now_iso() -> str:
@@ -86,10 +100,13 @@ class ScratchpadWriter:
         - active_projects 最多保留 MAX_ACTIVE_PROJECTS 条，超出时移除最旧条目
         - 同步执行，目标 < 50ms
 
-        注意：session_key 参数保留用于未来扩展（当前不使用）。
+        注意：实例的 ``user_id`` 决定 scratchpad 行的归属；``session_key`` 仅作
+        调用方签名兼容性保留（FIX-1 Sec-C-α：实际写入走 ``self.user_id``）。
+        生产应由调用方在构造 ``ScratchpadWriter`` 时用 ``user_id_for_key(session_key)``
+        派生 ``user_id``，确保不同会话得到独立 scratchpad 行。
 
         Args:
-            session_key: 当前会话标识（暂未使用）。
+            session_key: 当前会话标识（保留以兼容调用方；实际不参与行定位）。
             new_focus: 新的当前焦点描述。
         """
         old_focus: str = ""
