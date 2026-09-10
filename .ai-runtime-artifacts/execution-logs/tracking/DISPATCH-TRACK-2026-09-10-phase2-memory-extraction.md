@@ -108,5 +108,6 @@ Detail: 派 WU-10 review+security 合并修 → coder（agent a05693a97e2fead17�
 范围:6 项(FIX-1 Sec-C-α scratchpad per-session / FIX-2 Sec-C-β EpisodeSource.DELETION / FIX-3 Sec-M-1 ActionNode 截断+redact / FIX-4 Sec-M-2 importance/content/tags 钳制 / FIX-5 Rev-M-1 docstring / FIX-6 Rev-M-4 source_episode_id 回填)
 Closeout: collective-test=done verdict=go | code-review=done verdict=needs-fixes | status=in_progress
 
-[2026-09-10] WORKTREE-CLOSE | Leader | Status: pending
-Detail: worktree remove 并汇报（待 WU-10 完成后）
+[2026-09-11] WORKTREE-CLOSE | Leader | Status: done
+Detail: 无 worktree（feature/memory-system 直接在主工作树）；4 commit 已推送 origin/feature/memory-system（c02c23b/996ac7c/2769eae/b14415e），HEAD = b14415e
+Action: gh CLI token 已用于本次 push；建议在 GitHub Settings → Personal access tokens 撤销（已暴露在会话历史中）
