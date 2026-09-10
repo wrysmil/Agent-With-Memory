@@ -85,20 +85,28 @@ Evidence: tests/memory/test_quick_facts.py 17 passed
 
 ### WU-09: 端到端集成测试
 
-[2026-09-10] DISPATCH-GROUP-4 | Leader | Status: pending
-Detail: 派发 WU-09 → test-engineer，依赖 WU-06,07,08
+[2026-09-10] DISPATCH-GROUP-4 | Leader | Status: done
+Detail: agent ad982bfa47f2abb04 → tests/memory/test_extraction_integration.py(8 用例)
+Evidence: pytest tests/memory/test_extraction_integration.py -v → 8 passed; pytest tests/memory/ -q → 306 passed; pytest tests/memory/ tests/agent/test_memory_store.py -q → 353 passed(基线 345 + WU-09 +8); ruff check → All checks passed
+Notes: 测试侧 2 处合理调整(非实现偏离) — ①FTS5 "uv" 仅命中 PREFERENCE 行,改用 "用户" 同时覆盖 FACT/PREFERENCE;②`extract_session` 不写 scratchpad(T0 路径由 hook after_run 驱动),测试显式 `writer.update_focus` 模拟 T0
 
 ---
 
 ## CLOSE-OUT（尾盘）
 
-[2026-09-10] CLOSE-A-TEST | Leader | Status: pending
-Detail: 集体测试 collective-test
-Closeout: collective-test=pending verdict=n/a | code-review=pending verdict=n/a | status=pending
+[2026-09-10] CLOSE-A-TEST | Leader | Status: done
+Detail: pytest 全量 9 failed(全部 pre-existing MCP/TUI/web_fetch)/ MemoryStore 47 pass / Phase 1 SQLite 46 pass / Phase 2 子集 5 failed(Pydantic ToolsConfig 顺序敏感,pre-existing)/ ruff 25 errors pre-existing / basedpyright 1355 errors pre-existing / prompts snapshot 已记录
+Evidence: .ai-runtime-artifacts/verifications/2026-09-10-phase2-memory-extraction-collective-test.{log,md}
+Verdict: go(Phase 2 自身 0 回归)
 
-[2026-09-10] CLOSE-B-REVIEW | Leader | Status: pending
-Detail: 并行审查：reviewer + security-auditor（perf-auditor 按需）
-Closeout: collective-test=pending verdict=n/a | code-review=pending verdict=n/a | status=pending
+[2026-09-10] CLOSE-B-REVIEW | Leader | Status: done
+Detail: reviewer → no-go(2 critical 均为 Phase 3 延后项 plan §14,合理)/ security-auditor → needs-fixes(2 critical 真实待爆缺陷,默认 False 不触发)
+Evidence: .ai-runtime-artifacts/reviews/2026-09-10-phase2-memory-extraction-{code,security}-review.md
+
+[2026-09-10] CLOSE-WU10-FIX | Leader | Status: in_progress
+Detail: 派 WU-10 review+security 合并修 → coder（agent a05693a97e2fead17）
+范围:6 项(FIX-1 Sec-C-α scratchpad per-session / FIX-2 Sec-C-β EpisodeSource.DELETION / FIX-3 Sec-M-1 ActionNode 截断+redact / FIX-4 Sec-M-2 importance/content/tags 钳制 / FIX-5 Rev-M-1 docstring / FIX-6 Rev-M-4 source_episode_id 回填)
+Closeout: collective-test=done verdict=go | code-review=done verdict=needs-fixes | status=in_progress
 
 [2026-09-10] WORKTREE-CLOSE | Leader | Status: pending
-Detail: worktree remove 并汇报
+Detail: worktree remove 并汇报（待 WU-10 完成后）
