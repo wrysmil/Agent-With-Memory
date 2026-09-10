@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import uuid4
 
 from loguru import logger
@@ -79,6 +80,30 @@ _VALID_PRIORITIES = frozenset(p.value for p in MemoryPriority)
 # L2 去重阈值（plan §5.2 防线3）
 _HIGH_SIMILARITY = 0.8
 
+# FIX-3 Sec-M-1: ActionNode 输入/输出截断阈值（防凭据外发注入攻击）
+ACTION_NODE_INPUT_MAX_CHARS = 512
+ACTION_NODE_OUTPUT_MAX_CHARS = 2048
+
+# FIX-3 Sec-M-1: 凭据/密钥/令牌脱敏模式；命中即替换为占位符，
+# 然后再按上面的 OUTPUT_MAX_CHARS 截断。
+_REDACT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    # ``key=value`` / ``key: value`` / ``"key": "value"``（JSON 风格）均匹配
+    (re.compile(
+        r"(?i)(?P<k>api[_-]?key|secret|password|token)\s*[\"']?\s*[=:]\s*[\"']?\s*\S+"
+    ), "<redacted>"),
+    (re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]+"), "Bearer <redacted>"),
+    (re.compile(
+        r"(?i)(aws[_-]?access[_-]?key[_-]?id|aws[_-]?secret)\s*[\"']?\s*[=:]\s*[\"']?\s*\S+"
+    ), "<redacted>"),
+]
+
+# FIX-4 Sec-M-2: 数值与字符串字段值域校验（防 LLM 输出 NaN/Inf / 巨型字符串）
+CONTENT_MAX_CHARS = 8192
+TAGS_MAX_ITEMS = 32
+SUBJECT_MAX_CHARS = 256
+PREDICATE_MAX_CHARS = 256
+DEFAULT_IMPORTANCE = 0.7
+
 # source 字符串 → EpisodeSource 映射（FIX-2 Sec-C-β：``deletion`` 现在有专属枚举，
 # 不再折叠到 SESSION_END；保留 provenance 用于审计 / 调优）
 _SOURCE_MAP: dict[str, EpisodeSource] = {
@@ -97,6 +122,10 @@ _SOURCE_MAP: dict[str, EpisodeSource] = {
 @dataclass
 class ActionNode:
     """系统提取的单个工具调用节点。"""
+
+    # FIX-3 Sec-M-1: 输入/输出大小上限（脱敏后截断）
+    INPUT_MAX_CHARS: ClassVar[int] = ACTION_NODE_INPUT_MAX_CHARS
+    OUTPUT_MAX_CHARS: ClassVar[int] = ACTION_NODE_OUTPUT_MAX_CHARS
 
     tool: str
     input: str = ""
@@ -248,8 +277,27 @@ def _extract_tool_call(call: Any) -> tuple[str, str, str]:
     return str(name), args_str, str(call_id)
 
 
+def _redact(text: str) -> str:
+    """FIX-3 Sec-M-1：用占位符替换常见凭据 / 密钥 / 令牌模式。"""
+    for pattern, replacement in _REDACT_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def _truncate(text: str, limit: int) -> str:
+    """FIX-3 Sec-M-1：按 ``limit`` 截断字符串并附加 truncated 标记。"""
+    if len(text) <= limit:
+        return text
+    extra = len(text) - limit
+    return text[:limit] + f"...[truncated {extra} chars]"
+
+
 def _collect_action_nodes(messages: list[dict[str, Any]]) -> list[ActionNode]:
-    """扫描 assistant 消息中的 tool_calls，结合 tool 结果消息生成 ActionNode。"""
+    """扫描 assistant 消息中的 tool_calls，结合 tool 结果消息生成 ActionNode。
+
+    FIX-3 Sec-M-1：构造前对 input/output 先脱敏，再按 INPUT_MAX_CHARS /
+    OUTPUT_MAX_CHARS 截断，防止凭据随 action_nodes 持久化进入 episode。
+    """
     results: dict[str, str] = {}
     for msg in messages:
         if msg.get("role") != "tool":
@@ -273,8 +321,8 @@ def _collect_action_nodes(messages: list[dict[str, Any]]) -> list[ActionNode]:
             nodes.append(
                 ActionNode(
                     tool=name,
-                    input=args,
-                    output=output,
+                    input=_truncate(_redact(args), ActionNode.INPUT_MAX_CHARS),
+                    output=_truncate(_redact(output), ActionNode.OUTPUT_MAX_CHARS),
                     success=not _looks_like_error(output),
                 )
             )
@@ -331,24 +379,49 @@ def _json_candidates(text: str) -> list[str]:
 def _coerce_memory_item(raw: Any) -> LLMMemoryItem | None:
     if not isinstance(raw, dict):
         return None
-    content = str(raw.get("content") or "").strip()
-    if not content:
+    # FIX-4 Sec-M-2：content 长度上限 + 截断标记（防 LLM 输出巨型字符串）
+    raw_content = str(raw.get("content") or "").strip()
+    if not raw_content:
         return None
+    if len(raw_content) > CONTENT_MAX_CHARS:
+        content = raw_content[:CONTENT_MAX_CHARS] + "...[truncated]"
+    else:
+        content = raw_content
+
     priority_raw = raw.get("priority")
     priority = str(priority_raw).strip() if priority_raw is not None else None
+
+    # FIX-4 Sec-M-2：importance 必须为有限数并位于 [0,1]；否则回落默认值
+    importance_raw = raw.get("importance", DEFAULT_IMPORTANCE)
     try:
-        importance = float(raw.get("importance", 0.7))
+        importance_value = float(importance_raw)
     except (TypeError, ValueError):
-        importance = 0.7
+        importance_value = DEFAULT_IMPORTANCE
+    if not math.isfinite(importance_value) or not (0.0 <= importance_value <= 1.0):
+        importance_value = DEFAULT_IMPORTANCE
+    importance = min(max(importance_value, 0.0), 1.0)
+
     tags_raw = raw.get("tags")
-    tags = [str(t) for t in tags_raw] if isinstance(tags_raw, list) else []
+    if isinstance(tags_raw, list):
+        tags_all = [str(t) for t in tags_raw]
+    else:
+        tags_all = []
+    # FIX-4 Sec-M-2：tags 条数上限（防 LLM 输出巨型标签列表）
+    tags = tags_all[:TAGS_MAX_ITEMS]
+
+    # FIX-4 Sec-M-2：subject / predicate 长度上限
+    subject_raw = str(raw.get("subject") or "").strip()
+    predicate_raw = str(raw.get("predicate") or "").strip()
+    subject = subject_raw[:SUBJECT_MAX_CHARS]
+    predicate = predicate_raw[:PREDICATE_MAX_CHARS]
+
     return LLMMemoryItem(
         content=content,
         type=str(raw.get("type") or "").strip(),
         priority=priority or None,
         importance=importance,
-        subject=str(raw.get("subject") or "").strip(),
-        predicate=str(raw.get("predicate") or "").strip(),
+        subject=subject,
+        predicate=predicate,
         tags=tags,
     )
 

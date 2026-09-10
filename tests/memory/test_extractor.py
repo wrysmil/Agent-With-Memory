@@ -21,6 +21,8 @@ from nanobot.memory.extractor import (
     LLMMemoryItem,
     MemoryExtractor,
     SystemExtractionResult,
+    _collect_action_nodes,
+    _coerce_memory_item,
 )
 from nanobot.memory.models import (
     EpisodeSource,
@@ -816,3 +818,193 @@ class TestContracts:
         assert episode.outcome is None
         assert episode.entities == []
         assert episode.importance == 0.7
+
+
+# ---------------------------------------------------------------------------
+# FIX-3 Sec-M-1: ActionNode redact + truncate
+# ---------------------------------------------------------------------------
+
+
+class TestCollectActionNodes:
+    """FIX-3 Sec-M-1: ActionNode 的 input/output 必须先 redact 再截断。"""
+
+    def test_redacts_api_key_in_output(self):
+        """含 ``api_key=xxx`` 的输出应被 ``<redacted>`` 替换。"""
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [_tool_call("bash", '{"cmd": "env"}', "c1")],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c1",
+                    "name": "bash",
+                    "content": "PATH=/usr/bin api_key=sk-live-abc123def",
+                },
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        assert len(nodes) == 1
+        assert "<redacted>" in nodes[0].output
+        assert "sk-live-abc123def" not in nodes[0].output
+
+    def test_redacts_bearer_token(self):
+        """``Bearer xxx`` 应被 ``Bearer <redacted>`` 替换。"""
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [_tool_call("bash", '{"cmd": "cat"}', "c1")],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c1",
+                    "name": "bash",
+                    "content": "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9",
+                },
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        assert len(nodes) == 1
+        assert "Bearer <redacted>" in nodes[0].output
+        assert "eyJhbGciOiJIUzI1NiJ9" not in nodes[0].output
+
+    def test_output_truncated_to_max_chars(self):
+        """超长 output 被截断到 OUTPUT_MAX_CHARS 并附 truncated 标记。"""
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [_tool_call("bash", '{"cmd": "yes"}', "c1")],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "c1",
+                    "name": "bash",
+                    "content": "x" * 5000,
+                },
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        from nanobot.memory.extractor import ActionNode
+
+        assert len(nodes) == 1
+        # 截断后实际内容 ≤ OUTPUT_MAX_CHARS；末尾追加 truncated 标记
+        assert nodes[0].output.startswith("x" * ActionNode.OUTPUT_MAX_CHARS)
+        assert "truncated" in nodes[0].output
+        # 原始 5000 字符不应完整出现
+        assert len(nodes[0].output) < 5000
+
+    def test_input_redacts_password(self):
+        """含 ``password=xxx`` 的入参应被 ``<redacted>`` 替换。"""
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        _tool_call("bash", '{"cmd": "login", "password": "p4ssw0rd!"}', "c1")
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "c1", "name": "bash", "content": "ok"},
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        assert len(nodes) == 1
+        assert "<redacted>" in nodes[0].input
+        assert "p4ssw0rd!" not in nodes[0].input
+
+
+# ---------------------------------------------------------------------------
+# FIX-4 Sec-M-2: 数值与字符串字段值域校验
+# ---------------------------------------------------------------------------
+
+
+class TestCoerceMemoryItem:
+    """FIX-4 Sec-M-2: importance/content/tags/subject/predicate 域校验。"""
+
+    def test_importance_nan_falls_back_to_default(self):
+        """``importance="nan"`` 回落默认值 0.7。"""
+        item = _coerce_memory_item(
+            {"content": "x", "type": "FACT", "importance": "nan"}
+        )
+        assert item is not None
+        assert item.importance == 0.7
+
+    def test_importance_inf_falls_back_to_default(self):
+        """``importance=1e400``（Inf）回落默认值 0.7。"""
+        item = _coerce_memory_item(
+            {"content": "x", "type": "FACT", "importance": "1e400"}
+        )
+        assert item is not None
+        assert item.importance == 0.7
+
+    def test_importance_negative_falls_back_to_default(self):
+        """``importance=-1`` 越界回落默认值 0.7（FIX-4 Sec-M-2：失败或越界 → 0.7）。"""
+        item = _coerce_memory_item(
+            {"content": "x", "type": "FACT", "importance": -1}
+        )
+        assert item is not None
+        assert item.importance == 0.7
+
+    def test_importance_above_one_falls_back_to_default(self):
+        """``importance=2.5`` 越界回落默认值 0.7。"""
+        item = _coerce_memory_item(
+            {"content": "x", "type": "FACT", "importance": 2.5}
+        )
+        assert item is not None
+        assert item.importance == 0.7
+
+    def test_content_truncated_when_over_max_chars(self):
+        """超长 content 截断 + truncated 标记。"""
+        from nanobot.memory.extractor import CONTENT_MAX_CHARS
+
+        long_content = "a" * (CONTENT_MAX_CHARS + 1000)
+        item = _coerce_memory_item({"content": long_content, "type": "FACT"})
+        assert item is not None
+        assert len(item.content) <= CONTENT_MAX_CHARS + len("...[truncated]")
+        assert item.content.endswith("...[truncated]")
+
+    def test_tags_truncated_when_over_max_items(self):
+        """超量 tags 截断到 TAGS_MAX_ITEMS。"""
+        from nanobot.memory.extractor import TAGS_MAX_ITEMS
+
+        many_tags = [f"tag-{i}" for i in range(TAGS_MAX_ITEMS + 100)]
+        item = _coerce_memory_item(
+            {"content": "x", "type": "FACT", "tags": many_tags}
+        )
+        assert item is not None
+        assert len(item.tags) == TAGS_MAX_ITEMS
+        assert item.tags[0] == "tag-0"
+        assert item.tags[-1] == f"tag-{TAGS_MAX_ITEMS - 1}"
+
+    def test_subject_truncated_when_over_max_chars(self):
+        """超长 subject 截断到 SUBJECT_MAX_CHARS。"""
+        from nanobot.memory.extractor import SUBJECT_MAX_CHARS
+
+        long_subject = "s" * (SUBJECT_MAX_CHARS + 500)
+        item = _coerce_memory_item(
+            {"content": "x", "type": "FACT", "subject": long_subject}
+        )
+        assert item is not None
+        assert len(item.subject) == SUBJECT_MAX_CHARS
+
+    def test_importance_valid_value_passes_through(self):
+        """合法值（0.5）原样保留。"""
+        item = _coerce_memory_item(
+            {"content": "x", "type": "FACT", "importance": 0.5}
+        )
+        assert item is not None
+        assert item.importance == 0.5
