@@ -1579,3 +1579,67 @@ export type Outbound =
        * generic websocket protocol for other clients. */
       webui?: true;
     };
+
+export type MemoryType = "fact" | "preference" | "skill" | "error" | "rule" | "experience";
+
+export type MemoryPriority = "short_term" | "long_term";
+
+export type EpisodeOutcome = "completed" | "partial" | "failed" | "ongoing";
+
+export interface MemoryPayload {
+  id: string;
+  content: string;
+  type: MemoryType;
+  priority: MemoryPriority;
+  source: "manual" | "extraction" | "consolidation";
+  importance_score: number;
+  access_count: number;
+  tags: string[];
+  subject: string;
+  predicate: string;
+  confidence: number;
+  decay_rate: number;
+  expires_at: string | null;
+  last_accessed_at: string | null;
+  superseded_by: string | null;
+  source_episode_id: string | null;
+  scope: string;
+  workspace_id: string;
+  created_at: string;
+  updated_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface EpisodePayload {
+  id: string;
+  session_id: string;
+  summary: string;
+  goal: string;
+  outcome: EpisodeOutcome;
+  source: string;
+  started_at: string;
+  ended_at: string;
+  action_nodes: Record<string, unknown>[];
+  entities: string[];
+  tools_used: string[];
+  linked_memory_ids: string[];
+  tags: string[];
+  importance_score: number;
+  access_count: number;
+}
+
+export interface ScratchpadPayload {
+  user_id: string;
+  workspace_id: string;
+  updated_at: string;
+  content: string;
+  active_projects: string[];
+  current_focus: string;
+  open_questions: string[];
+  next_steps: string[];
+}
+
+export interface MemoryStats {
+  total: number;
+  by_type: Record<MemoryType, number>;
+}

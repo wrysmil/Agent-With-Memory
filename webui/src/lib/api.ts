@@ -7,11 +7,16 @@ import type {
   ChannelValidationPayload,
   ChatSummary,
   CliAppsPayload,
+  EpisodePayload,
   FilePreviewPayload,
   ImageGenerationSettingsUpdate,
   McpPresetsPayload,
   McpOAuthFlowPayload,
   MarketplaceProvider,
+  MemoryPayload,
+  MemoryPriority,
+  MemoryStats,
+  MemoryType,
   NanobotFeaturesPayload,
   ModelConfigurationCreate,
   ModelConfigurationUpdate,
@@ -23,6 +28,7 @@ import type {
   ProviderOAuthLoginResult,
   ProviderSettingsUpdate,
   RecoveryState,
+  ScratchpadPayload,
   SessionDeleteResult,
   SessionHandle,
   SessionAutomationsPayload,
@@ -1078,4 +1084,210 @@ export async function updateTranscriptionSettings(
       max_upload_mb: update.maxUploadMb,
     },
   );
+}
+
+const MEMORY_BASE = "/api/settings/memory";
+
+export interface ListMemoriesOpts {
+  type?: MemoryType;
+  order?: "created" | "importance";
+  limit?: number;
+}
+
+export async function listMemories(
+  token: string,
+  opts: ListMemoriesOpts = {},
+  base: string = "",
+): Promise<{ items: MemoryPayload[] }> {
+  const params = new URLSearchParams();
+  if (opts.type) params.set("type", opts.type);
+  if (opts.order) params.set("order", opts.order);
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  return request<{ items: MemoryPayload[] }>(
+    `${base}${MEMORY_BASE}/memories${qs ? `?${qs}` : ""}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function searchMemories(
+  token: string,
+  query: string,
+  opts: { type?: MemoryType; limit?: number } = {},
+  base: string = "",
+): Promise<{ items: MemoryPayload[]; query: string }> {
+  const params = new URLSearchParams({ q: query });
+  if (opts.type) params.set("type", opts.type);
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  return request<{ items: MemoryPayload[]; query: string }>(
+    `${base}${MEMORY_BASE}/memories/search?${params.toString()}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function fetchMemory(
+  token: string,
+  id: string,
+  base: string = "",
+): Promise<{ memory: MemoryPayload }> {
+  return request<{ memory: MemoryPayload }>(
+    `${base}${MEMORY_BASE}/memories/get?id=${encodeURIComponent(id)}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function listEpisodes(
+  token: string,
+  opts: { session_id?: string; limit?: number } = {},
+  base: string = "",
+): Promise<{ items: EpisodePayload[] }> {
+  const params = new URLSearchParams();
+  if (opts.session_id) params.set("session_id", opts.session_id);
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  return request<{ items: EpisodePayload[] }>(
+    `${base}${MEMORY_BASE}/episodes${qs ? `?${qs}` : ""}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function fetchEpisode(
+  token: string,
+  id: string,
+  base: string = "",
+): Promise<{ episode: EpisodePayload }> {
+  return request<{ episode: EpisodePayload }>(
+    `${base}${MEMORY_BASE}/episodes/get?id=${encodeURIComponent(id)}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function fetchScratchpad(
+  token: string,
+  base: string = "",
+): Promise<{ scratchpad: ScratchpadPayload | null }> {
+  return request<{ scratchpad: ScratchpadPayload | null }>(
+    `${base}${MEMORY_BASE}/scratchpad`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function fetchMemoryStats(token: string, base: string = ""): Promise<MemoryStats> {
+  return request<MemoryStats>(
+    `${base}${MEMORY_BASE}/stats`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export interface CreateMemoryInput {
+  content: string;
+  type: MemoryType;
+  priority?: MemoryPriority;
+  importanceScore?: number;
+  tags?: string[];
+  subject?: string;
+  predicate?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export async function createMemory(
+  transport: WebUIMutationTransport,
+  input: CreateMemoryInput,
+): Promise<{ memory: MemoryPayload }> {
+  return mutation<{ memory: MemoryPayload }>(transport, "memory.create", {
+    content: input.content,
+    type: input.type,
+    ...(input.priority !== undefined ? { priority: input.priority } : {}),
+    ...(input.importanceScore !== undefined
+      ? { importance_score: input.importanceScore }
+      : {}),
+    ...(input.tags !== undefined ? { tags: input.tags } : {}),
+    ...(input.subject !== undefined ? { subject: input.subject } : {}),
+    ...(input.predicate !== undefined ? { predicate: input.predicate } : {}),
+    ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+  });
+}
+
+export interface MemoryPatch {
+  content?: string;
+  type?: MemoryType;
+  priority?: MemoryPriority;
+  importanceScore?: number;
+  tags?: string[];
+  subject?: string;
+  predicate?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export async function updateMemory(
+  transport: WebUIMutationTransport,
+  id: string,
+  patch: MemoryPatch,
+): Promise<{ memory: MemoryPayload }> {
+  return mutation<{ memory: MemoryPayload }>(transport, "memory.update", {
+    id,
+    ...(patch.content !== undefined ? { content: patch.content } : {}),
+    ...(patch.type !== undefined ? { type: patch.type } : {}),
+    ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+    ...(patch.importanceScore !== undefined
+      ? { importance_score: patch.importanceScore }
+      : {}),
+    ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
+    ...(patch.subject !== undefined ? { subject: patch.subject } : {}),
+    ...(patch.predicate !== undefined ? { predicate: patch.predicate } : {}),
+    ...(patch.metadata !== undefined ? { metadata: patch.metadata } : {}),
+  });
+}
+
+export async function deleteMemory(
+  transport: WebUIMutationTransport,
+  id: string,
+): Promise<{ ok: true }> {
+  return mutation<{ ok: true }>(transport, "memory.delete", { id });
+}
+
+export async function deleteEpisode(
+  transport: WebUIMutationTransport,
+  id: string,
+): Promise<{ ok: true }> {
+  return mutation<{ ok: true }>(transport, "episode.delete", { id });
+}
+
+export interface SaveScratchpadInput {
+  content: string;
+  activeProjects?: string[];
+  currentFocus?: string;
+  openQuestions?: string[];
+  nextSteps?: string[];
+}
+
+export async function saveScratchpad(
+  transport: WebUIMutationTransport,
+  input: SaveScratchpadInput,
+): Promise<{ scratchpad: ScratchpadPayload }> {
+  return mutation<{ scratchpad: ScratchpadPayload }>(transport, "scratchpad.save", {
+    content: input.content,
+    ...(input.activeProjects !== undefined
+      ? { active_projects: input.activeProjects }
+      : {}),
+    ...(input.currentFocus !== undefined ? { current_focus: input.currentFocus } : {}),
+    ...(input.openQuestions !== undefined
+      ? { open_questions: input.openQuestions }
+      : {}),
+    ...(input.nextSteps !== undefined ? { next_steps: input.nextSteps } : {}),
+  });
 }
