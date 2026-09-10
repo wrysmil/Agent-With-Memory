@@ -1,3 +1,46 @@
+---
+name: AGENTS
+description: Agent Harness 入口（覆盖层）+ nanobot 项目开发指南
+---
+
+# AGENTS.md
+
+项目背景：nanobot-ai（v0.3.0，Agent-With-Memory 仓库）是超轻量自托管的个人 AI agent 框架，Python ≥3.11 + asyncio 核心，配套 React/TypeScript WebUI 与终端 TUI。当前在 feature/memory-system 分支扩展记忆系统（WebUI 记忆管理 API + 前端 + phase-2 抽取）。
+
+> 必读：`harness-kit/core/routing.md`（路由判定、阶段门禁、按判定加载）
+> AI 入口顺序：1. 本文件 → 2. `harness-kit/core/routing.md` → 3. 平台适配器入口（`.claude/rules/`）
+
+## 强制声明
+
+每个任务首句必须以 `「Harness：<route>」` 开头；Tier 1+ 或 stage/route skill 次行追加 `Skills: <slug>@<path> loaded|skipped`。完整 route 表见 `harness-kit/core/routing.md`。
+
+## 产物落盘（强制）
+
+**所有 AI 过程产物必须写入 `.ai-runtime-artifacts/` 对应子目录，禁止写入其他位置。**
+
+| 产物类型 | 目录 |
+| --- | --- |
+| spec / 方案 | `.ai-runtime-artifacts/specs/` |
+| plan / 计划 | `.ai-runtime-artifacts/plans/` |
+| dispatch / 调度 | `.ai-runtime-artifacts/plans/`（同 stem 的 `*-dispatch.md`） |
+| verification / 验证 | `.ai-runtime-artifacts/verifications/` |
+| collective-test / 集体测试 | `.ai-runtime-artifacts/verifications/*-collective-test.md` |
+| review / 审查 | `.ai-runtime-artifacts/reviews/` |
+| execution-log / 执行日志 | `.ai-runtime-artifacts/execution-logs/` |
+| decision / 决策 | `.ai-runtime-artifacts/decisions/` |
+| retro / 复盘 | `.ai-runtime-artifacts/retros/` |
+| research / 调研 | `.ai-runtime-artifacts/research/` |
+
+**禁止：** 把产物写到 `docs/`、项目根目录或其他任意位置；把 plan 写到平台私有目录（如 `~/.claude/plans/`）；用 `docs/superpowers/` 代替 `.ai-runtime-artifacts/`。
+
+## 沟通语言
+
+对用户回复、子 Agent 派发、产物摘要、验收口径全部使用**中文**（代码标识符、路径、命令、API 名保留英文）。细则见 `routing.md` § 沟通语言。
+
+## 项目指南（nanobot 仓库原有内容，保留）
+
+---
+
 This file provides guidance to AI coding agents working with this repository.
 
 ## Project Overview

@@ -93,6 +93,10 @@ nano.*.save
 .env.*
 !.env.example
 
+# Agent Harness
+harness-kit/*
+.ai-runtime-artifacts/
+
 # Logs & temp
 *.log
 logs/
