@@ -4,16 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Mapping
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger as default_logger
 
 from nanobot.config.loader import get_config_path
+from nanobot.webui import memory_api
 from nanobot.webui.gateway_endpoint import WebUIGatewayEndpoint
 from nanobot.webui.gateway_tokens import GatewayTokenStore
 from nanobot.webui.ingress_policy import DEFAULT_WEBUI_INGRESS_POLICY, WebUIIngressPolicy
 from nanobot.webui.media_gateway import WebUIMediaGateway
+from nanobot.webui.memory_routes import MemorySettingsOperations
+from nanobot.webui.memory_services import MemoryServices
 from nanobot.webui.session_projection import WebUISessionProjection
 from nanobot.webui.settings_services import WebUISettingsServices
 from nanobot.webui.temporary_chats import WebUITemporaryChats
@@ -48,6 +52,30 @@ class GatewayServices:
     local_trigger_store: LocalTriggerStore | None
     cron_pending_job_ids: Callable[[str], set[str]] | None
     local_trigger_pending_ids: Callable[[str], set[str]] | None
+
+
+def build_memory_operations(
+    *,
+    workspace_id: str,
+    workspace_path: Path,
+) -> MemorySettingsOperations:
+    """Wire the real ``memory_api`` actions to a workspace-scoped database."""
+    services = MemoryServices.for_workspace(workspace_id, workspace_path)
+    return MemorySettingsOperations(
+        list_memories=partial(memory_api.list_memories_payload, services),
+        search_memories=partial(memory_api.search_memories_payload, services),
+        fetch_memory=partial(memory_api.fetch_memory_payload, services),
+        list_episodes=partial(memory_api.list_episodes_payload, services),
+        fetch_episode=partial(memory_api.fetch_episode_payload, services),
+        fetch_scratchpad=partial(memory_api.scratchpad_payload, services),
+        fetch_stats=partial(memory_api.stats_payload, services),
+        create_memory=partial(memory_api.create_memory, services),
+        update_memory=partial(memory_api.update_memory, services),
+        delete_memory=partial(memory_api.delete_memory, services),
+        update_episode=partial(memory_api.update_episode, services),
+        delete_episode=partial(memory_api.delete_episode, services),
+        save_scratchpad=partial(memory_api.save_scratchpad, services),
+    )
 
 
 def build_gateway_services(
@@ -128,6 +156,10 @@ def build_gateway_services(
         settings=settings,
         skills_workspace_path=workspace_path,
         disabled_skills=disabled_skills,
+        memory_operations=build_memory_operations(
+            workspace_id="default",
+            workspace_path=workspace_path,
+        ),
         cron_service=cron_service,
         local_trigger_store=local_trigger_store,
         cron_pending_job_ids=cron_pending_job_ids,

@@ -91,6 +91,7 @@ from nanobot.webui.http_utils import (
 )
 from nanobot.webui.ingress_policy import WebUIIngressPolicy
 from nanobot.webui.media_gateway import WebUIMediaGateway
+from nanobot.webui.memory_routes import MemorySettingsOperations
 from nanobot.webui.native_folder_picker import (
     NativeFolderPickerError,
     native_folder_picker_available,
@@ -188,6 +189,12 @@ _WEBUI_MUTATION_PATHS = {
     "settings.mcp.oauth_start": "/api/settings/mcp-oauth/start",
     "settings.mcp.oauth_complete": "/api/settings/mcp-oauth/complete",
     "settings.mcp.oauth_cancel": "/api/settings/mcp-oauth/cancel",
+    "memory.create": "/api/settings/memory/memories/create",
+    "memory.update": "/api/settings/memory/memories/update",
+    "memory.delete": "/api/settings/memory/memories/delete",
+    "episode.update": "/api/settings/memory/episodes/update",
+    "episode.delete": "/api/settings/memory/episodes/delete",
+    "scratchpad.save": "/api/settings/memory/scratchpad/save",
 }
 
 _WEBUI_CHANNEL_CONNECT_ACTIONS = {
@@ -330,6 +337,7 @@ class GatewayHTTPHandler:
         recovery_action: (
             Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]] | None
         ) = None,
+        memory_operations: MemorySettingsOperations | None = None,
         log: Any = logger,
     ) -> None:
         self.config = config
@@ -343,6 +351,7 @@ class GatewayHTTPHandler:
         self.workspaces = workspaces
         self.settings = settings
         self.skills_workspace_path = skills_workspace_path
+        self.memory_operations = memory_operations
         self.disabled_skills: set[str] = (
             disabled_skills if disabled_skills is not None else set()
         )
@@ -376,6 +385,7 @@ class GatewayHTTPHandler:
             mcp_runtime_status=mcp_runtime_status,
             mcp_reload=mcp_reload,
             mcp_oauth_redirect_uri=self._mcp_oauth_redirect_uri,
+            memory_operations=self.memory_operations,
         )
 
     def workspace_controls_available(self, connection: Any) -> bool:

@@ -26,5 +26,11 @@ class MemoryServices:
 
     @classmethod
     def for_workspace(cls, workspace_id: str, workspace_path) -> "MemoryServices":
-        """Build a services instance for the given workspace path."""
-        return cls(workspace_id=workspace_id, database=MemoryDatabase(workspace_path))
+        """Build a ready-to-use services instance for the given workspace path.
+
+        The schema is created lazily the first time it is absent, so
+        construction is idempotent across gateway restarts.
+        """
+        database = MemoryDatabase(workspace_path)
+        database.ensure_schema()
+        return cls(workspace_id=workspace_id, database=database)
