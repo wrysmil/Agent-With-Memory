@@ -447,3 +447,143 @@ def search_memories(
     )
     rows = conn.execute(sql, params).fetchall()
     return [_row_to_memory(r) for r in rows]
+
+
+# ---------- T-12 retrieval adapters ----------
+# 注：本段由 Phase 3 GROUP-D T-12 追加；既有代码完全未改。通道函数
+# （channels/{semantic,episodes,recent,attachments}.py）期望 store 提供：
+#     search_semantic_scored(query, limit) -> list[(Memory, float)]
+#     search_episodes(entity, limit)       -> list[_EpisodeRow]
+#     query_semantic(*, min_importance, since_days, limit) -> list[_MemoryRow]
+#     search_attachments(term, *, intent, limit) -> list[_AttachmentRow]
+# 真实实现在此；测试可用 stub 替代（见 tests/memory/retrieval/test_engine.py）。
+
+from dataclasses import dataclass  # T-12: row dataclasses（追加于 T-12）  # noqa: E402
+
+
+def search_semantic_scored(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    limit: int = 30,
+) -> list[tuple[Memory, float]]:
+    """语义召回：复用 search_memories + bm25 归一化分（索引伪 rank）。
+
+    真实 bm25 rank 列注入属于未来增强（不在本 plan 范围）；此处以
+    ``bm25_rank_to_score`` 兼容通道侧 ``search_semantic`` 的 (Memory, score) 形态。
+    """
+    results = search_memories(conn, query=query, limit=limit)
+    out: list[tuple[Memory, float]] = []
+    for idx, mem in enumerate(results):
+        out.append((mem, _pseudo_bm25_score(float(idx))))
+    return out
+
+
+def search_episodes(
+    conn: sqlite3.Connection,
+    *,
+    entity: str,
+    limit: int = 5,
+) -> list["_EpisodeRow"]:
+    """按实体名 LIKE 模糊匹配 episodes 表。
+
+    真实 FTS5 关联属于未来增强（不在本 plan 范围）；最小实现用 LIKE 兜底。
+    """
+    cur = conn.execute(
+        "SELECT id, summary, updated_at FROM episodes "
+        "WHERE summary LIKE ? OR session_id LIKE ? "
+        "LIMIT ?",
+        (f"%{entity}%", f"%{entity}%", limit),
+    )
+    return [
+        _EpisodeRow(id=row[0], summary=row[1], updated_at=row[2])
+        for row in cur.fetchall()
+    ]
+
+
+def query_semantic(
+    conn: sqlite3.Connection,
+    *,
+    min_importance: float,
+    since_days: int,
+    limit: int,
+) -> list["_MemoryRow"]:
+    """近期高重要性记忆：``importance >= min_importance`` 且 ``updated_at`` 在窗口内。"""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+    cur = conn.execute(
+        "SELECT id, content, importance_score, updated_at, access_count "
+        "FROM memories "
+        "WHERE importance_score >= ? AND updated_at >= ? "
+        "ORDER BY importance_score DESC LIMIT ?",
+        (min_importance, cutoff.isoformat(), limit),
+    )
+    return [
+        _MemoryRow(
+            id=row[0],
+            content=row[1],
+            importance_score=row[2],
+            updated_at=row[3],
+            access_count=row[4],
+        )
+        for row in cur.fetchall()
+    ]
+
+
+def search_attachments(
+    conn: sqlite3.Connection,
+    *,
+    term: str,
+    intent: str,
+    limit: int = 5,
+) -> list["_AttachmentRow"]:
+    """附件搜索：LIKE 匹配（最小实现）。
+
+    注：``attachments`` 表当前未在 schema v1 内，此实现为预留接口；调用方须
+    保证 schema 已扩展（或用 stub store）。真实 term 匹配语义属于未来增强。
+    """
+    cur = conn.execute(
+        "SELECT id, file_path, created_at FROM attachments "
+        "WHERE file_path LIKE ? LIMIT ?",
+        (f"%{term}%", limit),
+    )
+    return [
+        _AttachmentRow(id=row[0], content=row[1], updated_at=row[2])
+        for row in cur.fetchall()
+    ]
+
+
+def _pseudo_bm25_score(rank: float) -> float:
+    """``bm25_rank_to_score`` 内联版：避免在既有文件中新增顶层 import。"""
+    return 1.0 / (1.0 + max(0.0, rank))
+
+
+@dataclass
+class _EpisodeRow:
+    """``search_episodes`` 返回的轻量 row：与 ``channels/episodes`` 期望属性对齐。"""
+
+    id: str
+    summary: str
+    updated_at: str
+
+
+@dataclass
+class _MemoryRow:
+    """``query_semantic`` 返回的轻量 row：与 ``channels/recent`` 期望属性对齐。"""
+
+    id: str
+    content: str
+    importance_score: float
+    updated_at: str
+    access_count: int
+
+
+@dataclass
+class _AttachmentRow:
+    """``search_attachments`` 返回的轻量 row：与 ``channels/attachments`` 期望属性对齐。"""
+
+    id: str
+    content: str = ""
+    updated_at: str = ""
+    importance_score: float = 0.5
