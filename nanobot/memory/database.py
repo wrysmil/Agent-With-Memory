@@ -174,3 +174,8 @@ class MemoryDatabase:
             ).fetchone()
         if row is None:
             self.init_schema()
+
+
+def bm25_rank_to_score(rank: float) -> float:
+    """FTS5 bm25() 值 -> [0,1] 相关性。rank 越小越相关。"""
+    return 1.0 / (1.0 + max(0.0, rank))
