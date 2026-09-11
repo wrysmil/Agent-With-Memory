@@ -1,6 +1,7 @@
 # tests/memory/retrieval/test_decomposer.py
 import pytest
-from nanobot.memory.retrieval.decomposer import QueryDecomposer, DecompositionResult
+
+from nanobot.memory.retrieval.decomposer import QueryDecomposer
 
 
 class _FakeBrain:

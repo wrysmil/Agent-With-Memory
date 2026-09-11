@@ -34,8 +34,8 @@ def _make_memory(mid, content, importance, days_ago, *, keyword_hit=False):
 
 
 def test_skips_low_recency():
-    m_old = _make_memory("m-old", "old", 0.9, days_ago=30)
-    store = _FakeStore([m_old])
+    m_recent = _make_memory("m-recent", "old", 0.9, days_ago=1)
+    store = _FakeStore([m_recent])
     cands = search_recent(
         store,
         query="anything",

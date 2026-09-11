@@ -60,3 +60,29 @@ def test_attachments_channel_label():
         compute_recency=lambda dt: 0.9,
     )
     assert cands and cands[0].source_channel == "attachments"
+
+
+def test_dedupes_across_terms():
+    store = _FakeStore([_make_item("a-1", "img-2026.png"), _make_item("a-2", "img-2025.png")])
+    cands = search_attachments(
+        store,
+        raw_query="图片",
+        keywords=["图片"],  # 与 raw_query 同批命中，去重后不应重复
+        intent="general",
+        limit=10,
+        compute_recency=lambda dt: 0.9,
+    )
+    assert [c.memory_id for c in cands] == ["a-1", "a-2"]
+
+
+def test_respects_limit():
+    store = _FakeStore([_make_item(f"a-{i}", "img.png") for i in range(5)])
+    cands = search_attachments(
+        store,
+        raw_query="图片",
+        keywords=[],
+        intent="general",
+        limit=2,
+        compute_recency=lambda dt: 0.9,
+    )
+    assert len(cands) == 2
