@@ -5,7 +5,9 @@ import mimetypes
 import platform
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, Mapping, Sequence, cast
+
+from loguru import logger
 
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.skills import SkillsLoader
@@ -30,6 +32,13 @@ from nanobot.session.manager import Session
 from nanobot.session.summary import SessionSummary
 from nanobot.utils.helpers import detect_image_mime, load_bundled_template
 from nanobot.utils.prompt_templates import render_template
+
+if TYPE_CHECKING:
+    from nanobot.memory.retrieval import RetrievalEngine
+    from nanobot.memory.retrieval.preprocessor import MemoryQueryPreprocessor
+else:
+    RetrievalEngine = Any  # type: ignore[misc,assignment]
+    MemoryQueryPreprocessor = Any  # type: ignore[misc,assignment]
 
 
 def session_extra(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -92,11 +101,56 @@ class ContextBuilder:
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md"]
     _SKIPPABLE_DEFAULTS = {"AGENTS.md", "USER.md"}
 
-    def __init__(self, workspace: Path, timezone: str | None = None, disabled_skills: list[str] | None = None):
+    def __init__(
+        self,
+        workspace: Path,
+        timezone: str | None = None,
+        disabled_skills: list[str] | None = None,
+        active_retrieval_enabled: bool = False,
+        retrieval_engine: RetrievalEngine | None = None,
+    ):
         self.workspace = workspace
         self.timezone = timezone
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace, disabled_skills=set(disabled_skills) if disabled_skills else None)
+        # Phase 3 Layer 4 Active Retrieval (T-13): disabled by default; the
+        # ``RetrievalEngine`` instance is supplied externally (see
+        # ``AgentLoop``) so this builder stays free of retrieval dependencies.
+        self._active_retrieval_enabled = active_retrieval_enabled
+        self._retrieval_engine = retrieval_engine
+
+    async def _build_memory_section(
+        self,
+        *,
+        query: str,
+        recent_messages: list[Any],
+    ) -> str:
+        """Return Layer 4 retrieval block (markdown), or ``""`` when disabled.
+
+        Failure-isolated: any retrieval exception is swallowed and logged so
+        the system prompt build never breaks because of retrieval.
+        """
+        if not self._active_retrieval_enabled or self._retrieval_engine is None:
+            return ""
+        # Lazy import: keeps ``nanobot.agent.context`` importable without
+        # pulling the retrieval module eagerly (preserves the historical
+        # sync-only path for callers that never enable Layer 4).
+        from nanobot.memory.retrieval.preprocessor import MemoryQueryPreprocessor
+
+        try:
+            prepared = MemoryQueryPreprocessor.prepare(query, recent_messages)
+            if prepared.skip:
+                return ""
+            retrieved = await self._retrieval_engine.retrieve(
+                query=prepared.cleaned_query,
+                recent_messages=recent_messages,
+            )
+        except Exception:
+            logger.warning(
+                "Active retrieval failed; continuing without Layer 4 block"
+            )
+            return ""
+        return retrieved or ""
 
     def build_system_prompt(
         self,
@@ -105,6 +159,7 @@ class ContextBuilder:
         session_summary: SessionSummary | None = None,
         workspace: Path | None = None,
         include_memory: bool = True,
+        retrieved_memory_section: str | None = None,
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
         root = workspace or self.workspace
@@ -148,6 +203,17 @@ class ContextBuilder:
                 f"Previous conversation summary (last active {session_summary['last_active']}):\n"
                 f"{session_summary['text']}"
             )
+
+        # Layer 4 Active Retrieval block (T-13): only appended when the
+        # feature is enabled AND the engine is wired AND a non-empty section
+        # is supplied by the caller (typically pre-computed in
+        # ``AgentLoop._build_turn`` to keep the sync prompt builder API).
+        if (
+            self._active_retrieval_enabled
+            and self._retrieval_engine is not None
+            and retrieved_memory_section
+        ):
+            parts.append(retrieved_memory_section)
 
         return "\n\n---\n\n".join(parts)
 
@@ -240,6 +306,7 @@ class ContextBuilder:
         runtime_context_blocks: Sequence[RuntimeContextBlock] | None = None,
         workspace: Path | None = None,
         include_memory: bool = True,
+        retrieved_memory_section: str | None = None,
     ) -> list[dict[str, Any]]:
         """Compatibility wrapper for callers that need merged adjacent roles."""
         messages = self.build_transcript(
@@ -254,6 +321,7 @@ class ContextBuilder:
             channel=channel,
             workspace=workspace,
             include_memory=include_memory,
+            retrieved_memory_section=retrieved_memory_section,
         )
         if current_message is None:
             return messages
@@ -280,6 +348,7 @@ class ContextBuilder:
         channel: str | None = None,
         workspace: Path | None = None,
         include_memory: bool = True,
+        retrieved_memory_section: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build a model transcript while preserving the fresh-turn boundary."""
         root = workspace or self.workspace
@@ -291,6 +360,7 @@ class ContextBuilder:
                     session_summary=transcript.session_summary,
                     workspace=root,
                     include_memory=include_memory,
+                    retrieved_memory_section=retrieved_memory_section,
                 ),
             },
             *transcript.history,

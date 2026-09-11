@@ -161,6 +161,10 @@ class TurnContext:
     stop_reason: str = ""
     failure_error_kind: str | None = None
     streamed_content: bool = False
+    # Phase 3 Layer 4 Active Retrieval (T-13): pre-computed retrieval block
+    # produced in ``_build_turn`` and forwarded into the ``transcript_builder``
+    # partial. Empty string when disabled / engine missing / query gated.
+    pending_retrieved_memory_section: str = ""
 
     input_persisted_early: bool = False
     save_skip: int = 0
@@ -310,6 +314,8 @@ class AgentLoop:
         recovery_admission: RecoveryAdmission | None = None,
         memory_extraction_enabled: bool = False,
         memory_services: MemoryServices | None = None,
+        active_retrieval_enabled: bool = False,
+        retrieval_engine: Any | None = None,
     ):
         from nanobot.config.schema import ToolsConfig
 
@@ -382,7 +388,13 @@ class AgentLoop:
         self._extra_hooks: list[AgentHook] = hooks or []
         self._hook_factories: list[AgentTurnHookFactory] = hook_factories or []
 
-        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills)
+        self.context = ContextBuilder(
+            workspace,
+            timezone=timezone,
+            disabled_skills=disabled_skills,
+            active_retrieval_enabled=active_retrieval_enabled,
+            retrieval_engine=retrieval_engine,
+        )
         self.sessions = session_manager or SessionManager(workspace)
         # One file-read/write tracker per logical session. The tool registry is
         # shared by this loop, so tools resolve the active state via contextvars.
@@ -1090,6 +1102,7 @@ class AgentLoop:
         tools: ToolRegistry | None = None,
         request_context: RequestContext | None = None,
         provider_state: ProviderConversationState | None = None,
+        retrieved_memory_section: str = "",
     ) -> AgentRunResult:
         """Run the agent iteration loop.
 
@@ -1259,6 +1272,7 @@ class AgentLoop:
             channel=request_ctx.channel,
             workspace=effective_scope.project_path,
             include_memory=session.policy.persist if session is not None else True,
+            retrieved_memory_section=retrieved_memory_section,
         )
         if request_context is None:
             request_ctx = dataclasses.replace(
@@ -2114,7 +2128,39 @@ class AgentLoop:
             # prompt assembly and the first model checkpoint.
             self.sessions.save(session)
         ctx.transcript_input = self._build_transcript_input(ctx)
+        # Phase 3 Layer 4 Active Retrieval (T-13): pre-compute the retrieval
+        # block here so the sync ``transcript_builder`` partial inside
+        # ``_run_agent_loop`` can pick it up via ``build_system_prompt``.
+        # Failure-isolated — never breaks BUILD even if retrieval errors out.
+        ctx.pending_retrieved_memory_section = await self._compute_retrieval_section(
+            query=ctx.msg.content,
+            recent_messages=list(ctx.history),
+        )
 
+    async def _compute_retrieval_section(
+        self,
+        *,
+        query: str,
+        recent_messages: list[dict[str, Any]],
+    ) -> str:
+        """Compute the Layer 4 retrieval markdown block (T-13).
+
+        Returns ``""`` when the feature is disabled, when the engine is not
+        wired, when the preprocessor gate short-circuits, or when retrieval
+        raises. Never propagates exceptions to the caller — failures must not
+        block the BUILD stage.
+        """
+        try:
+            return await self.context._build_memory_section(
+                query=query,
+                recent_messages=recent_messages,
+            )
+        except Exception:
+            logger.warning(
+                "Active retrieval failed during _build_turn; "
+                "system prompt will omit the Layer 4 block"
+            )
+            return ""
 
     async def _run_turn(self, ctx: TurnContext) -> None:
         runtime = ctx.require_runtime()
@@ -2137,6 +2183,7 @@ class AgentLoop:
                 tools=ctx.tools,
                 request_context=ctx.request_context,
                 provider_state=ctx.provider_state,
+                retrieved_memory_section=ctx.pending_retrieved_memory_section,
                 events=ctx.events,
             )
         ctx.final_content = result.final_content
