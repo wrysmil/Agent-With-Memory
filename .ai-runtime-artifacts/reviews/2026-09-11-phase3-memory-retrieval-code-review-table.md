@@ -135,3 +135,140 @@ ruff check nanobot/memory/retrieval/ nanobot/agent/context.py nanobot/agent/loop
 # 测试（验证）
 pytest tests/memory/ tests/agent/tools/test_memory_search_tool.py -q
 ```
+
+---
+
+## 时序图
+
+### 图 1：记忆检索（Phase 3 — 被动注入）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant Channel
+    participant AgentLoop
+    participant AgentRunner
+    participant ContextBuilder
+    participant RetrievalEngine
+    participant SemanticChannel
+    participant EpisodesChannel
+    participant RecentChannel
+    participant AttachmentsChannel
+    participant Reranker
+    participant Formatter
+    participant LLM
+
+    User->>Channel: 用户消息
+    Channel->>AgentLoop: InboundMessage
+    AgentLoop->>AgentRunner: _run_turn()
+    AgentRunner->>AgentRunner: _build_turn()
+
+    rect rgb(230, 245, 230)
+        Note over AgentLoop,RetrievalEngine: Layer 4 — 自动注入（被动召回）
+        AgentRunner->>ContextBuilder: active_retrieval_enabled=True?
+        ContextBuilder->>RetrievalEngine: retrieve(query, recent_messages)
+        RetrievalEngine->>RetrievalEngine: Preprocessor.prepare() [gate]
+
+        alt query 可检索
+            RetrievalEngine->>RetrievalEngine: QueryDecomposer.decompose() [LLM/rule]
+
+            par 4路并行
+                RetrievalEngine->>SemanticChannel: search_semantic(query, limit=15)
+                SemanticChannel-->>RetrievalEngine: list[RetrievalCandidate]
+                RetrievalEngine->>EpisodesChannel: search_episodes(query, limit=5)
+                EpisodesChannel-->>RetrievalEngine: list[RetrievalCandidate]
+                RetrievalEngine->>RecentChannel: search_recent(query, limit=5)
+                RecentChannel-->>RetrievalEngine: list[RetrievalCandidate]
+                RetrievalEngine->>AttachmentsChannel: search_attachments(query, intent)
+                AttachmentsChannel-->>RetrievalEngine: list[RetrievalCandidate]
+            end
+
+            RetrievalEngine->>RetrievalEngine: 去重（按 memory_id）
+            RetrievalEngine->>Reranker: rerank(candidates, query, persona)
+            Reranker-->>RetrievalEngine: list[RetrievalCandidate] (sorted)
+            RetrievalEngine->>Formatter: format(ranked, limit)
+            Formatter-->>RetrievalEngine: list[dict]
+            RetrievalEngine->>RetrievalEngine: render_injection_block() → markdown str
+        else query 跳过
+            RetrievalEngine-->>RetrievalEngine: ""
+        end
+
+        RetrievalEngine-->>ContextBuilder: memory_section: str
+        ContextBuilder-->>AgentRunner: system_prompt 含 memory_section
+    end
+
+    AgentRunner->>LLM: chat(messages + system_prompt)
+    LLM-->>AgentRunner: response
+    AgentRunner->>Channel: OutboundMessage
+    Channel-->>User: 回复
+```
+
+### 图 2：记忆提取（Phase 2 — 主动写入）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant Channel
+    participant AgentLoop
+    participant MemoryExtractionHook
+    participant MemoryExtractor
+    participant ScratchpadWriter
+    participant LLMRuntime
+    participant MemoryDatabase
+    participant SessionManager
+
+    User->>Channel: 用户消息
+    Channel->>AgentLoop: InboundMessage
+
+    rect rgb(230, 240, 255)
+        Note over AgentLoop,MemoryExtractionHook: T0 — 即时同步（每轮触发）
+        AgentLoop->>MemoryExtractionHook: after_run(context)
+        MemoryExtractionHook->>MemoryExtractionHook: classify_intent(last_user_msg)
+        alt intent != CHAT
+            MemoryExtractionHook->>ScratchpadWriter: update_focus(session_key, msg[:200])
+            ScratchpadWriter->>MemoryDatabase: upsert_scratchpad()
+        end
+    end
+
+    AgentLoop->>AgentRunner: run()
+
+    rect rgb(255, 240, 230)
+        Note over AgentLoop,MemoryExtractionHook: T1 — 异步提取（会话结束）
+        MemoryExtractionHook->>MemoryExtractionHook: _schedule_run_extraction()
+        MemoryExtractionHook->>MemoryExtractionHook: asyncio.create_task()
+
+        par 4阶段流水线
+            MemoryExtractor->>MemoryExtractor: 阶段1: _system_extract() [ActionNode + 规则信号]
+            MemoryExtractor->>LLMRuntime: 阶段2: _llm_extract() [semantic + episode 并发]
+            LLMRuntime-->>MemoryExtractor: memories + episode JSON
+            MemoryExtractor->>MemoryExtractor: 阶段3: _apply_filters() [去重 + 防污染]
+            MemoryExtractor->>MemoryDatabase: 阶段4: _persist() [SQLite写入]
+        end
+
+        MemoryExtractor-->>MemoryExtractionHook: ExtractionResult
+    end
+
+    rect rgb(240, 230, 255)
+        Note over AgentLoop,SessionManager: T2 — 会话删除触发
+        User->>SessionManager: delete_session(key)
+        SessionManager->>SessionManager: get_cached(key) → Session
+        SessionManager->>SessionManager: store.delete(key)
+        SessionManager->>MemoryExtractionHook: _on_session_deleted(session)
+        MemoryExtractionHook->>MemoryExtractor: extract_session(session, source="deletion")
+        Note over MemoryExtractor: 阶段1~4 同上（异步，不阻塞删除）
+    end
+
+    rect rgb(255, 250, 230)
+        Note over AgentLoop,MemoryDatabase: T3 — Quick Facts（压缩后）
+        AgentLoop->>AutoCompact: _archive(key, runtime)
+        AutoCompact->>MemoryExtractor: extract_quick_facts(session)
+        Note over MemoryExtractor: 仅正则规则信号，不调LLM
+        MemoryExtractor->>MemoryDatabase: SQLite写入 (rules only)
+    end
+
+    AgentLoop->>LLM: chat(messages)
+    LLM-->>AgentLoop: response
+    Channel-->>User: 回复
+```
