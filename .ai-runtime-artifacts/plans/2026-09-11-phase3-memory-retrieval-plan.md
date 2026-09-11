@@ -14,7 +14,7 @@ source:
 created_at: 2026-09-11
 topic: phase3-memory-retrieval
 phase: 3-of-3
-status: revised-after-review
+status: ready-for-dispatch
 approved: false
 revision:
   reviewed_at: 2026-09-11
@@ -157,7 +157,7 @@ uv sync && pytest tests/memory/test_database.py tests/agent/test_loop_wiring.py 
 | --- | --- | --- |
 | `nanobot/memory/repository.py` | 新增 `search_semantic_scored(query, limit)`、`search_episodes(entity, limit)`、`query_semantic(min_importance, since_days)`、`search_attachments(term, intent)`；保留旧 `search_memories` 兼容 | T-05/06/07/08 |
 | `nanobot/memory/database.py` | FTS5 bm25 评分辅助（`bm25_rank_to_score(rank)` = `1.0 / (1.0 + rank)`） + jieba 触发开关（默认 off） | T-04 |
-| `nanobot/memory/models.py` | `Episode` 加 `compaction_checkpoint_id: str \| None`（Phase 2 handoff §14 顺带） | T-06 |
+| `nanobot/memory/models.py` | ~~`Episode` 加 `compaction_checkpoint_id`~~ **已作废：字段基线已存在**（见 T-06 说明） | — |
 | `nanobot/agent/context.py` | `_build_memory_section()` 新增方法 → 在既有 Memory 层组装末尾追加 Layer 4 注入块；新增 `active_retrieval_enabled` 参数（默认 False，opt-in） | T-13 |
 | `nanobot/agent/loop.py` | 装配 `RetrievalEngine`（仅当配置开启时 wire，与 Phase 2 `_wire_memory_extraction` 模式一致）；新增 `retrieval_engine_provider` 上下文供 `MemorySearchTool.create()` 调用 | T-13/T-14 |
 
@@ -394,8 +394,6 @@ class MemoryQueryPreprocessor:
         cleaned = cls.clean_query(query or "")
         skip, reason = cls.should_skip_retrieval(cleaned, recent_messages)
         return PreparedQuery(skip=skip, reason=reason, cleaned_query=cleaned)
-
-    _CONTROL_ONLY = _CONTROL_ONLY  # 暴露供测试遍历
 ```
 
 - [ ] **Step 4: 跑绿**
@@ -529,7 +527,7 @@ class QueryDecomposer:
         result = await self._do_decompose(query, recent or [])
         self._cache[cache_key] = result
         if len(self._cache) > self._cache_max:
-            self._cache.popitem(last=False)  # 淘汰一半策略见 Step 3 改进
+            self._cache.popitem(last=False)  # LRU 淘汰策略：移除最旧条目
         return result
 
     async def _do_decompose(self, query: str, recent: list) -> DecompositionResult:
@@ -813,7 +811,7 @@ def test_returns_candidates_with_semantic_channel():
     assert c.relevance == 0.9
     assert c.recency_score == 1.0
     assert c.importance_score == 0.8
-    assert c.access_frequency_score == pytest.approx(0.477)  # log1p(3)/5
+    assert c.access_frequency_score == pytest.approx(0.2772589)  # log1p(3)/5
 
 
 def test_empty_results():
@@ -887,7 +885,7 @@ git commit -m "feat(retrieval): semantic search channel + repository interface s
 
 **Files:**
 - Create: `nanobot/memory/retrieval/channels/episodes.py`
-- Modify: `nanobot/memory/models.py`（`Episode` 加 `compaction_checkpoint_id`）
+- ~~Modify: `nanobot/memory/models.py`~~（**已作废**：`Episode.compaction_checkpoint_id` 基线已存在，见下方 Step 3 说明）
 - Test: `tests/memory/retrieval/channels/test_episodes.py`
 
 - [ ] **Step 1: 写失败测试**
@@ -1000,11 +998,13 @@ def search_episodes(
 ```
 
 ```python
-# nanobot/memory/models.py（在 Episode dataclass 追加字段；保持默认 None）
-@dataclass
-class Episode:
-    # ... 既有字段 ...
-    compaction_checkpoint_id: str | None = None
+# 说明（2026-09-11 实测修正）：本 Task 原计划给 Episode 追加 compaction_checkpoint_id，
+# 但该字段基线已存在，无需也不应修改 —
+#   nanobot/memory/models.py:119  →  compaction_checkpoint_id: str = ''
+#   nanobot/memory/database.py:76 →  compaction_checkpoint_id TEXT NOT NULL DEFAULT ''
+# 实证：若改成 `str | None = None`，tests/memory/test_episodes.py 出现
+#   sqlite3.IntegrityError: NOT NULL constraint failed: episodes.compaction_checkpoint_id（5 failed）
+# 结论：T-06 不修改 models.py；Phase 2 handoff §14 的语义是「填充该字段的值」而非新增字段。
 ```
 
 - [ ] **Step 4: 跑绿**
@@ -1016,8 +1016,8 @@ Expected: 全用例 passed
 
 ```bash
 git add nanobot/memory/retrieval/channels/episodes.py nanobot/memory/retrieval/channels/__init__.py \
-        nanobot/memory/models.py tests/memory/retrieval/channels/test_episodes.py
-git commit -m "feat(retrieval): episodes channel + Episode.compaction_checkpoint_id (T-06)"
+        tests/memory/retrieval/channels/test_episodes.py
+git commit -m "feat(retrieval): episodes channel (T-06)"
 ```
 
 ---
@@ -1164,9 +1164,14 @@ from nanobot.memory.retrieval.channels.attachments import search_attachments
 
 
 class _FakeStore:
+    """假 store：本 WU 只验闸门与候选包装，term 匹配语义归 T-12 的 repository 真实现。
+
+    修正说明（2026-09-11 实测）：原假 store 按 `term in content` 过滤，但本文件断言测的是
+    「媒体闸门是否触发」，二者对不上 → 照抄必然 4/5 用例失败。故改为返回登记条目。
+    """
     def __init__(self, items): self._items = items
     def search_attachments(self, term, *, intent, limit):
-        return [i for i in self._items if term.lower() in i["content"].lower()][:limit]
+        return self._items[:limit]
 
 
 @pytest.mark.parametrize("query,intent,expected", [
@@ -1942,6 +1947,7 @@ class SystemContextBuilder:
         """Layer 0..3 既有 + Layer 4 主动检索（可选）。"""
         parts: list[str] = []
         # Layer 0..3 既有（保留兼容调用方式）
+        # 注：实际调用方式需在 T-13 实施前核对 nanobot/agent/context.py 真实方法名
         if hasattr(self, "_existing_memory_layers"):
             parts.append(self._existing_memory_layers(query=query, recent_messages=recent_messages))
         # Layer 4
@@ -2254,7 +2260,7 @@ git commit -m "docs(retrieval): advertise memory_search tool in identity templat
 | --- | --- | --- |
 | Phase 1 `repository.search_memories` 不返回真实 BM25 rank | 语义通道精度受限 | T-04/T-12 已用 `bm25_rank_to_score(idx)` 兼容；真实 bm25 列注入属于**未来增强**（不在本 plan 范围），单独 PR 处理 |
 | `chromadb` / `api_embedding` 后端复杂 | T-04 工厂暂时只支持 FTS5 | 默认回退到 FTS5；真实 chromadb/api_embedding 后端属于**未来增强**（不在本 plan 范围） |
-| `Episode.compaction_checkpoint_id` 是 Phase 2 handoff §14 遗项 | T-06 顺带完成 | 数据库设计契约允许字段为 nullable，零回归 |
+| `Episode.compaction_checkpoint_id` 曾被误判为 Phase 2 handoff §14 遗项 | ~~T-06 顺带完成~~ | **实测推翻**：字段基线已存在（`models.py:119` 为 `str = ''`，`database.py:76` 为 `NOT NULL DEFAULT ''`），改为 nullable 会触发 `IntegrityError`。T-06 不改 models.py |
 | 注入 Layer 4 改变 system prompt 大小 | 可能挤掉 skill 块空间 | T-13 校验 token 预算（默认 500 tokens）；用户在 build_system_prompt 层可调 |
 | `RetrievalEngine` 默认 opt-in | 默认关闭 → 端到端验证需手动开启 | 尾盘 collective-test 显式启用 `active_retrieval_enabled=True` 跑 |
 | **Tool 自动发现兼容性** | T-14 的 `MemorySearchTool` 必须能被 `ToolLoader` 通过 `pkgutil` 扫描到 | T-14 测试 `test_tool_auto_discoverable` 验证 `ToolRegistry.has("memory_search")`；遵循 `WebSearchTool` 的 `_scopes` / `config_key` / `create()` 工厂模式 |
@@ -2267,7 +2273,7 @@ git commit -m "docs(retrieval): advertise memory_search tool in identity templat
 | GROUP | 回滚命令 | 数据兼容性 |
 | --- | --- | --- |
 | **A**（基础） | `git revert <commit-A>` | 无 DB schema 变更，完全安全 |
-| **B**（通道） | `git revert <commit-B>` | `Episode.compaction_checkpoint_id` 字段 nullable，旧版读取忽略该字段，无破坏 |
+| **B**（通道） | `git revert <commit-B>` | 纯新增文件（`channels/*`），无 DB schema 变更、无既有文件修改，完全安全 |
 | **C**（后处理） | `git revert <commit-C>` | 无 |
 | **D**（引擎+集成） | `git revert <commit-D>` + 配置 `active_retrieval_enabled=False` | `context.py` / `loop.py` 兼容旧版；Memory layer 拼接点向后兼容 |
 | **E**（Tool） | `git revert <commit-E>` + 删 `identity.md` 追加行 | Tool 自动发现通过 `pkgutil`，删除文件即从 `ToolRegistry` 移除，不影响其他工具 |
@@ -2299,6 +2305,50 @@ git commit -m "docs(retrieval): advertise memory_search tool in identity templat
 
 > ⚠️ **写入本 plan 后暂停，等用户在本会话单独说「开始实现」或「并行执行」再进入 GROUP-A 派发。**
 > 同句「写计划然后执行」按 routing.md § 组合指令 **仅写 plan 并暂停**。
+
+## 附录：既有产物索引
+
+> 以下是 Phase 1（存储层）+ Phase 2（提取层）已交付的产物，供 coder 在实施 T-01..T-15 时核对，避免重复实现或命名冲突。
+
+### 核心文件
+
+| 既有文件 | 已提供 | 本阶段将新增 / 修改 |
+|---|---|---|
+| `nanobot/memory/database.py` | FTS5 `memories_fts` 表、`bm25()` 可用、既有 schema | T-04 加 `bm25_rank_to_score()` + 可选 jieba 触发开关 |
+| `nanobot/memory/repository.py` | `search_memories(query, limit)`、`get_memory(id)`、`add_memory(...)` 等既有 CRUD | T-12 加 `search_semantic_scored` / `search_episodes` / `query_semantic` / `search_attachments` |
+| `nanobot/memory/models.py` | `Memory` dataclass（含 `id/content/source_channel/importance_score/updated_at/access_count/type/subject/predicate/confidence`）、`Episode` dataclass（**已含 `compaction_checkpoint_id: str = ''`**）| T-06 **无需**修改（字段已存在） |
+| `nanobot/agent/context.py` | `build_system_prompt()` 函数、Layer 0..3 记忆拼接 | T-13 加 `_build_memory_section()` + `active_retrieval_enabled` 参数 |
+| `nanobot/agent/loop.py` | `_wire_memory_extraction()`（Phase 2 提取 wiring） | T-13 加 `_wire_memory_retrieval()` 平行 wiring 方法 |
+
+### Phase 2 提取产物（供检索层引用）
+
+| 文件 | 导出内容 | 本阶段引用 |
+|---|---|---|
+| `nanobot/agent/hooks/memory_extraction.py` | `MemoryExtractionHook` | T-13 wiring 模式参考 |
+| `nanobot/memory/extractor.py` | `MemoryExtractor` / `extract_from_turn()` | — |
+| `nanobot/memory/filters.py` | `IntentFilter` / `QualityFilter` | — |
+| `nanobot/memory/scratchpad_writer.py` | `ScratchpadWriter` | — |
+| `nanobot/templates/agent/identity.md` | Agent identity 模板 | T-15 追加 `memory_search` 工具告知行 |
+
+### 当前测试基线
+
+| 命令 | 预期 | 说明 |
+|---|---|---|
+| `pytest tests/memory/ -q` | 100+ passed | Phase 1 + 2 测试不退化基准 |
+| `pytest tests/agent/ -q` | 200+ passed | nanobot agent 测试不退化基准 |
+| `pytest tests/ -q` | 345+ passed | 两者合计总基线 |
+
+### 实施前核对（强制）
+
+T-13 开始前，coder 必须执行以下命令确认真实类名：
+
+```bash
+# 确认 context.py 真实类名（不是硬编码假设）
+grep -n "^class\|^def" nanobot/agent/context.py | head -30
+
+# 确认 loop.py 真实 wiring 模式
+grep -n "wire_memory" nanobot/agent/loop.py
+```
 
 ## Next
 
