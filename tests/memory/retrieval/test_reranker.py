@@ -43,6 +43,8 @@ def test_rerank_focus_boost_in_range():
     )
     assert out_boost[0].composite_score > out_base[0].composite_score
     assert out_boost[0].composite_score <= out_base[0].composite_score * 1.35 + 1e-6
+    # hits=2 → boost = 1.0 + 0.1×2 = 1.2；base=0.5 → 0.6
+    assert out_boost[0].composite_score == pytest.approx(0.6, abs=1e-3)
 
 
 def test_rerank_action_penalty_drops_action_phrased_fact():
@@ -80,3 +82,23 @@ def test_rerank_min_threshold_drops_low_score():
               access_frequency_score=0.05)
     out = Reranker().rerank([c], query="x", persona=None, focus_terms=[])
     assert out == []
+
+
+def test_rerank_action_penalty_hits_cjk_without_space():
+    penalized = _cand("semantic", relevance=0.8, importance_score=0.8, recency_score=0.8,
+                      content="删除文件", raw=SimpleNamespace(type="fact"))
+    kept = _cand("semantic", relevance=0.8, importance_score=0.8, recency_score=0.8,
+                 content="文件已删除", raw=SimpleNamespace(type="fact"))
+    out = Reranker(fact_type_names=("fact",)).rerank(
+        [penalized, kept], query="x", persona=None, focus_terms=[]
+    )
+    assert [c.content for c in out] == ["文件已删除"]
+
+
+def test_rerank_action_penalty_skips_non_fact():
+    c = _cand("semantic", relevance=0.8, importance_score=0.8, recency_score=0.8,
+              content="删除文件", raw=SimpleNamespace(type="experience"))
+    out = Reranker(fact_type_names=("fact",)).rerank(
+        [c], query="x", persona=None, focus_terms=[]
+    )
+    assert out[0].composite_score == pytest.approx(0.74, abs=1e-3)

@@ -23,13 +23,21 @@ _ACTION_PENALTY = 0.30
 _COLD_START_RECENCY = 0.99
 _MIN_COMPOSITE = 0.35
 
-_ACTION_PREFIXES = (
+_CJK_PREFIXES = (
     "打开", "启动", "运行", "执行", "调用", "安装", "部署", "下载",
     "上传", "删除", "修改", "更新", "重启", "关闭", "退出",
+)
+_ASCII_PREFIXES = (
     "open", "run", "execute", "install", "deploy", "download", "delete",
 )
+_ACTION_PREFIXES = _CJK_PREFIXES + _ASCII_PREFIXES
+
 _ACTION_PATTERN = re.compile(
-    r"^\s*(?:" + "|".join(re.escape(p) for p in _ACTION_PREFIXES) + r")\b",
+    r"^\s*(?:"
+    + "|".join(re.escape(p) for p in _CJK_PREFIXES)
+    + r"|"
+    + "|".join(rf"{re.escape(p)}\b" for p in _ASCII_PREFIXES)
+    + r")",
     re.IGNORECASE,
 )
 
