@@ -140,61 +140,131 @@ pytest tests/memory/ tests/agent/tools/test_memory_search_tool.py -q
 
 ## 时序图
 
-### 图 1：记忆检索（Phase 3 — 被动注入）
+> 拆成 6 张子图分别对应 4 路并行召回 / 后处理注入 / T0 / T1 / T2 / T3。
 
-```
-用户 → Channel → AgentLoop → AgentRunner → ContextBuilder → RetrievalEngine
-                                              │
-                                              ├─ Preprocessor.prepare()  [gate]
-                                              │
-                                              ├─ QueryDecomposer.decompose()  [LLM/rule]
-                                              │
-                                              ├─ 4路并行 (asyncio.gather)
-                                              │    ├─ SemanticChannel.search_semantic()
-                                              │    ├─ EpisodesChannel.search_episodes()
-                                              │    ├─ RecentChannel.search_recent()
-                                              │    └─ AttachmentsChannel.search_attachments()
-                                              │
-                                              ├─ 去重 (memory_id)
-                                              ├─ Reranker.rerank()
-                                              ├─ Formatter.format()
-                                              └─ render_injection_block() → markdown str
-                                              │
-                                              ← system_prompt 含 memory_section
-                                              │
-                                          AgentRunner → LLM → 回复用户
-```
+### 图 1A：检索触发 + 4 路并行召回
 
-**关键点**：4路并行、失败隔离（return_exceptions）、opt-in 默认关闭
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CB as ContextBuilder
+    participant RE as RetrievalEngine
+    participant S as Semantic
+    participant E as Episodes
+    participant R as Recent
+    participant A as Attachments
 
----
+    CB->>RE: retrieve(query, recent_messages)
+    RE->>RE: Preprocessor.gate
+    RE->>RE: QueryDecomposer.decompose()
 
-### 图 2：记忆提取（Phase 2 — 主动写入）
-
-```
-用户消息
-  │
-  ├─ T0 即时同步（每轮 after_run）
-  │    └─ classify_intent(msg)
-  │         ├─ CHAT → 跳过
-  │         └─ TASK/QUERY/FOLLOW_UP/COMMAND
-  │              └─ ScratchpadWriter.update_focus() → SQLite upsert_scratchpad()
-  │
-  ├─ T1 异步提取（会话结束 after_run → fire-and-forget）
-  │    └─ asyncio.create_task()
-  │         └─ MemoryExtractor.extract_session()
-  │              ├─ 阶段1: _system_extract()     [ActionNode + 规则信号]
-  │              ├─ 阶段2: _llm_extract()       [semantic + episode 并发 LLM]
-  │              ├─ 阶段3: _apply_filters()     [去重 + 防污染]
-  │              └─ 阶段4: _persist()           [SQLite 写入]
-  │
-  ├─ T2 删除触发（SessionManager.delete_session）
-  │    └─ get_cached(key) → _on_session_deleted(session)
-  │         └─ extract_session(source="deletion")  [异步，不阻塞删除]
-  │
-  └─ T3 Quick Facts（AutoCompact._archive 压缩后）
-       └─ extract_quick_facts()  [正则规则，无 LLM] → SQLite
+    par 4 路并行
+        RE->>S: search_semantic(limit=15)
+        S-->>RE: candidates
+        RE->>E: search_episodes(limit=5)
+        E-->>RE: candidates
+        RE->>R: search_recent(limit=5)
+        R-->>RE: candidates
+        RE->>A: search_attachments(intent)
+        A-->>RE: candidates
+    end
 ```
 
-**关键点**：4阶段流水线、T0 不调 LLM、T2/T3 异步不阻塞主流程、失败隔离
+### 图 1B：检索后处理 + 系统提示注入
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant RE as RetrievalEngine
+    participant RR as Reranker
+    participant FM as Formatter
+    participant CB as ContextBuilder
+    participant LLM
+
+    RE->>RE: 去重 (memory_id)
+    RE->>RR: rerank(candidates, query, persona)
+    RR-->>RE: sorted candidates
+    RE->>FM: format(ranked, limit=10)
+    FM-->>RE: list[dict]
+    RE->>RE: render_injection_block()
+    RE-->>CB: memory_section: str
+    CB-->>LLM: system_prompt (含 memory_section)
+```
+
+### 图 2A：T0 — 即时同步（每轮触发）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Loop as AgentLoop
+    participant Hook as MemoryExtractionHook
+    participant SW as ScratchpadWriter
+    participant DB as MemoryDatabase
+
+    Loop->>Hook: after_run(context)
+    Hook->>Hook: classify_intent(last_user_msg)
+
+    alt intent != CHAT
+        Hook->>SW: update_focus(session_key, msg[:200])
+        SW->>DB: upsert_scratchpad()
+    end
+```
+
+### 图 2B：T1 — 异步提取（4 阶段流水线）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Hook as MemoryExtractionHook
+    participant Ex as MemoryExtractor
+    participant LLM as LLMRuntime
+    participant DB as MemoryDatabase
+
+    Hook->>Hook: on_finally (5s wait)
+    Hook->>Hook: asyncio.create_task()
+    Hook->>Ex: extract_session(session)
+
+    par 4 阶段流水线
+        Ex->>Ex: 阶段1 _system_extract()
+        Ex->>LLM: 阶段2 _llm_extract() (semantic + episode 并发)
+        LLM-->>Ex: JSON
+        Ex->>Ex: 阶段3 _apply_filters()
+        Ex->>DB: 阶段4 _persist()
+    end
+
+    Ex-->>Hook: ExtractionResult
+```
+
+### 图 2C：T2 — 会话删除触发
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant SM as SessionManager
+    participant Hook as MemoryExtractionHook
+    participant Ex as MemoryExtractor
+    participant DB as MemoryDatabase
+
+    SM->>SM: delete_session(key)
+    SM->>SM: get_cached(key) → Session
+    SM->>Hook: _on_session_deleted(session)
+    Hook->>Ex: extract_session(session, source="deletion")
+    Note over Ex: 阶段1~4 同 T1，异步不阻塞
+    Ex->>DB: SQLite 写入
+```
+
+### 图 2D：T3 — Quick Facts（压缩后）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Loop as AgentLoop
+    participant AC as AutoCompact
+    participant Ex as MemoryExtractor
+    participant DB as MemoryDatabase
+
+    Loop->>AC: _archive(key, runtime)
+    AC->>Ex: extract_quick_facts(session)
+    Note over Ex: 仅正则规则信号，不调 LLM
+    Ex->>DB: SQLite 写入 (rules only)
 ```
