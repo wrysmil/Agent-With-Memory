@@ -32,6 +32,7 @@ class EpisodeOutcome(str, Enum):
 class EpisodeSource(str, Enum):
     SESSION_END = 'session_end'
     CONTEXT_COMPRESS = 'context_compress'
+    TOPIC_CHANGE = 'topic_change'
     DAILY_CONSOLIDATION = 'daily_consolidation'
     DELETION = 'deletion'
 
@@ -98,6 +99,36 @@ class Memory:
         }
         return d
 
+    @classmethod
+    def from_row(cls, row: dict[str, Any]) -> "Memory":
+        """从 ``to_row()`` 序列化得到的 dict 反构实例（WU-3B fallback replay 用）。"""
+        return cls(
+            id=row['id'],
+            content=row['content'],
+            created_at=row['created_at'],
+            updated_at=row['updated_at'],
+            type=MemoryType(row['type']) if not isinstance(row['type'], MemoryType) else row['type'],
+            priority=MemoryPriority(row['priority']) if not isinstance(row['priority'], MemoryPriority) else row['priority'],
+            source=row['source'],
+            importance_score=row['importance_score'],
+            access_count=row['access_count'],
+            tags=json.loads(row['tags']) if isinstance(row['tags'], str) and row['tags'] else [],
+            subject=row['subject'],
+            predicate=row['predicate'],
+            confidence=row['confidence'],
+            decay_rate=row['decay_rate'],
+            expires_at=row['expires_at'],
+            last_accessed_at=row['last_accessed_at'],
+            superseded_by=row['superseded_by'],
+            source_episode_id=row['source_episode_id'],
+            scope=row['scope'],
+            scope_owner=row['scope_owner'],
+            agent_id=row['agent_id'],
+            user_id=row['user_id'],
+            workspace_id=row['workspace_id'],
+            metadata=json.loads(row['metadata']) if isinstance(row['metadata'], str) and row['metadata'] else {},
+        )
+
 
 @dataclass
 class Episode:
@@ -139,6 +170,36 @@ class Episode:
             'compaction_checkpoint_id': self.compaction_checkpoint_id,
             'workspace_snapshot_id': self.workspace_snapshot_id,
         }
+
+    @classmethod
+    def from_row(cls, row: dict[str, Any]) -> "Episode":
+        """从 ``to_row()`` 序列化得到的 dict 反构实例（WU-3B fallback replay 用）。"""
+        def _load_json_list(value: Any) -> list[Any]:
+            if isinstance(value, str):
+                return json.loads(value) if value else []
+            if isinstance(value, list):
+                return value
+            return []
+
+        return cls(
+            id=row['id'],
+            session_id=row['session_id'],
+            summary=row['summary'],
+            goal=row['goal'],
+            outcome=EpisodeOutcome(row['outcome']) if not isinstance(row['outcome'], EpisodeOutcome) else row['outcome'],
+            source=EpisodeSource(row['source']) if not isinstance(row['source'], EpisodeSource) else row['source'],
+            started_at=row['started_at'],
+            ended_at=row['ended_at'],
+            action_nodes=_load_json_list(row['action_nodes']),
+            entities=_load_json_list(row['entities']),
+            tools_used=_load_json_list(row['tools_used']),
+            linked_memory_ids=_load_json_list(row['linked_memory_ids']),
+            tags=_load_json_list(row['tags']),
+            importance_score=row['importance_score'],
+            access_count=row['access_count'],
+            compaction_checkpoint_id=row['compaction_checkpoint_id'],
+            workspace_snapshot_id=row['workspace_snapshot_id'],
+        )
 
 
 @dataclass

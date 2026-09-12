@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
+
+from loguru import logger
+
+from nanobot.memory.repository import (
+    add_episode,
+    add_memory,
+    update_memory_source_episode,
+)
 
 _SCHEMA_VERSION = "1"
 
@@ -141,7 +150,20 @@ class MemoryDatabase:
         self.workspace = Path(workspace)
         self.db_path = Path(db_path) if db_path is not None else (self.workspace / "memory" / "state.db")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        # WU-3B: 写入失败时的 fallback 目录（同级 _memory_fallback/）。
+        # 构造时即 mkdir，确保 _safe_write_with_fallback / replay_fallback
+        # 在数据库不可写时也能落地 JSON 文件。
+        self.fallback_dir = self.db_path.parent / "_memory_fallback"
+        self.fallback_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        # MAJOR #3: 构造时自动 replay 一次,与 MemoryExtractor.__init__ 端的
+        # 调用形成双调幂等(第一次清空,第二次 glob 空 list 直接 no-op)。
+        # replay_fallback 内部已对单文件 try/except 隔离,此处再加 try/except
+        # 是双保险:启动路径绝不被 fallback 队列污染。
+        try:
+            self.replay_fallback()
+        except Exception as exc:  # noqa: BLE001 - 启动路径绝不被污染
+            logger.warning("memory fallback replay at init failed: {}", exc)
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -174,6 +196,61 @@ class MemoryDatabase:
             ).fetchone()
         if row is None:
             self.init_schema()
+
+    def replay_fallback(self) -> int:
+        """把 ``fallback_dir`` 中的所有 JSON 载荷重新执行一次,成功后删除文件。
+
+        设计依据:``_safe_write_with_fallback`` 在 DB 写入失败时把整条 payload 落盘
+        到 ``fallback_dir``。下次启动 / 下次 _persist 调用前调用本方法把队列重放,
+        避免 LLM 已经成功抽取但写入失败导致数据丢失。
+
+        - 单文件失败仅 ``logger.warning``,**绝不**抛出,以保证启动路径不被污染。
+        - 文件名按字典序排序以保证顺序;失败文件保留以便下次再试。
+        - 返回成功重放的数量。
+        """
+        if not self.fallback_dir.exists():
+            return 0
+        succeeded = 0
+        # 按文件名排序(ISO ts 前缀保证顺序);glob 一次拿全避免迭代中新增干扰。
+        paths = sorted(self.fallback_dir.glob("*.json"))
+        for path in paths:
+            try:
+                payload_raw = path.read_text(encoding="utf-8")
+                payload = json.loads(payload_raw)
+                kind = payload.get("kind")
+                item = payload.get("item")
+                if not isinstance(item, dict):
+                    raise ValueError(f"fallback payload missing/invalid 'item': {path.name}")
+                with self.connect() as conn:
+                    if kind == "memory":
+                        from nanobot.memory.models import Memory
+
+                        memory = Memory.from_row(item)
+                        add_memory(conn, memory)
+                    elif kind == "episode":
+                        from nanobot.memory.models import Episode
+
+                        episode = Episode.from_row(item)
+                        add_episode(conn, episode)
+                    elif kind == "backfill":
+                        memory_id = str(item.get("memory_id") or "")
+                        episode_id = str(item.get("episode_id") or "")
+                        if not memory_id or not episode_id:
+                            raise ValueError(
+                                f"backfill payload missing ids: {path.name}"
+                            )
+                        update_memory_source_episode(conn, memory_id, episode_id)
+                    else:
+                        raise ValueError(f"unknown fallback kind: {kind!r}")
+                path.unlink()
+                succeeded += 1
+            except Exception as exc:  # noqa: BLE001 - 单文件失败隔离
+                logger.warning(
+                    "memory fallback replay skipped for {}: {}",
+                    path.name,
+                    exc,
+                )
+        return succeeded
 
 
 def bm25_rank_to_score(rank: float) -> float:

@@ -47,11 +47,20 @@ class _FakeExtractor:
 
     def __init__(self, *, delay: float = 0.0, raise_exc: BaseException | None = None) -> None:
         self.calls: list[tuple[Any, str]] = []
+        self.incremental_calls: list[tuple[Any, int]] = []
         self.delay = delay
         self.raise_exc = raise_exc
 
     async def extract_session(self, session: Any, *, source: str = "session_end") -> Any:
         self.calls.append((session, source))
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        return _FakeExtractionResult()
+
+    async def extract_incremental(self, session: Any, last_extracted_index: int) -> Any:
+        self.incremental_calls.append((session, last_extracted_index))
         if self.delay:
             await asyncio.sleep(self.delay)
         if self.raise_exc is not None:
@@ -348,10 +357,11 @@ class TestTopicChangeDetection:
         await hook.before_iteration(_iter_ctx(*_SWITCHED))
         await _drain_background()
 
-        # ② fire-and-forget 触发提取（不登记到 on_finally）
-        assert len(extractor.calls) == 1
-        session, source = extractor.calls[0]
-        assert source == "session_end"
+        # ② fire-and-forget 触发增量提取（不登记到 on_finally）
+        assert extractor.calls == []
+        assert len(extractor.incremental_calls) == 1
+        session, last_extracted_index = extractor.incremental_calls[0]
+        assert last_extracted_index == 3
         assert session.key == "s1"
         assert [m["content"] for m in session.messages] == _SWITCHED
 
@@ -429,7 +439,8 @@ class TestTopicChangeDetection:
         await hook.before_iteration(context)  # 不应二次触发
         await _drain_background()
 
-        assert len(extractor.calls) == 1
+        assert extractor.calls == []
+        assert len(extractor.incremental_calls) == 1
         assert len(provider.calls) == 1
 
     async def test_cooldown_after_new_within_same_instance(self):

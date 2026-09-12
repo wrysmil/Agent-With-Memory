@@ -21,8 +21,9 @@ from nanobot.memory.extractor import (
     LLMMemoryItem,
     MemoryExtractor,
     SystemExtractionResult,
-    _collect_action_nodes,
     _coerce_memory_item,
+    _collect_action_nodes,
+    _resolve_action_success,
 )
 from nanobot.memory.models import (
     EpisodeSource,
@@ -927,6 +928,159 @@ class TestCollectActionNodes:
         assert "p4ssw0rd!" not in nodes[0].input
 
 
+class TestResolveActionSuccess:
+    """WU-3A: ``_resolve_action_success`` 的纯函数单元测试。"""
+
+    def test_orphan_always_failed(self):
+        """``has_result=False`` 永远失败,无论 output 是什么。"""
+        assert _resolve_action_success("anything", False) is False
+        assert _resolve_action_success("", False) is False
+        assert _resolve_action_success("OK", False) is False
+        assert _resolve_action_success("Error: failed", False) is False
+
+    def test_has_result_with_ok_output_succeeds(self):
+        """``has_result=True`` 且 output 无 error → 成功。"""
+        assert _resolve_action_success("OK", True) is True
+        assert _resolve_action_success("file content", True) is True
+
+    def test_has_result_with_empty_output_succeeds(self):
+        """``has_result=True`` 但 content 为空字符串:无 error 关键字 → 成功(回归保护)。
+
+        注意:这里与"孤儿"语义不同——孤儿是 tool 消息不存在(``has_result=False``);
+        这里是 tool 消息存在但内容为空,工具方可能确实返回了空结果,不应视为失败。
+        """
+        assert _resolve_action_success("", True) is True
+
+    def test_has_result_with_error_output_fails(self):
+        """``has_result=True`` 且 output 含 error → 失败。"""
+        assert _resolve_action_success("Error: failed", True) is False
+        assert _resolve_action_success("Traceback here", True) is False
+        assert _resolve_action_success("ERROR something", True) is False
+        assert _resolve_action_success("an exception traceback occurred", True) is False
+
+
+class TestCollectActionNodesSuccess:
+    """WU-3A: ``_collect_action_nodes`` 的 success 字段判定回归测试。"""
+
+    def test_orphan_action_node_marked_failed(self):
+        """工具调用但 tool 消息缺失(孤儿) → ``success=False`` + 空 output。"""
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        _tool_call("shell_exec", '{"cmd": "ls"}', "orphan_1")
+                    ],
+                },
+                # 没有 role=tool 对应 orphan_1
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        assert len(nodes) == 1
+        assert nodes[0].tool == "shell_exec"
+        assert nodes[0].output == ""
+        assert nodes[0].success is False
+
+    def test_empty_content_action_node_marked_failed(self):
+        """tool 消息存在但 content 为空 → ``success=False``(无 error 关键字)。
+
+        区分于"有结果但空字符串"场景:此场景的 tool 消息存在,所以 ``has_result=True``,
+        但空字符串不含 error/traceback,``_looks_like_error`` 返回 False,因此 success=True。
+        这是预期回归保护(空字符串不应触发"error"误判)。本测试作为回归点保留。
+        """
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        _tool_call("web_search", "{}", "empty_1")
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "empty_1", "name": "web_search", "content": ""},
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        assert len(nodes) == 1
+        # has_result=True + output="" + _looks_like_error("")==False → success=True
+        # 这是有意保留的"空内容视为成功"语义,确保不被误判为 error。
+        assert nodes[0].success is True
+        assert nodes[0].output == ""
+
+    def test_normal_success_action_node_still_works(self):
+        """正常成功调用 → ``success=True``(回归保护)。"""
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        _tool_call("read_file", '{"path": "/tmp"}', "ok_1")
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "ok_1", "name": "read_file", "content": "file content"},
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        assert len(nodes) == 1
+        assert nodes[0].success is True
+        assert nodes[0].output == "file content"
+
+    def test_error_action_node_marked_failed(self):
+        """含 error/traceback 的 output → ``success=False``(回归保护)。"""
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        _tool_call("shell_exec", "{}", "err_1")
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "err_1", "name": "shell_exec", "content": "Traceback: NameError"},
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        assert len(nodes) == 1
+        assert nodes[0].success is False
+
+    def test_mixed_orphan_and_normal_action_nodes(self):
+        """混合场景:同一 session 中既有孤儿也有正常调用,分别正确判定。"""
+        session = _session(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        _tool_call("tool_a", "{}", "orphan_id"),
+                        _tool_call("tool_b", "{}", "ok_id"),
+                        _tool_call("tool_c", "{}", "err_id"),
+                    ],
+                },
+                # orphan_id: 无对应 tool 消息 → 失败
+                {"role": "tool", "tool_call_id": "ok_id", "name": "tool_b", "content": "OK"},
+                {"role": "tool", "tool_call_id": "err_id", "name": "tool_c", "content": "Error: bad"},
+            ]
+        )
+
+        nodes = _collect_action_nodes(session.messages)
+
+        assert len(nodes) == 3
+        by_tool = {node.tool: node for node in nodes}
+        assert by_tool["tool_a"].success is False  # 孤儿
+        assert by_tool["tool_b"].success is True   # 正常
+        assert by_tool["tool_c"].success is False  # error
+
+
 # ---------------------------------------------------------------------------
 # FIX-4 Sec-M-2: 数值与字符串字段值域校验
 # ---------------------------------------------------------------------------
@@ -1008,3 +1162,287 @@ class TestCoerceMemoryItem:
         )
         assert item is not None
         assert item.importance == 0.5
+
+
+# ---------------------------------------------------------------------------
+# WU-1: _render_transcript head+tail 双向保留
+# ---------------------------------------------------------------------------
+
+
+class TestRenderTranscript:
+    """WU-1：长对话改为 head + tail 双向保留，避免中段被纯 tail 截断丢失。"""
+
+    def test_render_transcript_short_returns_full(self):
+        """短对话 (<8000) 原样返回，不做任何截断。"""
+        from nanobot.memory.extractor import _render_transcript
+
+        messages = [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi"},
+        ]
+        result = _render_transcript(messages)
+        assert "[user] hello" in result
+        assert "[assistant] hi" in result
+        assert "截断" not in result  # 无 marker
+
+    def test_render_transcript_long_keeps_head_and_tail(self):
+        """长对话 (>8000) 保留头尾，middle marker 居中。"""
+        from nanobot.memory.extractor import (
+            _TRANSCRIPT_TRUNCATE_MARKER,
+            _render_transcript,
+        )
+
+        # 构造 ~12000 字符对话
+        long_text = "x" * 1000
+        messages = [{"role": "user", "content": long_text} for _ in range(12)]
+        result = _render_transcript(messages, max_chars=8000)
+        assert "截断" in result  # marker 在
+        assert result.startswith("[user] xxx")  # head 保留
+        assert result.endswith("xxx")  # tail 保留
+        # 总长不超过 max_chars + marker 长度（默认 head+tail 比例 0.4 + 0.45）
+        assert len(result) <= 8000 + len(_TRANSCRIPT_TRUNCATE_MARKER)
+
+    def test_render_transcript_skips_non_user_assistant(self):
+        """tool/system 角色跳过，只渲染 user/assistant。"""
+        from nanobot.memory.extractor import _render_transcript
+
+        messages = [
+            {"role": "user", "content": "hello"},
+            {"role": "tool", "content": "result_data"},  # 应跳过
+            {"role": "system", "content": "you are helpful"},  # 应跳过
+            {"role": "assistant", "content": "hi"},
+        ]
+        result = _render_transcript(messages)
+        assert "result_data" not in result
+        assert "you are helpful" not in result
+        assert "[user] hello" in result
+        assert "[assistant] hi" in result
+
+    def test_render_transcript_skips_empty_content(self):
+        """空 content 跳过，不产生空行。"""
+        from nanobot.memory.extractor import _render_transcript
+
+        messages = [
+            {"role": "user", "content": ""},
+            {"role": "user", "content": "   "},  # 全空白
+            {"role": "assistant", "content": "real"},
+        ]
+        result = _render_transcript(messages)
+        lines = [line for line in result.split("\n") if line.strip()]
+        assert len(lines) == 1
+        assert "[assistant] real" in lines[0]
+
+    def test_render_transcript_handles_content_blocks(self):
+        """content 为 list[dict] 形式（content-block）也能正确渲染。"""
+        from nanobot.memory.extractor import _render_transcript
+
+        messages = [{
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "block1"},
+                {"type": "text", "text": "block2"},
+            ],
+        }]
+        result = _render_transcript(messages)
+        assert "block1" in result
+        assert "block2" in result
+
+    def test_render_transcript_custom_ratios(self):
+        """自定义 head_ratio / tail_ratio 生效，且超 1.0 时自动按比例缩放。"""
+        from nanobot.memory.extractor import _render_transcript
+
+        messages = [{"role": "user", "content": "x" * 10000}]
+        result = _render_transcript(
+            messages, max_chars=1000, head_ratio=0.5, tail_ratio=0.4
+        )
+        # 500 + 400 + marker ≈ 1000+
+        assert len(result) >= 900  # head + tail 都保留了
+        assert "截断" in result
+
+        # 超过 1.0：传入 0.8 + 0.8 应自动缩放（0.5 + 0.5），不抛错
+        result2 = _render_transcript(
+            messages, max_chars=1000, head_ratio=0.8, tail_ratio=0.8
+        )
+        assert "截断" in result2
+        assert len(result2) >= 800
+
+
+# ---------------------------------------------------------------------------
+# WU-2: extract_incremental 话题切换增量抽取
+# ---------------------------------------------------------------------------
+
+
+class TestExtractIncremental:
+    async def test_only_new_messages_are_scanned(self, db):
+        """旧消息中的规则信号不提取，只从 last_extracted_index 之后扫描。"""
+        provider = _FakeProvider()
+        extractor = _make_extractor(db, provider)
+        session = _session(
+            [
+                {"role": "user", "content": "以后都用 uv 管理依赖"},
+                {"role": "assistant", "content": "好的"},
+                {"role": "user", "content": "必须每次保存日志"},
+                {"role": "assistant", "content": "收到"},
+            ]
+        )
+
+        result = await extractor.extract_incremental(session, 2)
+
+        assert len(result.memory_ids) == 1
+        rows = _memory_rows(db)
+        assert len(rows) == 1
+        assert "保存日志" in rows[0].content
+        assert "uv" not in rows[0].content
+        assert result.skipped == 0
+
+    async def test_no_llm_called(self, db):
+        """增量抽取只走规则信号，不触碰 runtime/provider。"""
+        provider = _FakeProvider(semantic=_semantic_json(), episode=EPISODE_JSON)
+        extractor = _make_extractor(db, provider)
+        session = _session([{"role": "user", "content": "以后都用 uv 管理依赖"}])
+
+        result = await extractor.extract_incremental(session, 0)
+
+        assert provider.calls == []
+        assert len(result.memory_ids) == 1
+
+    @pytest.mark.parametrize(
+        ("messages", "start"),
+        [
+            ([], 0),
+            ([{"role": "user", "content": "你好"}], 0),
+            ([{"role": "user", "content": "以后都用 uv"}], 1),
+        ],
+    )
+    async def test_empty_or_no_signals_returns_empty(self, db, messages, start):
+        """空 session、无规则信号、或没有新增消息时返回空 ExtractionResult。"""
+        provider = _FakeProvider()
+        extractor = _make_extractor(db, provider)
+
+        result = await extractor.extract_incremental(_session(messages), start)
+
+        assert result.memory_ids == []
+        assert result.episode_ids == []
+        assert result.skipped == 0
+        assert provider.calls == []
+
+    def test_topic_change_source_maps(self, db):
+        extractor = _make_extractor(db, _FakeProvider())
+
+        assert extractor._map_source("topic_change") is EpisodeSource.TOPIC_CHANGE
+
+
+# ---------------------------------------------------------------------------
+# WU-4: _build_prompt_messages 参数化
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPromptMessages:
+    """WU-4：让 ``_build_prompt_messages`` 接受 ``transcript_max_chars`` /
+    ``transcript_head_ratio`` 透传给 ``_render_transcript``，默认行为不变。
+    """
+
+    def test_build_prompt_messages_default_unchanged(self, db):
+        """默认参数下与直接 ``_render_transcript(session.messages)`` 完全一致。"""
+        from nanobot.memory.extractor import (
+            _TRANSCRIPT_TRUNCATE_MARKER,
+            _render_transcript,
+        )
+
+        long_text = "A" * 1000
+        messages = [{"role": "user", "content": long_text} for _ in range(12)]
+        session = _session(messages)
+        extractor = _make_extractor(db, _FakeProvider())
+
+        msgs = extractor._build_prompt_messages(
+            "PROMPT_BODY", session, SystemExtractionResult()
+        )
+
+        assert len(msgs) == 1
+        body = msgs[0]["content"]
+        assert "PROMPT_BODY" in body
+        assert "## 对话内容" in body
+        # 默认行为：transcript 段与 _render_transcript(session.messages) 完全一致
+        direct = _render_transcript(session.messages)
+        assert direct in body
+        assert "截断" in body  # 12000 chars > 8000 -> 触发 marker
+        assert body.index(direct) == body.index("## 对话内容") + len("## 对话内容\n\n")
+        # 默认值就是 8000 + marker
+        head_chars = int(8000 * 0.4)
+        tail_chars = int(8000 * 0.45)
+        assert len(direct) == head_chars + len(_TRANSCRIPT_TRUNCATE_MARKER) + tail_chars
+
+    def test_build_prompt_messages_with_custom_max_chars(self, db):
+        """传入 ``transcript_max_chars=200`` 时 transcript 长度不超过 200 + marker。"""
+        from nanobot.memory.extractor import _TRANSCRIPT_TRUNCATE_MARKER
+
+        long_text = "B" * 500
+        messages = [{"role": "user", "content": long_text} for _ in range(10)]
+        session = _session(messages)
+        extractor = _make_extractor(db, _FakeProvider())
+
+        msgs = extractor._build_prompt_messages(
+            "PROMPT",
+            session,
+            SystemExtractionResult(),
+            transcript_max_chars=200,
+        )
+
+        body = msgs[0]["content"]
+        assert "## 对话内容" in body
+        # 提取 transcript 段以核对长度
+        start = body.index("## 对话内容") + len("## 对话内容\n\n")
+        end = body.index("\n\n## 阶段1")
+        transcript = body[start:end]
+        assert "截断" in transcript
+        assert len(transcript) <= 200 + len(_TRANSCRIPT_TRUNCATE_MARKER)
+
+    def test_build_prompt_messages_with_custom_head_ratio(self, db):
+        """``transcript_head_ratio=0.8`` 时开头 80% × max_chars 仍保留关键开头。"""
+        from nanobot.memory.extractor import (
+            _TRANSCRIPT_TRUNCATE_MARKER,
+            _render_transcript,
+        )
+
+        # 构造超长对话（≥ 2×8000 字符）：把 head_marker 放在第一行靠后位置
+        # 默认 head=0.4 (head_chars=3200) 切掉它;head=0.8 (auto-scale 后 5120) 保留
+        head_marker = "HEAD_BEGIN_MARKER"
+        tail_marker = "TAIL_END_MARKER"
+        first_user = ("x" * 3300) + " " + head_marker + " " + ("x" * 1000)
+        messages = [{"role": "user", "content": first_user}]
+        # 用额外 assistant 消息铺出 16000+ 字符
+        for i in range(10):
+            messages.append({"role": "assistant", "content": f"turn-{i} " + "y" * 1500})
+        messages.append({"role": "user", "content": f"final {tail_marker} " + "z" * 1500})
+        session = _session(messages)
+        extractor = _make_extractor(db, _FakeProvider())
+
+        msgs = extractor._build_prompt_messages(
+            "PROMPT",
+            session,
+            SystemExtractionResult(),
+            transcript_max_chars=8000,
+            transcript_head_ratio=0.8,
+        )
+
+        body = msgs[0]["content"]
+        assert "## 对话内容" in body
+        start = body.index("## 对话内容") + len("## 对话内容\n\n")
+        end = body.index("\n\n## 阶段1")
+        transcript = body[start:end]
+
+        assert "截断" in transcript
+        # head_ratio=0.8 + 默认 tail_ratio=0.45 之和 1.25>1.0,会被自动按比例缩放。
+        # 缩放后 head_ratio=0.64, tail_ratio=0.36, head_chars=5120, tail_chars=2880。
+        head_chars = 5120
+        tail_chars = 2880
+        assert len(transcript) == head_chars + len(_TRANSCRIPT_TRUNCATE_MARKER) + tail_chars
+
+        assert head_marker in transcript[:head_chars]
+
+        default_transcript = _render_transcript(
+            session.messages, max_chars=8000, head_ratio=0.4
+        )
+        default_head_chars = int(8000 * 0.4)
+        assert head_marker not in default_transcript[:default_head_chars]
+

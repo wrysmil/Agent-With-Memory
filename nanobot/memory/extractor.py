@@ -18,8 +18,10 @@ import asyncio
 import json
 import math
 import re
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import uuid4
 
@@ -98,6 +100,14 @@ _REDACT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ), "<redacted>"),
 ]
 
+# WU-1 head+tail 双向保留（plan §3 WU-1 / 参考 OpenAkita smart_truncate）：
+# OpenAkita 用 65% head，我们调成 40% head：开篇任务定义 + 结尾最新进展，
+# 对 LLM 抽取语义/情节记忆的覆盖率更高。head_ratio + tail_ratio 之和 < 1.0
+# （给 marker 留 ~15% 空间）。
+_TRANSCRIPT_HEAD_RATIO: float = 0.4
+_TRANSCRIPT_TAIL_RATIO: float = 0.45
+_TRANSCRIPT_TRUNCATE_MARKER = "\n...[中段已截断,完整对话已被压缩或超长]...\n"
+
 # FIX-4 Sec-M-2: 数值与字符串字段值域校验（防 LLM 输出 NaN/Inf / 巨型字符串）
 CONTENT_MAX_CHARS = 8192
 TAGS_MAX_ITEMS = 32
@@ -110,6 +120,7 @@ DEFAULT_IMPORTANCE = 0.7
 _SOURCE_MAP: dict[str, EpisodeSource] = {
     "session_end": EpisodeSource.SESSION_END,
     "context_compress": EpisodeSource.CONTEXT_COMPRESS,
+    "topic_change": EpisodeSource.TOPIC_CHANGE,
     "deletion": EpisodeSource.DELETION,
     "daily_consolidation": EpisodeSource.DAILY_CONSOLIDATION,
 }
@@ -258,6 +269,25 @@ def _looks_like_error(output: str) -> bool:
     return "error" in low or "traceback" in low
 
 
+def _resolve_action_success(output: str, has_result: bool) -> bool:
+    """判定 ActionNode 是否执行成功。
+
+    Args:
+        output: 工具返回的 output 文本（已归一化）。
+        has_result: 是否在 tool 消息中找到了对应 ``tool_call_id`` 的结果。
+
+    Returns:
+        True 表示成功,False 表示失败。
+
+    孤儿语义：当 assistant 发出了 tool_call 但没有对应的 tool 结果消息
+    时,视为执行失败（``has_result=False``）,避免把"调用了但没收到结果"
+    的工具调用当作"成功调用"写入 episode。
+    """
+    if not has_result:
+        return False
+    return not _looks_like_error(output)
+
+
 def _extract_tool_call(call: Any) -> tuple[str, str, str]:
     """探测 tool_call 结构，返回 ``(tool_name, arguments_str, call_id)``。"""
     if not isinstance(call, dict):
@@ -318,13 +348,14 @@ def _collect_action_nodes(messages: list[dict[str, Any]]) -> list[ActionNode]:
             name, args, call_id = _extract_tool_call(call)
             if not name:
                 continue
+            has_result = call_id in results
             output = results.get(call_id, "")
             nodes.append(
                 ActionNode(
                     tool=name,
                     input=_truncate(_redact(args), ActionNode.INPUT_MAX_CHARS),
                     output=_truncate(_redact(output), ActionNode.OUTPUT_MAX_CHARS),
-                    success=not _looks_like_error(output),
+                    success=_resolve_action_success(output, has_result),
                 )
             )
     return nodes
@@ -501,8 +532,34 @@ def _render_scratchpad(snapshot: ScratchpadEntry | None) -> str:
     )
 
 
-def _render_transcript(messages: list[dict[str, Any]], max_chars: int = 8000) -> str:
-    """渲染 user/assistant 文本转录（超长时保留最近内容）。"""
+def _render_transcript(
+    messages: list[dict[str, Any]],
+    max_chars: int = 8000,
+    *,
+    head_ratio: float = _TRANSCRIPT_HEAD_RATIO,
+    tail_ratio: float = _TRANSCRIPT_TAIL_RATIO,
+) -> str:
+    """渲染 user/assistant 文本转录，超长时 head + tail 双向保留。
+
+    短对话（``<= max_chars``）原样返回，不做任何截断。
+    长对话保留头部 ``head_ratio`` + 尾部 ``tail_ratio``，中间插入
+    ``_TRANSCRIPT_TRUNCATE_MARKER``，让 LLM 既能看到开篇任务定义，
+    又能看到结尾最新进展，覆盖率显著高于纯 tail 截断。
+
+    参考 OpenAkita ``smart_truncate``（truncate.py:60-82），但更简单、无 sidecar
+    文件机制（本路径无 LLM 工具调用回读能力）。
+
+    :param head_ratio: 头部比例，默认 0.4。会被裁剪到 ``[0.0, 1.0]``。
+    :param tail_ratio: 尾部比例，默认 0.45。会被裁剪到 ``[0.0, 1.0]``。
+        若 ``head_ratio + tail_ratio > 1.0``，自动按比例缩放，确保不溢出。
+    """
+    head_ratio = max(0.0, min(1.0, float(head_ratio)))
+    tail_ratio = max(0.0, min(1.0, float(tail_ratio)))
+    if head_ratio + tail_ratio > 1.0:
+        scale = 1.0 / (head_ratio + tail_ratio)
+        head_ratio *= scale
+        tail_ratio *= scale
+
     lines: list[str] = []
     for msg in messages:
         role = str(msg.get("role") or "")
@@ -513,9 +570,11 @@ def _render_transcript(messages: list[dict[str, Any]], max_chars: int = 8000) ->
             continue
         lines.append(f"[{role}] {text}")
     joined = "\n".join(lines)
-    if len(joined) > max_chars:
-        joined = "..." + joined[-max_chars:]
-    return joined
+    if len(joined) <= max_chars:
+        return joined
+    head_chars = int(max_chars * head_ratio)
+    tail_chars = int(max_chars * tail_ratio)
+    return joined[:head_chars] + _TRANSCRIPT_TRUNCATE_MARKER + joined[-tail_chars:]
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +602,32 @@ class MemoryExtractor:
         self.runtime = runtime
         self.workspace_id = workspace_id
         self.user_id = user_id
+        # WU-3B: fallback 目录。若 database 暴露了 fallback_dir(B 节),复用;
+        # 否则回退到 db_path.parent/_memory_fallback,确保 _safe_write_with_fallback
+        # 始终有可写目录。database 可能为 None(generate_episode 路径下),此时
+        # 不创建 fallback_dir,运行时再兜底。
+        self.fallback_dir: Path | None = None
+        if database is not None:
+            db_fb = getattr(database, "fallback_dir", None)
+            if isinstance(db_fb, Path):
+                self.fallback_dir = db_fb
+            else:
+                db_path = getattr(database, "db_path", None)
+                if db_path is not None:
+                    self.fallback_dir = Path(db_path).parent / "_memory_fallback"
+            if self.fallback_dir is not None:
+                try:
+                    self.fallback_dir.mkdir(parents=True, exist_ok=True)
+                except Exception as exc:  # noqa: BLE001 - fallback 目录建不出来不能阻断 extractor
+                    logger.warning("memory fallback dir unavailable ({}): {}", self.fallback_dir, exc)
+            # WU-3B: 启动时重放上轮未写入的 fallback 队列。任何异常仅 warning,
+            # 不影响 extractor 主流程。
+            replay_fn = getattr(database, "replay_fallback", None)
+            if callable(replay_fn):
+                try:
+                    replay_fn()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("memory fallback replay skipped on init: {}", exc)
 
     # ------------------------------------------------------------------
     # 主入口
@@ -555,9 +640,15 @@ class MemoryExtractor:
         source: str = "session_end",
     ) -> ExtractionResult:
         """执行完整 4 阶段提取，返回写入统计。"""
+        # 系统性读取
         system = self._system_extract(session)
+
+        # LLM 抽取
         llm_result = await self._llm_extract(session, system)
+
         existing_memories = self._load_existing_memories(llm_result.memories)
+
+        # 去重
         filtered = self._apply_filters(llm_result, existing_memories)
         persisted = self._persist(filtered, session, source)
         skipped = len(llm_result.memories) - len(filtered.memories)
@@ -605,6 +696,48 @@ class MemoryExtractor:
             logger.opt(exception=exc).warning("quick facts extraction failed: {}", exc)
             return 0
 
+    async def extract_incremental(
+        self,
+        session: Session,
+        last_extracted_index: int,
+    ) -> ExtractionResult:
+        """话题切换触发的轻量增量抽取（只扫新消息，不调 LLM）。
+
+        ``session.messages[last_extracted_index:]`` 视为新增消息，仅走阶段1 的规则
+        信号抽取，去重与落库复用 ``_load_existing_memories`` + ``_apply_filters``
+        + ``_persist``。source 固定为 ``topic_change``，用于 episode 映射审计。
+        失败隔离：任何异常仅 warning，并返回空 :class:`ExtractionResult`。
+        """
+        try:
+            if not session.messages:
+                return ExtractionResult()
+            start = max(0, last_extracted_index)
+            new_messages = session.messages[start:]
+            if not new_messages:
+                return ExtractionResult()
+
+            fragments = _collect_rule_signals(new_messages)
+            if not fragments:
+                return ExtractionResult()
+            candidates = [
+                LLMMemoryItem(content=fragment, type=_QUICK_FACT_TYPE)
+                for fragment in fragments
+            ]
+            existing = self._load_existing_memories(candidates)
+            filtered = self._apply_filters(
+                LLMExtractionResult(memories=candidates),
+                existing,
+            )
+            persisted = self._persist(filtered, session, source="topic_change")
+            return ExtractionResult(
+                memory_ids=persisted.memory_ids,
+                episode_ids=persisted.episode_ids,
+                skipped=len(candidates) - len(filtered.memories),
+            )
+        except Exception as exc:  # noqa: BLE001 - 增量抽取失败绝不能上抛
+            logger.opt(exception=exc).warning("incremental extraction failed: {}", exc)
+            return ExtractionResult()
+
     # ------------------------------------------------------------------
     # 阶段1：系统提取（无 LLM）
     # ------------------------------------------------------------------
@@ -612,9 +745,12 @@ class MemoryExtractor:
     def _system_extract(self, session: Session) -> SystemExtractionResult:
         if not session.messages:
             return SystemExtractionResult()
+        # 工具
         action_nodes = _collect_action_nodes(session.messages)
+        # 对话内容
         rule_signals = _collect_rule_signals(session.messages)
         with self.database.connect() as conn:
+            # 快照
             snapshot = get_scratchpad(conn, self.user_id, self.workspace_id)
         return SystemExtractionResult(
             action_nodes=action_nodes,
@@ -720,8 +856,15 @@ class MemoryExtractor:
         prompt: str,
         session: Session,
         system: SystemExtractionResult,
+        *,
+        transcript_max_chars: int = 8000,
+        transcript_head_ratio: float = _TRANSCRIPT_HEAD_RATIO,
     ) -> list[dict[str, Any]]:
-        transcript = _render_transcript(session.messages)
+        transcript = _render_transcript(
+            session.messages,
+            max_chars=transcript_max_chars,
+            head_ratio=transcript_head_ratio,
+        )
         action_summary = json.dumps(
             [node.to_dict() for node in system.action_nodes], ensure_ascii=False
         )
@@ -823,6 +966,87 @@ class MemoryExtractor:
     # 阶段4：持久化
     # ------------------------------------------------------------------
 
+    def _safe_write_with_fallback(
+        self,
+        conn: Any,
+        *,
+        kind: str,
+        item: dict[str, Any],
+        writer: Any,
+    ) -> bool:
+        """执行单条 DB 写入;失败时把 payload 落 ``fallback_dir`` 等下次重放。
+
+        Args:
+            conn: 当前事务内的 ``sqlite3.Connection``(由 ``_persist`` 的
+                ``with self.database.connect() as conn:`` 提供)。
+            kind: ``"memory"`` / ``"episode"`` / ``"backfill"``。
+            item: 载荷 dict(对应 ``Memory.to_row()`` / ``Episode.to_row()`` 或
+                backfill 的 ``{memory_id, episode_id}``)。
+            writer: 真正写入 DB 的可调用对象,签名 ``writer(conn) -> None``,
+                抛任意异常即视为写入失败。
+
+        Returns:
+            True 表示实际写入 DB 成功,False 表示已落 fallback 文件(或 fallback
+            也失败,仅 warning)。调用方据此决定是否把 id 计入
+            ``saved_memory_ids`` / ``saved_episode_ids``。
+        """
+        try:
+            writer(conn)
+            return True
+        except Exception as exc:  # noqa: BLE001 - 失败隔离
+            # MAJOR #1: 失败后 rollback 撤销未提交写入,避免事务残留污染后续操作。
+            # rollback 自身失败必须吞掉,fallback 是兜底,绝不能被 rollback 阻断。
+            try:
+                conn.rollback()
+            except Exception:
+                logger.debug("rollback after failed write also failed (ignored)")
+            fallback_dir = self.fallback_dir
+            if fallback_dir is None:
+                logger.warning(
+                    "memory write failed and no fallback_dir configured: {} (kind={})",
+                    exc,
+                    kind,
+                )
+                return False
+            try:
+                ts = _now_iso()
+                uid = uuid.uuid4().hex[:8]
+                safe_kind = str(kind).replace("/", "_").replace("\\", "_")
+                path = fallback_dir / f"{ts}_{safe_kind}_{uid}.json"
+                fallback_dir.mkdir(parents=True, exist_ok=True)
+                # MAJOR #2 / OWASP LLM05: 落盘前对文本字段 redact,防止凭据
+                # 残留到 fallback JSON 中。只处理 content / subject / predicate
+                # 三个文本字段(tags 数组不在本改动范围);用 isinstance 守卫保证
+                # 缺字段/非字符串时原样保留。
+                payload_item = dict(item)
+                for text_key in ("content", "subject", "predicate"):
+                    value = payload_item.get(text_key)
+                    if isinstance(value, str):
+                        payload_item[text_key] = _redact(value)
+                payload = {
+                    "kind": safe_kind,
+                    "item": payload_item,
+                    "attempt": ts,
+                    "error": str(exc),
+                }
+                path.write_text(
+                    json.dumps(payload, ensure_ascii=False, default=str),
+                    encoding="utf-8",
+                )
+                logger.warning(
+                    "memory write failed; saved to fallback {} ({})",
+                    path.name,
+                    exc,
+                )
+            except Exception as file_exc:  # noqa: BLE001 - fallback 自身失败也吞掉
+                logger.warning(
+                    "memory fallback write also failed for kind={} ({}); original={}",
+                    kind,
+                    file_exc,
+                    exc,
+                )
+            return False
+
     def _persist(
         self,
         filtered: FilteredExtractionResult,
@@ -833,30 +1057,36 @@ class MemoryExtractor:
         saved_memory_ids: list[str] = []
         saved_episode_ids: list[str] = []
 
+        # WU-3B: 每条真实写入通过 _safe_write_with_fallback 路由。
+        # 成功 → 返回 True → id 进入 saved_*_ids;失败 → 整条 payload 落 fallback
+        # 文件 → 返回 False → id 不进 saved_*_ids(对外统计保持「真实成功」语义)。
         with self.database.connect() as conn:
             # 阶段 4a：写入 memories（先写，拿到 ID 供 episode 反向引用）
             memory_by_subject: dict[str, str] = {}
             for item in filtered.memories:
                 memory_id = str(uuid4())
-                try:
-                    memory = Memory(
-                        id=memory_id,
-                        content=item.content,
-                        type=MemoryType(item.type.strip().lower()),
-                        priority=_resolve_priority(item),
-                        source="extraction",
-                        importance_score=item.importance,
-                        tags=list(item.tags),
-                        subject=item.subject,
-                        predicate=item.predicate,
-                        workspace_id=self.workspace_id,
-                        user_id=self.user_id,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                    add_memory(conn, memory)
-                except Exception as exc:  # noqa: BLE001 - 单条失败隔离
-                    logger.warning("skipping memory insert after failure: {}", exc)
+                memory = Memory(
+                    id=memory_id,
+                    content=item.content,
+                    type=MemoryType(item.type.strip().lower()),
+                    priority=_resolve_priority(item),
+                    source="extraction",
+                    importance_score=item.importance,
+                    tags=list(item.tags),
+                    subject=item.subject,
+                    predicate=item.predicate,
+                    workspace_id=self.workspace_id,
+                    user_id=self.user_id,
+                    created_at=now,
+                    updated_at=now,
+                )
+                ok = self._safe_write_with_fallback(
+                    conn,
+                    kind="memory",
+                    item=memory.to_row(),
+                    writer=lambda c, m=memory: add_memory(c, m),
+                )
+                if not ok:
                     continue
                 saved_memory_ids.append(memory_id)
                 if item.subject:
@@ -874,38 +1104,47 @@ class MemoryExtractor:
             # 阶段 4c：写入 episode（即使 LLM 失败也写，仅 action_nodes）
             if episode is not None or filtered.action_nodes:
                 episode_id = str(uuid4())
-                try:
-                    record = Episode(
-                        id=episode_id,
-                        session_id=session.key,
-                        summary=episode.summary if episode is not None else "",
-                        goal=episode.goal if episode is not None else "",
-                        outcome=_normalize_outcome(episode.outcome if episode is not None else None),
-                        source=self._map_source(source),
-                        action_nodes=[node.to_dict() for node in filtered.action_nodes],
-                        entities=list(episode.entities) if episode is not None else [],
-                        tools_used=list(episode.tools_used) if episode is not None else [],
-                        linked_memory_ids=linked_ids,
-                        importance_score=episode.importance if episode is not None else 0.7,
-                        started_at=_iso(session.created_at),
-                        ended_at=now,
-                    )
-                    add_episode(conn, record)
+                record = Episode(
+                    id=episode_id,
+                    session_id=session.key,
+                    summary=episode.summary if episode is not None else "",
+                    goal=episode.goal if episode is not None else "",
+                    outcome=_normalize_outcome(episode.outcome if episode is not None else None),
+                    source=self._map_source(source),
+                    action_nodes=[node.to_dict() for node in filtered.action_nodes],
+                    entities=list(episode.entities) if episode is not None else [],
+                    tools_used=list(episode.tools_used) if episode is not None else [],
+                    linked_memory_ids=linked_ids,
+                    importance_score=episode.importance if episode is not None else 0.7,
+                    started_at=_iso(session.created_at),
+                    ended_at=now,
+                )
+                episode_ok = self._safe_write_with_fallback(
+                    conn,
+                    kind="episode",
+                    item=record.to_row(),
+                    writer=lambda c, r=record: add_episode(c, r),
+                )
+                if episode_ok:
                     saved_episode_ids.append(episode_id)
-                except Exception as exc:  # noqa: BLE001 - episode 失败不回滚已写 memory
-                    logger.error("episode insert failed: {}", exc)
-                else:
                     # FIX-6 Rev-M-4：反向回填 source_episode_id（同一事务）。
                     # 单条失败仅 warning，不影响 episode 持久化或后续回填。
                     for memory_id in linked_ids:
-                        try:
-                            update_memory_source_episode(conn, memory_id, episode_id)
-                        except Exception as exc:  # noqa: BLE001
+                        backfill_ok = self._safe_write_with_fallback(
+                            conn,
+                            kind="backfill",
+                            item={"memory_id": memory_id, "episode_id": episode_id},
+                            writer=lambda c, mid=memory_id, eid=episode_id: update_memory_source_episode(
+                                c, mid, eid
+                            ),
+                        )
+                        if not backfill_ok:
                             logger.warning(
-                                "memory source_episode_id backfill failed for {}: {}",
+                                "memory source_episode_id backfill failed for {} (saved to fallback)",
                                 memory_id,
-                                exc,
                             )
+                else:
+                    logger.error("episode insert failed (saved to fallback)")
 
         return PersistenceResult(
             memory_ids=saved_memory_ids,

@@ -390,14 +390,35 @@ class MemoryExtractionHook(AgentHook):
                 self._session_key,
             )
 
-        # ② fire-and-forget 触发提取（plan §10 Task 12：不等待、不登记）。
-        #    extractor 无「仅 semantic 轨」开关，按整体 ``extract_session`` 退化执行；
-        #    输入取当前会话转录，保留 assistant / tool 上下文。
+        # ② fire-and-forget 触发增量抽取（plan §10 Task 12：不等待、不登记）。
+        #    只扫最新 user 消息及之后的 assistant/tool，避免重复整 session 扫描。
         transcript = [dict(message) for message in context.messages]
-        _spawn_background_task(self._run_extraction(transcript, source="session_end"))
+        last_extracted_index = self._compute_incremental_start_index(transcript)
+        _spawn_background_task(
+            self._run_incremental_extraction(transcript, last_extracted_index)
+        )
 
         # ③ 抬高阈值：同一实例内需再累积 ≥4 条 user 消息才重新检测（跨轮重置）。
         self._next_check_count = count + self.TOPIC_CHANGE_MIN_MESSAGES
+
+    def _compute_incremental_start_index(self, messages: list[dict[str, Any]]) -> int:
+        """返回倒数第二条非空 user 消息之后的起始下标。
+
+        增量抽取保留最新 user 消息及其后的 assistant / tool 消息，不重扫更早的
+        历史。若找不到倒数第二条非空 user 消息（例如只有一条 user 消息），返回 0。
+        """
+        user_indices: list[int] = []
+        for index, message in enumerate(messages):
+            if message.get("role") != "user":
+                continue
+            text = _content_text(message.get("content")).strip()
+            if not text:
+                continue
+            user_indices.append(index)
+
+        if len(user_indices) < 2:
+            return 0
+        return user_indices[-2] + 1
 
     async def _judge_topic_change(self, recent: list[str], latest: str) -> bool:
         """返回 ``True`` 表示同一话题（CONTINUE）；任何失败都按 CONTINUE 处理。"""
@@ -517,6 +538,32 @@ class MemoryExtractionHook(AgentHook):
             "memory extraction finished for session {} source={}",
             self._session_key,
             source,
+        )
+
+    async def _run_incremental_extraction(
+        self,
+        messages: list[dict[str, Any]],
+        last_extracted_index: int,
+    ) -> None:
+        """在后台执行话题切换触发的增量抽取，失败仅 warning。"""
+        session = Session(
+            key=self._session_key,
+            messages=[dict(message) for message in messages],
+        )
+        try:
+            await asyncio.wait_for(
+                self._extractor.extract_incremental(session, last_extracted_index),
+                timeout=30.0,
+            )
+        except Exception:
+            logger.warning(
+                "incremental memory extraction failed for session {}",
+                self._session_key,
+            )
+            return
+        logger.info(
+            "incremental memory extraction finished for session {}",
+            self._session_key,
         )
 
 
