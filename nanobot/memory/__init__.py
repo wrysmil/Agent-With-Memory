@@ -31,6 +31,13 @@ from nanobot.memory.repository import (
     upsert_scratchpad,
 )
 
+# S1-S5 hardening exports（plan 2026-09-12）
+from nanobot.memory.session_end_event import SessionEndEvent, SessionEndReason
+from nanobot.memory.orchestrator import SessionEndOrchestrator
+from nanobot.memory.profile_extractor import ProfileExtractor, merge_profile_incremental
+from nanobot.memory.experience_extractor import ExperienceExtractor
+from nanobot.memory.topic_prefilter import TopicChangeGate, compute_topic_hash
+
 __all__ = [
     "MemoryDatabase",
     "Memory", "Episode", "ScratchpadEntry",
@@ -38,4 +45,9 @@ __all__ = [
     "add_memory", "get_memory", "list_memories", "search_memories", "delete_memory",
     "add_episode", "get_episode", "list_episodes_by_session",
     "upsert_scratchpad", "get_scratchpad",
+    # S1-S5 hardening
+    "SessionEndEvent", "SessionEndReason", "SessionEndOrchestrator",
+    "ProfileExtractor", "ExperienceExtractor",
+    "merge_profile_incremental",
+    "TopicChangeGate", "compute_topic_hash",
 ]
