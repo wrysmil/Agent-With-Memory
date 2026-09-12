@@ -27,7 +27,6 @@ from nanobot.memory.models import (
     ScratchpadEntry,
 )
 
-
 # ---------- memories ----------
 
 _INSERT_MEMORY_SQL = """

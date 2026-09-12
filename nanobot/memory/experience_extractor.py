@@ -1,8 +1,6 @@
 """任务经验提取（S3 Track 2：feature flag 控制默认关闭）。"""
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import dataclass
 from typing import Any
 

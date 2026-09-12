@@ -14,7 +14,6 @@ from loguru import logger
 
 from nanobot.memory.prompts import SEMANTIC_EXTRACTION_PROMPT
 
-
 CITATION_SCORING_SECTION = """\
 
 以下是被检索到的历史记忆，请逐条评判它对本次任务是否有实际帮助：
