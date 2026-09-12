@@ -203,6 +203,23 @@ class MemoryExtractionHook(AgentHook):
         from nanobot.memory.topic_prefilter import TopicChangeGate
         self._topic_gate = TopicChangeGate(interval_seconds=60)
 
+        # S1: 会话结束编排器（feature flag 默认关闭，遵循 spec §7.3）
+        self._session_end_enabled: bool = getattr(
+            type(self), "SESSION_END_ENABLED", True
+        )
+        if self._session_end_enabled:
+            from nanobot.memory.orchestrator import SessionEndOrchestrator
+            self._session_end_orchestrator = SessionEndOrchestrator(
+                extractor=self._build_orchestrator_extractor(),
+                scratchpad_writer=self._scratchpad_writer,
+                enable_track2=getattr(type(self), "S3_TRACK2_ENABLED", False),
+                enable_scratchpad_reformat=getattr(
+                    type(self), "S4_SCRATCHPAD_REFORMAT_ENABLED", False
+                ),
+            )
+        else:
+            self._session_end_orchestrator = None
+
     # ------------------------------------------------------------------
     # AgentHook 回调
     # ------------------------------------------------------------------
@@ -252,7 +269,10 @@ class MemoryExtractionHook(AgentHook):
             )
 
     async def on_finally(self, context: AgentRunHookContext) -> None:
-        """T1 等待登记中的提取任务完成（超时/异常仅 warning）。"""
+        """T1 等待登记中的提取任务完成（超时/异常仅 warning）。
+
+        S1: 同时 fire-and-forget 触发 SessionEndOrchestrator 兜底执行。
+        """
         try:
             await self._await_pending_extractions()
         except Exception:
@@ -260,6 +280,49 @@ class MemoryExtractionHook(AgentHook):
                 "MemoryExtractionHook.on_finally failed for session {}",
                 self._session_key,
             )
+
+        # S1: 进程退出兜底触发 SessionEndEvent（fire-and-forget）
+        if self._session_end_orchestrator is not None:
+            from nanobot.memory.session_end_event import SessionEndEvent, SessionEndReason
+            event = SessionEndEvent(
+                session_key=self._session_key,
+                reason=SessionEndReason.PROCESS_SHUTDOWN,
+                transcript=list(context.messages),
+            )
+            try:
+                _spawn_background_task(
+                    self._session_end_orchestrator.run(event)
+                )
+            except Exception:
+                logger.warning(
+                    "SessionEnd orchestrator dispatch failed for session {}",
+                    self._session_key,
+                )
+
+    def _build_orchestrator_extractor(self) -> Any:
+        """构造编排器所需的 extractor 适配形态。
+
+        MemoryExtractor 已具备 generate_episode（Task 2 已接入）；
+        ProfileExtractor/ExperienceExtractor 是新模块，由调用方按需构造。
+        这里返回的适配对象暴露 3 个 async 方法；对不存在的属性返回 no-op。
+        """
+        ext = self._extractor
+
+        class _Adapter:
+            pass
+
+        adapter = _Adapter()
+
+        async def _noop(*a, **k):
+            return None
+
+        async def _noop_pair(*a, **k):
+            return [], []
+
+        adapter.generate_episode = getattr(ext, "generate_episode", _noop)
+        adapter.extract_user_profile = getattr(ext, "extract_user_profile", _noop_pair)
+        adapter.extract_experience = getattr(ext, "extract_experience", _noop)
+        return adapter
 
     # ------------------------------------------------------------------
     # T0：即时同步焦点

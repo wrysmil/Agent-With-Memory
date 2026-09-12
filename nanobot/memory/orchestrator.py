@@ -77,3 +77,31 @@ class SessionEndOrchestrator:
                 )
             except Exception as exc:
                 logger.warning("[S4:Scratchpad] failed: {}", exc)
+
+        # Step 4: 关联回填（episode ↔ memories ↔ turns）—— spec §1.1 / §7.1
+        await self._step_link_relations(ep_id)
+
+    async def _step_link_relations(self, ep_id: Any) -> None:
+        """关联回填：失败重试 1 次，仍失败仅告警（spec §1.2 失败隔离）。"""
+        linker = getattr(self._extractor, "link_relations", None)
+        if linker is None or ep_id is None:
+            return
+        # 占位：调用方提供 link_relations(episode_id, memory_ids, turn_ids)
+        # 当前 _build_orchestrator_extractor 适配器未实现，按 no-op 处理。
+        # 生产应由 repository.update_episode + link_turns_to_episode 实现。
+        try:
+            result = linker(ep_id, [], [])
+            if hasattr(result, "__await__"):
+                await result
+        except Exception as exc:
+            logger.warning("[S1:SessionEnd] link_relations first attempt failed: {}", exc)
+            # 重试 1 次
+            try:
+                result = linker(ep_id, [], [])
+                if hasattr(result, "__await__"):
+                    await result
+            except Exception as exc2:
+                logger.error(
+                    "[S1:SessionEnd] link_relations retry failed: {}",
+                    exc2,
+                )
