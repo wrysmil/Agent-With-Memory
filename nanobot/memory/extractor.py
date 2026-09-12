@@ -919,3 +919,167 @@ class MemoryExtractor:
             logger.warning("unknown extraction source {!r}, fallback to session_end", source)
             return EpisodeSource.SESSION_END
         return mapped
+
+    # ------------------------------------------------------------------
+    # S2: Episode 抽取（plan 2026-09-12 nanobot memory extraction hardening）
+    # ------------------------------------------------------------------
+
+    async def generate_episode(
+        self,
+        transcript: list[dict],
+        session_key: str,
+        source: str = "session_end",
+    ) -> Episode | None:
+        """从整段对话转录生成一个情节记忆（不入库，由调用方决定）。"""
+        from datetime import datetime, timezone
+
+        from .models import Episode, EpisodeOutcome
+
+        if not transcript:
+            return None
+
+        action_nodes = self._extract_action_nodes(transcript)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        episode = Episode(
+            id=str(uuid4()),
+            session_id=session_key,
+            summary="",
+            started_at=now_iso,
+            ended_at=now_iso,
+            source=self._map_source(source),
+            outcome=EpisodeOutcome.COMPLETED,
+            action_nodes=action_nodes,
+        )
+
+        if self.runtime is not None:
+            try:
+                conv_text = self._format_episode_lines(transcript)
+                # EPISODE_EXTRACTION_PROMPT 为指令式，无 {conversation} 占位符
+                prompt = f"{EPISODE_EXTRACTION_PROMPT}\n\n### 对话转录\n{conv_text}"
+                resp = await self.runtime.provider.chat_with_retry(
+                    model=self.runtime.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    tools=[],
+                    temperature=self.runtime.generation.temperature,
+                    max_tokens=self.runtime.generation.max_tokens,
+                    reasoning_effort=self.runtime.generation.reasoning_effort,
+                )
+                text = getattr(resp, "content", "") or ""
+                data = _parse_json_object(text)
+                if isinstance(data, dict):
+                    summary = str(data.get("summary", "")).strip()
+                    if summary:
+                        episode.summary = summary
+                    episode.goal = str(data.get("goal", "")).strip()
+                    raw_outcome = str(data.get("outcome", "")).strip().lower()
+                    if raw_outcome in ("completed", "partial", "failed", "ongoing"):
+                        try:
+                            episode.outcome = EpisodeOutcome(raw_outcome)
+                        except ValueError:
+                            pass
+                    entities = data.get("entities")
+                    if isinstance(entities, list):
+                        episode.entities = [str(e) for e in entities if e]
+                    tools = data.get("tools_used")
+                    if isinstance(tools, list):
+                        existing = set(episode.tools_used)
+                        for t in tools:
+                            ts = str(t)
+                            if ts and ts not in existing:
+                                episode.tools_used.append(ts)
+                                existing.add(ts)
+            except Exception as exc:
+                logger.warning("generate_episode LLM failed: {}", exc)
+
+        if not episode.summary:
+            episode.summary = self._generate_fallback_summary(transcript)
+            first_content = transcript[0].get("content", "") if transcript else ""
+            episode.goal = str(first_content)[:100]
+        if not episode.entities:
+            episode.entities = self._extract_entities_heuristic(transcript)
+
+        return episode
+
+    def _extract_action_nodes(self, transcript: list[dict]) -> list[dict]:
+        """从 transcript 中抽取结构化工具调用节点（参考 OpenAkita _extract_action_nodes）。"""
+        nodes: list[dict] = []
+        for turn in transcript:
+            tool_calls = turn.get("tool_calls") or []
+            if not tool_calls:
+                continue
+            for tc in tool_calls:
+                inp = tc.get("input", tc.get("arguments", {})) or {}
+                params: dict[str, str] = {}
+                for key in ("command", "path", "query", "url", "filename"):
+                    if key in inp:
+                        params[key] = str(inp[key])[:200]
+                success = True
+                err: str | None = None
+                summary = ""
+                tc_id = tc.get("id", "")
+                for tr in turn.get("tool_results") or []:
+                    if tr.get("tool_use_id") == tc_id or not tc_id:
+                        content = tr.get("content", "")
+                        if isinstance(content, str):
+                            summary = content[:200]
+                        else:
+                            summary = str(content)[:200]
+                        if tr.get("is_error"):
+                            success = False
+                            err = summary
+                        break
+                nodes.append({
+                    "tool_name": tc.get("name", ""),
+                    "key_params": params,
+                    "result_summary": summary,
+                    "success": success,
+                    "error_message": err,
+                })
+        return nodes
+
+    @staticmethod
+    def _format_episode_lines(transcript: list[dict]) -> str:
+        lines: list[str] = []
+        for t in transcript[-20:]:
+            content = (t.get("content", "") or "")[:600]
+            suffix = ""
+            if t.get("tool_calls"):
+                suffix = f" [调用了 {len(t['tool_calls'])} 个工具]"
+            lines.append(f"[{t.get('role', '?')}]: {content}{suffix}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _generate_fallback_summary(transcript: list[dict]) -> str:
+        user_msgs = [
+            (t.get("content", "") or "")[:100]
+            for t in transcript
+            if t.get("role") == "user" and t.get("content")
+        ]
+        if user_msgs:
+            return f"对话涉及: {'; '.join(user_msgs[:3])}"
+        return f"共 {len(transcript)} 轮对话"
+
+    @staticmethod
+    def _extract_entities_heuristic(transcript: list[dict]) -> list[str]:
+        path_re = re.compile(r"[A-Za-z]:[\\/][^\s\"']+")
+        file_re = re.compile(r"[\w-]+\.(?:py|js|ts|md|json|yaml|toml|sh)\b")
+        out: set[str] = set()
+        for t in transcript:
+            text = t.get("content", "") or ""
+            for m in path_re.finditer(text):
+                out.add(m.group(0))
+            for m in file_re.finditer(text):
+                out.add(m.group(0))
+        return list(out)[:20]
+
+
+def _parse_json_object(text: str) -> dict | None:
+    """宽松提取首个 JSON 对象。"""
+    import json
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(0))
+    except Exception:
+        return None
