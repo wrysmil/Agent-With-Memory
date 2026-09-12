@@ -84,7 +84,7 @@ class FilterResult:
 
 
 def is_task_artifact(content: str) -> bool:
-    """判断内容是否为任务产物（用户请求 AI 执行操作）。
+    """判断内容是否为任务产物（用户请求 AI 执行操作），任务产物不应该进入记忆中。
 
     任务产物是指用户在请求 AI 完成某项操作，而非陈述一个事实或偏好。
     这类内容不应存入记忆系统，因为它们是过程性而非陈述性的。
@@ -216,3 +216,37 @@ def ngram_similarity(a: str, b: str, n: int = 3) -> float:
         return 0.0
 
     return intersection / union
+
+
+# ---------------------------------------------------------------------------
+# 给话题预筛复用的判定辅助（plan 2026-09-12 S5）
+#
+# 注：原计划复用模块内 _CHAT_FULL/_FOLLOW_UP_CJK/_FOLLOW_UP_EN 私有正则，
+# 但 filters.py 经过一轮重构后这些私有变量已移除。为避免反向耦合，
+# 这里改为弱判定（短消息或以特定追问词开头即视为预筛跳过），
+# 实际预筛逻辑在 nanobot.memory.topic_prefilter 内独立实现。
+# ---------------------------------------------------------------------------
+
+
+def is_chat_only(content: str) -> bool:
+    """整句仅由短寒暄/控制词构成（弱判定，预筛的辅助信号之一）。"""
+    if not content or not content.strip():
+        return False
+    text = content.strip().lower()
+    return len(text) <= 2 and text in {
+        "好", "好呀", "嗯", "哦", "ok", "no", "hi", "yo", "嗨",
+    }
+
+
+def starts_with_follow_up(content: str) -> bool:
+    """以追问/承接词开头（弱判定，仅作为预筛辅助信号）。"""
+    if not content or not content.strip():
+        return False
+    s = content.strip()
+    heads = (
+        "那个", "这个", "它们", "它", "这些", "那些", "这", "那",
+        "继续", "接着", "接下来", "然后", "上次", "之前", "刚才", "还有",
+        "再问", "再说", "再来", "that", "this", "it", "these", "those",
+        "continue", "again", "once more",
+    )
+    return any(s.startswith(h) for h in heads)
