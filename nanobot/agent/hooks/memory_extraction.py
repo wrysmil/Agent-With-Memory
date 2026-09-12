@@ -199,6 +199,10 @@ class MemoryExtractionHook(AgentHook):
         # T1 任务（``on_finally`` 等待）。T5 后台任务见模块级 ``_BACKGROUND_TASKS``。
         self._pending_tasks: set[asyncio.Task[Any]] = set()
 
+        # S5: 话题预筛 + 间隔节流（plan 2026-09-12）
+        from nanobot.memory.topic_prefilter import TopicChangeGate
+        self._topic_gate = TopicChangeGate(interval_seconds=60)
+
     # ------------------------------------------------------------------
     # AgentHook 回调
     # ------------------------------------------------------------------
@@ -288,6 +292,12 @@ class MemoryExtractionHook(AgentHook):
         if not recent:
             return
 
+        # S5: 廉价预筛（在调 LLM 之前挡掉明显非话题切换）
+        from nanobot.memory.topic_prefilter import PrefilterResult, compute_topic_hash
+        if self._topic_gate.prefilter(latest, [m for m in recent]) == PrefilterResult.SKIP:
+            self._next_check_count = count + 1
+            return
+
         if await self._judge_topic_change(recent, latest):
             # CONTINUE：同一转录状态不重复检测，出现新消息后再判。
             self._next_check_count = count + 1
@@ -298,6 +308,12 @@ class MemoryExtractionHook(AgentHook):
             self._session_key,
             count,
         )
+
+        # S5: 间隔 + topic_hash 去重后再 fire
+        topic_hash = compute_topic_hash(latest)
+        if not self._topic_gate.allow_fire(self._session_key, topic_hash):
+            self._next_check_count = count + 1
+            return
 
         # ① 旧 current_focus 滚入 active_projects（复用 update_focus 的归档语义）。
         try:
