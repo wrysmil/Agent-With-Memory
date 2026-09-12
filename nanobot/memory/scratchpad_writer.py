@@ -10,9 +10,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
+
+from loguru import logger
 
 from nanobot.memory.database import MemoryDatabase
 from nanobot.memory.models import ScratchpadEntry
+from nanobot.memory.prompts import SCRATCHPAD_FORMAT_PROMPT
 from nanobot.memory.repository import get_scratchpad, upsert_scratchpad
 
 # ---------- 常量 ----------
@@ -40,10 +44,15 @@ class ScratchpadWriter:
         database: MemoryDatabase,
         user_id: str,
         workspace_id: str = "default",
+        *,
+        runtime: Any | None = None,
+        model: str = "",
     ) -> None:
         self.database = database
         self.user_id = user_id
         self.workspace_id = workspace_id
+        self._runtime = runtime
+        self._model = model
 
     # ------------------------------------------------------------------
     # 内部工具
@@ -193,3 +202,82 @@ class ScratchpadWriter:
         )
         with self.database.connect() as conn:
             upsert_scratchpad(conn, updated_entry)
+
+    # ------------------------------------------------------------------
+    # S4: Scratchpad LLM 重构（plan 2026-09-12 nanobot memory extraction hardening）
+    # ------------------------------------------------------------------
+
+    SCRATCHPAD_MAX_CHARS: int = 2000
+
+    async def format_with_llm(
+        self,
+        current_scratchpad: Any | None,
+        episode_summary: str,
+    ) -> ScratchpadEntry:
+        """用 LLM 重构 scratchpad 内容（输出 4 段 Markdown，≤2000 字符）。
+
+        Args:
+            current_scratchpad: 现有 ScratchpadEntry（或 None）。
+            episode_summary: 最新情节摘要。
+
+        Returns:
+            ScratchpadEntry：调用方负责写库。
+        """
+        current_content = (
+            getattr(current_scratchpad, "content", "") if current_scratchpad else ""
+        ) or "(空白)"
+
+        if self._runtime is None:
+            return self._minimal_fallback(current_scratchpad, episode_summary)
+
+        try:
+            # SCRATCHPAD_FORMAT_PROMPT 为指令式模板（详见 prompts.py），
+            # 不含 {current_scratchpad}/{episode_summary} 占位符，改为手工拼接。
+            prompt = (
+                f"{SCRATCHPAD_FORMAT_PROMPT}\n\n"
+                f"### 当前草稿本\n{current_content}\n\n"
+                f"### 最新情节摘要\n{episode_summary}"
+            )
+            resp = await self._runtime.provider.chat_with_retry(
+                model=self._model or getattr(self._runtime, "model", ""),
+                messages=[{"role": "user", "content": prompt}],
+                tools=[],
+                temperature=getattr(self._runtime.generation, "temperature", 0.0),
+                max_tokens=getattr(self._runtime.generation, "max_tokens", 1000),
+                reasoning_effort=getattr(self._runtime.generation, "reasoning_effort", None),
+            )
+            text = (getattr(resp, "content", "") or "").strip()
+            if len(text) > self.SCRATCHPAD_MAX_CHARS:
+                text = text[: self.SCRATCHPAD_MAX_CHARS]
+            return self._build_scratchpad(text, current_scratchpad)
+        except Exception as exc:
+            logger.warning("ScratchpadWriter.format_with_llm failed: {}", exc)
+            return self._minimal_fallback(current_scratchpad, episode_summary)
+
+    def _minimal_fallback(
+        self, current: Any | None, episode_summary: str
+    ) -> ScratchpadEntry:
+        existing = current if isinstance(current, ScratchpadEntry) else ScratchpadEntry(
+            user_id=self.user_id,
+            workspace_id=self.workspace_id,
+            updated_at=self._now_iso(),
+        )
+        new_content = (existing.content or "") + (
+            f"\n\n## 近期进展\n- {episode_summary[:200]}"
+            if episode_summary else ""
+        )
+        if len(new_content) > self.SCRATCHPAD_MAX_CHARS:
+            new_content = new_content[-self.SCRATCHPAD_MAX_CHARS:]
+        existing.content = new_content
+        existing.updated_at = self._now_iso()
+        return existing
+
+    def _build_scratchpad(self, text: str, current: Any | None) -> ScratchpadEntry:
+        existing = current if isinstance(current, ScratchpadEntry) else ScratchpadEntry(
+            user_id=self.user_id,
+            workspace_id=self.workspace_id,
+            updated_at=self._now_iso(),
+        )
+        existing.content = text
+        existing.updated_at = self._now_iso()
+        return existing
