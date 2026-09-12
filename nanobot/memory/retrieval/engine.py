@@ -76,6 +76,8 @@ class RetrievalEngine:
         # 1) 拆解（关键词 + 意图）
         if precomputed_keywords is not None:
             keywords = precomputed_keywords
+            # 通用查询，走一般检索
+            # "search_file"	 ：检索文件/附件类资源
             intent = "general"
         else:
             decomp = await self._decomposer.decompose(
@@ -84,6 +86,8 @@ class RetrievalEngine:
             keywords = decomp.keywords
             intent = decomp.intent
 
+      # _fn 是一个闭包（内部函数）
+    # 即一个接收一个参数、返回一个结果的函数式接口。
         recency = _build_recency_fn()
 
         # 2) 四路并行（同步通道 → asyncio.to_thread）
@@ -96,6 +100,16 @@ class RetrievalEngine:
                 compute_recency=recency,
             )
         )
+
+        # eps_task = asyncio.create_task(           # ① 异步调度器：把下面整个调用包装成 Task
+        #     asyncio.to_thread(                     # ② 线程池执行器：把同步函数丢到后台线程跑
+        #         search_episodes,                   # ③ 被调用的同步函数（实际干活的）
+        #         self.store,                        # ④ 位置参数，透传给 search_episodes
+        #         query=prepared.cleaned_query,      # ④ 关键字参数，透传给 search_episodes
+        #         limit=_EPISODES_LIMIT,
+        #         compute_recency=recency,
+        #     )
+        # )
         eps_task = asyncio.create_task(
             asyncio.to_thread(
                 search_episodes,
@@ -159,6 +173,7 @@ def _dedupe_by_memory_id(
     bucket: dict[str, RetrievalCandidate] = {}
     for c in candidates:
         prev = bucket.get(c.memory_id)
+        # 桶空 或 当前候选 relevance 更高 → 替换
         if prev is None or c.relevance > prev.relevance:
             bucket[c.memory_id] = c
     return list(bucket.values())

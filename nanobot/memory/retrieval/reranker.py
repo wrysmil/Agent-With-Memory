@@ -62,6 +62,7 @@ class Reranker:
     ) -> list[RetrievalCandidate]:
         scored: list[RetrievalCandidate] = []
         for c in candidates:
+            # 先计算基础得分
             base = (
                 _W_RELEVANCE * c.relevance
                 + _W_RECENCY * c.recency_score

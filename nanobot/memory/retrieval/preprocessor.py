@@ -39,6 +39,11 @@ class PreparedQuery:
 class MemoryQueryPreprocessor:
     """检索前置守卫：决定是否跳过 + 清洗历史 Prompt 注入。"""
 
+    # 判断用户的这次查询是否值得走记忆检索
+
+   # should_skip_retrieval 是一个检索前置过滤方法。它在调用向量检索之前，用纯规则判断查询是否值得检索：
+    # 空文本、控制词（"ok"/"hi" 等）、极短文本或缺乏上文支撑的短查询会被直接跳过，
+    # 返回 (True, reason)；其余情况返回 (False, "")，继续走后续的检索流程。
     @classmethod
     def should_skip_retrieval(cls, query: str | None, recent_messages: list) -> tuple[bool, str]:
         text = (query or "").strip()
