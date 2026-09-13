@@ -322,7 +322,7 @@
         <mxCell id="LHYiseMuWotYPlfDE56U-5" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="单短无工具 =&amp;nbsp; 用户只发了一条信息 + &amp;lt; 10字符&amp;nbsp; &amp;nbsp;且无工具&amp;nbsp;" vertex="1">
           <mxGeometry height="30" width="254" x="-1722.5" y="16" as="geometry" />
         </mxCell>
-        <mxCell id="LHYiseMuWotYPlfDE56U-6" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="用户消息 &amp;gt;=10" vertex="1">
+        <mxCell id="LHYiseMuWotYPlfDE56U-6" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="所有用户消息只要有一条 &amp;gt;=10 就提取" vertex="1">
           <mxGeometry height="30" width="254" x="-1722.5" y="95" as="geometry" />
         </mxCell>
         <mxCell id="LHYiseMuWotYPlfDE56U-7" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="助手轮次 &amp;gt;=2" vertex="1">
