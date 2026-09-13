@@ -26,4 +26,8 @@ class SessionEndEvent:
 
     def __post_init__(self) -> None:
         # 防御性浅拷贝，避免外部修改影响事件快照
-        self.transcript = [dict(m) for m in self.transcript]
+        # 兼容 None 或空列表
+        if self.transcript is None:
+            self.transcript = []
+        else:
+            self.transcript = [dict(m) for m in self.transcript]

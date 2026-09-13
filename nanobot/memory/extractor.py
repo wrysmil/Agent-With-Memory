@@ -739,6 +739,79 @@ class MemoryExtractor:
             return ExtractionResult()
 
     # ------------------------------------------------------------------
+    # S2b: 用户画像提取（SessionEndOrchestrator Step 2a）
+    # ------------------------------------------------------------------
+
+    async def extract_user_profile(
+        self,
+        transcript: list[dict],
+        episode_id: str | None,
+        cited: Any = None,
+    ) -> None:
+        """从 transcript 提取用户画像（偏好、习惯等）。
+
+        L3 守卫：用户消息 < 10 字符时跳过（内容过短无法推断用户画像）。
+        失败隔离：任何异常仅 warning，不上抛。
+        """
+        try:
+            # L3: 过滤短用户消息
+            user_turns = [
+                t
+                for t in transcript
+                if t.get("role") == "user"
+                and len((t.get("content") or "").strip()) >= 10
+            ]
+            if not user_turns:
+                logger.debug("[S2a] skip extract_user_profile: no valid user messages (>= 10 chars)")
+                return
+
+            # TODO: 调用 LLM 提取用户画像（目前为占位实现）
+            logger.debug(
+                "[S2a] extract_user_profile: {} valid user messages (of {} total)",
+                len(user_turns),
+                len(transcript),
+            )
+        except Exception as exc:  # noqa: BLE001 - 失败隔离
+            logger.warning("[S2a] extract_user_profile failed: {}", exc)
+
+    # ------------------------------------------------------------------
+    # S2c: 任务经验提取（SessionEndOrchestrator Step 2b，feature flag）
+    # ------------------------------------------------------------------
+
+    async def extract_experience(
+        self,
+        transcript: list[dict],
+        episode_id: str | None,
+    ) -> None:
+        """从 transcript 提取任务执行经验（方法、技巧等）。
+
+        L4 守卫：assistant 轮次 < 2 时跳过（无足够交互可提取经验）。
+        失败隔离：任何异常仅 warning，不上抛。
+        """
+        try:
+            # L4: 检查 assistant 轮次
+            assistant_turns = [
+                t
+                for t in transcript
+                if t.get("role") == "assistant" and t.get("content")
+            ]
+            if len(assistant_turns) < 2:
+                logger.debug(
+                    "[S2b] skip extract_experience: {} assistant turns (< 2)",
+                    len(assistant_turns),
+                )
+                return
+
+            # TODO: 调用 LLM 提取任务经验（目前为占位实现）
+            logger.debug(
+                "[S2b] extract_experience: {} assistant turns (of {} total)",
+                len(assistant_turns),
+                len(transcript),
+            )
+        except Exception as exc:  # noqa: BLE001 - 失败隔离
+            logger.warning("[S2b] extract_experience failed: {}", exc)
+
+    # ------------------------------------------------------------------
     # 阶段1：系统提取（无 LLM）
     # ------------------------------------------------------------------
 

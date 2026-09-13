@@ -18,6 +18,7 @@ from aiohttp import web
 from loguru import logger
 
 from nanobot.agent.hook import AgentHook, AgentRunHookContext
+from nanobot.api.endpoints.sessions import handle_session_end
 from nanobot.config.paths import get_media_dir
 from nanobot.providers.base import LLMUsage
 from nanobot.utils.helpers import safe_filename
@@ -34,6 +35,8 @@ from nanobot.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
 if TYPE_CHECKING:
     from nanobot.agent.loop import AgentLoop
+    from nanobot.bus.queue import MessageBus
+    from nanobot.session.manager import SessionManager
 
 __all__ = (
     "MAX_FILE_SIZE",
@@ -478,6 +481,8 @@ def create_app(
     request_timeout: float = 120.0,
     api_key: str = "",
     prepare_agent: Callable[[], Awaitable[None]] | None = None,
+    session_manager: "SessionManager | None" = None,
+    event_bus: "MessageBus | None" = None,
 ) -> web.Application:
     """Create the aiohttp application.
 
@@ -487,6 +492,8 @@ def create_app(
         request_timeout: Per-request timeout in seconds.
         api_key: Optional API key for Bearer-token authentication on API routes.
         prepare_agent: Optional application-owned readiness callback run before each turn.
+        session_manager: Optional SessionManager for session-related API endpoints.
+        event_bus: Optional MessageBus for emitting events from API endpoints.
     """
     app = web.Application(client_max_size=20 * 1024 * 1024)  # 20MB for base64 images
     app[_AGENT_LOOP_KEY] = agent_loop
@@ -494,6 +501,12 @@ def create_app(
     app[_REQUEST_TIMEOUT_KEY] = request_timeout
     app[_SESSION_LOCKS_KEY] = {}  # per-user locks, keyed by session_key
     app[_PREPARE_AGENT_KEY] = prepare_agent
+
+    # Inject session_manager and event_bus for API endpoints
+    if session_manager is not None:
+        app["session_manager"] = session_manager
+    if event_bus is not None:
+        app["event_bus"] = event_bus
 
     @web.middleware
     async def auth_middleware(
@@ -517,4 +530,6 @@ def create_app(
     app.router.add_post("/v1/chat/completions", handle_chat_completions)
     app.router.add_get("/v1/models", handle_models)
     app.router.add_get("/health", handle_health)
+    # Session management endpoints
+    app.router.add_post("/api/sessions/{session_key}/end", handle_session_end)
     return app

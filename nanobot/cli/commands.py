@@ -399,6 +399,8 @@ def serve(
         agent_loop, model_name=model_name, request_timeout=timeout,
         api_key=api_key,
         prepare_agent=mcp_provider.connect,
+        session_manager=session_manager,
+        event_bus=bus,
     )
 
     async def on_startup(_app: Any) -> None:

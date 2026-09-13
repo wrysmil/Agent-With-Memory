@@ -38,6 +38,36 @@ class SessionEndOrchestrator:
             return
         self._last_run[key] = now
 
+        # ------------------------------------------------------------------
+        # L0: 空 transcript 直接跳过（无对话内容）
+        # ------------------------------------------------------------------
+        if not event.transcript:
+            logger.debug("[S1] skip: empty transcript")
+            return
+
+        # ------------------------------------------------------------------
+        # L1: 消息数 < 3 的短会话跳过（无足够上下文）
+        # ------------------------------------------------------------------
+        if len(event.transcript) < 3:
+            logger.debug("[S1] skip: transcript has {} messages (< 3)", len(event.transcript))
+            return
+
+        # ------------------------------------------------------------------
+        # L2: 单用户 + 短内容 + 无工具调用 → 跳过（有工具调用时豁免）
+        # ------------------------------------------------------------------
+        # 检查是否只有单个用户消息且内容很短
+        user_msgs = [t for t in event.transcript if t.get("role") == "user"]
+        if len(user_msgs) == 1:
+            first_content = (user_msgs[0].get("content") or "").strip()
+            # 检查是否有工具调用（豁免 L2）
+            has_tool_calls = any(t.get("tool_calls") for t in event.transcript)
+            if len(first_content) < 10 and not has_tool_calls:
+                logger.debug(
+                    "[S1] skip: single short message ({} chars) without tool calls",
+                    len(first_content),
+                )
+                return
+
         # Step 1: Episode
         episode = None
         try:
