@@ -10,19 +10,19 @@ interface EpisodeDetailPanelProps {
 export function EpisodeDetailPanel({ episode, onClose }: EpisodeDetailPanelProps) {
   const { t } = useTranslation();
   const tx = (key: string, fallback: string) => t(key, { defaultValue: fallback });
-  const fields: Array<[string, string]> = [
-    ["goal", episode.goal],
-    ["outcome", episode.outcome],
-    ["entities", episode.entities.join(", ")],
-    ["tools_used", episode.tools_used.join(", ")],
+  const fields: Array<[string, string, string]> = [
+    ["goal", episode.goal, "settings.memory.fieldGoal"],
+    ["outcome", episode.outcome, "settings.memory.fieldOutcome"],
+    ["entities", episode.entities.join(", "), "settings.memory.fieldEntities"],
+    ["tools_used", episode.tools_used.join(", "), "settings.memory.fieldToolsUsed"],
   ];
 
   return (
     <div className="mt-3 rounded-control border border-border/55 bg-muted/22 px-3.5 py-3 text-[13px]">
       <dl className="grid grid-cols-[88px_1fr] gap-x-3 gap-y-1.5">
-        {fields.map(([label, value]) => (
+        {fields.map(([label, value, labelKey]) => (
           <div key={label} className="contents">
-            <dt className="text-[12px] font-medium text-muted-foreground">{label}</dt>
+            <dt className="text-[12px] font-medium text-muted-foreground">{tx(labelKey, label)}</dt>
             <dd className="min-w-0 break-words text-foreground">{value || "—"}</dd>
           </div>
         ))}

@@ -75,7 +75,7 @@ describe("Settings memory section registration", () => {
     });
 
     expect(screen.getByRole("tablist", { name: "Memory sections" })).toBeInTheDocument();
-    for (const label of ["Semantic memory", "Episode memory", "Working memory"]) {
+    for (const label of ["Semantic memory", "Episodes", "Working memory"]) {
       expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
     }
 

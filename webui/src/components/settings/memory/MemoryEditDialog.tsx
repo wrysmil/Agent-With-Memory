@@ -113,7 +113,7 @@ export function MemoryEditDialog({ memory, onClose, onSaved }: MemoryEditDialogP
               >
                 {MEMORY_TYPES.map((value) => (
                   <option key={value} value={value}>
-                    {value}
+                    {tx(`settings.memory.type.${value}`, value)}
                   </option>
                 ))}
               </select>
@@ -127,7 +127,7 @@ export function MemoryEditDialog({ memory, onClose, onSaved }: MemoryEditDialogP
               >
                 {MEMORY_PRIORITIES.map((value) => (
                   <option key={value} value={value}>
-                    {value}
+                    {tx(`settings.memory.priority.${value}`, value)}
                   </option>
                 ))}
               </select>

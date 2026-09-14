@@ -130,7 +130,7 @@ export function MemoryListView() {
             <option value="">{tx("settings.memory.filterAll", "All")}</option>
             {MEMORY_TYPES.map((value) => (
               <option key={value} value={value}>
-                {value}
+                {tx(`settings.memory.type.${value}`, value)}
               </option>
             ))}
           </select>
@@ -145,7 +145,7 @@ export function MemoryListView() {
             <option value="">{tx("settings.memory.filterAll", "All")}</option>
             {MEMORY_PRIORITIES.map((value) => (
               <option key={value} value={value}>
-                {value}
+                {tx(`settings.memory.priority.${value}`, value)}
               </option>
             ))}
           </select>
@@ -238,7 +238,12 @@ function MemoryCard({
             {memory.content}
           </div>
           <div className="mt-0.5 text-[12px] leading-5 text-muted-foreground">
-            {memory.type} · {memory.priority} · {memory.importance_score.toFixed(2)}
+            {t("settings.memory.metaLine", {
+              defaultValue: "{{type}} · {{priority}} · {{importance}}",
+              type: tx(`settings.memory.type.${memory.type}`, memory.type),
+              priority: tx(`settings.memory.priority.${memory.priority}`, memory.priority),
+              importance: memory.importance_score.toFixed(2),
+            })}
             {memory.tags.length > 0 && ` · ${memory.tags.join(", ")}`}
             {memory.superseded_by
               ? ` · ${tx("settings.memory.superseded", "superseded")}`
