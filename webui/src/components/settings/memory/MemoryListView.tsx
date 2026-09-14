@@ -115,7 +115,7 @@ export function MemoryListView() {
         </div>
         <Button onClick={() => setEditing("new")} className="shrink-0">
           <Plus className="mr-1.5 h-4 w-4" aria-hidden />
-          {tx("settings.memory.newMemory", "New memory")}
+          {tx("settings.memory.actions.newMemory", "New memory")}
         </Button>
       </div>
 
