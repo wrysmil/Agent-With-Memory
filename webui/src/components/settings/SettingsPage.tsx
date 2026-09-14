@@ -59,6 +59,7 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const {
     activeSection,
+    applyPayload,
     apiService,
     apiServiceAction,
     apiServiceError,
@@ -479,7 +480,12 @@ export function SettingsPage({
       case "skills":
         return <SkillsCatalogSettings skills={skills} />;
       case "memory":
-        return <MemorySection />;
+        return (
+          <MemorySection
+            settings={settings}
+            onSettingsChange={applyPayload}
+          />
+        );
       case "runtime":
         return (
           <RuntimeSettings

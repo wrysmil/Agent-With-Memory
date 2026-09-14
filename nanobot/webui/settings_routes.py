@@ -12,6 +12,7 @@ from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
 from nanobot.agent.tools.image_generation import request_image_generation_reload
+from nanobot.memory.reload import request_memory_reload
 from nanobot.agent.tools.mcp_oauth import MCP_OAUTH_CALLBACK_PATH
 from nanobot.api.runtime import ApiRuntime, api_runtime_paths
 from nanobot.bus.queue import MessageBus
@@ -504,6 +505,7 @@ class WebUISettingsRouter:
             oauth_complete=complete_oauth_provider,
             oauth_logout=logout_oauth_provider,
             apply_image_runtime_change=self._apply_image_generation_runtime_change_result,
+            reload_memory=lambda: request_memory_reload(self.bus),
         )
 
     def _capability_operations(

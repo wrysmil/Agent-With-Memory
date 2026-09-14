@@ -34,6 +34,9 @@ from nanobot.cli.webui_support import (
 )
 from nanobot.config.paths import is_default_workspace
 from nanobot.config.schema import Config
+from nanobot.agent.loop import _MEMORY_WORKSPACE_ID
+from nanobot.memory.retrieval import RetrievalEngine
+from nanobot.webui.memory_services import MemoryServices
 from nanobot.gateway.runtime import GatewayInstance
 from nanobot.security.network import is_loopback_host
 from nanobot.session.keys import UNIFIED_SESSION_KEY, last_channel_from_metadata
@@ -478,6 +481,15 @@ def _run_gateway(
         unified_session=config.agents.defaults.unified_session,
     )
 
+    # Build memory services and retrieval engine (always-on; runtime gate via provider).
+    _memory_services = MemoryServices.for_workspace(
+        _MEMORY_WORKSPACE_ID, config.workspace_path,
+    )
+    _retrieval_engine = RetrievalEngine(store=_memory_services.database, brain=None)
+
+    def _memory_enabled_provider() -> bool:
+        return config.agents.defaults.memory_enabled
+
     # Create agent with cron service
     agent = AgentLoop.from_config(
         config, bus,
@@ -496,6 +508,11 @@ def _run_gateway(
         hook_factories=[create_file_edit_activity_hook],
         tool_registry=tools,
         recovery_admission=recovery,
+        memory_extraction_enabled=True,
+        memory_services=_memory_services,
+        active_retrieval_enabled=True,
+        retrieval_engine=_retrieval_engine,
+        memory_enabled_provider=_memory_enabled_provider,
     )
     def _schedule_webui_background(awaitable: Awaitable[None]) -> None:
         agent.schedule_background(cast(Coroutine[Any, Any, None], awaitable))

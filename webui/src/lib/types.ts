@@ -734,6 +734,7 @@ export interface SettingsPayload {
       schedule: string;
     };
     unified_session: boolean;
+    memory_enabled: boolean;
   };
   usage?: {
     days: Array<{

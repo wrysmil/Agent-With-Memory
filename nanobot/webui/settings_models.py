@@ -74,6 +74,7 @@ class ModelSettingsOperations:
         [dict[str, Any]],
         Awaitable[tuple[dict[str, Any], bool]],
     ]
+    reload_memory: Callable[[], Awaitable[Any]] | None = None
 
 
 class ModelSettingsPayload(TypedDict):
@@ -1763,10 +1764,45 @@ class ModelSettingsHandler:
             if action == "agent-update":
                 payload = self.settings.mutate(operations.update_agent, request.query)
                 self._refresh_runtime_config()
+                reload_result: dict[str, Any] | None = None
+                if (
+                    operations.reload_memory is not None
+                    and query_has_alias(
+                        request.query, "memory_enabled", "memoryEnabled"
+                    )
+                ):
+                    try:
+                        reload_result = await operations.reload_memory()
+                    except Exception:
+                        self.logger.exception("memory reload after agent-update failed")
+                    else:
+                        if reload_result is not None:
+                            payload = dict(payload)
+                            payload["memory_reload"] = reload_result
+                # Memory toggle is hot-switchable: when the user only flipped
+                # ``memory_enabled`` and the loop acked the reload, the runtime
+                # section does NOT need a restart. Any other runtime field
+                # still surfaces the normal restart prompt.
+                clear_restart = (
+                    "runtime"
+                    if (
+                        reload_result is not None
+                        and not query_has_alias(
+                            request.query, "timezone", "timezone"
+                        )
+                        and not query_has_alias(
+                            request.query,
+                            "tool_hint_max_length",
+                            "toolHintMaxLength",
+                        )
+                    )
+                    else None
+                )
                 return SettingsRouteResult.success(
                     payload,
                     decorate_restart=True,
                     restart_section="runtime",
+                    clear_restart_section=clear_restart,
                 )
 
             if action == "model-update":

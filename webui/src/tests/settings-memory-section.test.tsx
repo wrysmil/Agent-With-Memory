@@ -88,3 +88,41 @@ describe("Settings memory section registration", () => {
     );
   });
 });
+
+describe("Settings memory master toggle", () => {
+  installSettingsViewTestHooks();
+
+  it("defaults to off and reflects the runtime payload value", () => {
+    stubMemoryApi();
+    const payload = settingsPayload();
+    payload.runtime.memory_enabled = true;
+    renderSettingsView({
+      initialSection: "memory",
+      initialSettings: payload,
+      showSidebar: false,
+    });
+
+    const toggle = screen.getByRole("switch", { name: "Toggle memory extraction" });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("flips the toggle and dispatches settings.agent-update with the new value", async () => {
+    const fetchMock = stubMemoryApi();
+    const payload = settingsPayload();
+    payload.runtime.memory_enabled = false;
+    renderSettingsView({
+      initialSection: "memory",
+      initialSettings: payload,
+      showSidebar: false,
+    });
+
+    const toggle = screen.getByRole("switch", { name: "Toggle memory extraction" });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(toggle).toHaveAttribute("aria-checked", "true");
+    });
+  });
+});

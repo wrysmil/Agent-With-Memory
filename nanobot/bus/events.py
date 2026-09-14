@@ -19,6 +19,7 @@ INBOUND_META_USER_SHELL = "_user_shell"
 RUNTIME_CONTROL_ACK = "_ack"
 RUNTIME_CONTROL_IMAGE_GENERATION_RELOAD = "image_generation_reload"
 RUNTIME_CONTROL_SESSION_DISCARD = "session_discard"
+RUNTIME_CONTROL_MEMORY_RELOAD = "memory_reload"
 
 
 @dataclass
