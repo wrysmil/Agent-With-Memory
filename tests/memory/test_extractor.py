@@ -23,6 +23,7 @@ from nanobot.memory.extractor import (
     SystemExtractionResult,
     _coerce_memory_item,
     _collect_action_nodes,
+    _parse_json_object,
     _resolve_action_success,
 )
 from nanobot.memory.models import (
@@ -1552,4 +1553,43 @@ class TestExtractExperience:
         ]
         # 只有 1 个有效 assistant（第二个），应跳过
         await extractor.extract_experience(transcript, "ep-1")
+
+
+class TestParseJsonObject:
+    """`_parse_json_object` 必须容忍真实 LLM 输出里的围栏与前后废话。
+
+    回归背景：S2 提交曾引入一个同类名函数覆盖本实现，其贪婪正则
+    `\\{.*\\}` 会把「JSON 后面的解释文字」或「第二个对象」一并吞掉，
+    导致 episode 抽取稳定报 unparseable JSON。
+    """
+
+    def test_plain_object(self):
+        assert _parse_json_object('{"summary": "hi"}') == {"summary": "hi"}
+
+    def test_fenced_block(self):
+        raw = '```json\n{"summary": "hi"}\n```'
+        assert _parse_json_object(raw) == {"summary": "hi"}
+
+    def test_surrounding_prose(self):
+        raw = '好的，抽取结果如下：\n{"summary": "hi"}\n希望有帮助！'
+        assert _parse_json_object(raw) == {"summary": "hi"}
+
+    def test_returns_first_of_two_objects(self):
+        raw = '{"a": 1}\n{"b": 2}'
+        assert _parse_json_object(raw) == {"a": 1}
+
+    def test_braces_inside_string_values(self):
+        raw = '{"summary": "he said {ok} loudly"}'
+        assert _parse_json_object(raw) == {"summary": "he said {ok} loudly"}
+
+    def test_nested_object_with_trailing_prose(self):
+        raw = 'Sure!\n{"episode": {"goal": "x"}, "n": 2}\nDone.'
+        assert _parse_json_object(raw) == {"episode": {"goal": "x"}, "n": 2}
+
+    def test_truncated_json_returns_none(self):
+        assert _parse_json_object('{"summary": "unfinished') is None
+
+    def test_non_object_returns_none(self):
+        assert _parse_json_object("NONE") is None
+        assert _parse_json_object("no json here") is None
 

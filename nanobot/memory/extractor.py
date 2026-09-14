@@ -378,15 +378,8 @@ def _collect_rule_signals(messages: list[dict[str, Any]]) -> list[str]:
 
 
 def _parse_json_object(text: str) -> dict[str, Any] | None:
-    """容忍 ```json 围栏地从 LLM 输出中解析 JSON 对象；失败返回 None。"""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        first_newline = cleaned.find("\n")
-        if first_newline != -1:
-            cleaned = cleaned[first_newline + 1:]
-        if cleaned.rstrip().endswith("```"):
-            cleaned = cleaned.rstrip()[:-3]
-    cleaned = cleaned.strip()
+    """容忍 ```json 围栏与前后解释文字地解析首个 JSON 对象；失败返回 None。"""
+    cleaned = _strip_code_fence(text)
     for candidate in _json_candidates(cleaned):
         try:
             parsed = json.loads(candidate)
@@ -397,15 +390,57 @@ def _parse_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _strip_code_fence(text: str) -> str:
+    cleaned = text.strip()
+    if not cleaned.startswith("```"):
+        return cleaned
+    first_newline = cleaned.find("\n")
+    if first_newline != -1:
+        cleaned = cleaned[first_newline + 1:]
+    if cleaned.rstrip().endswith("```"):
+        cleaned = cleaned.rstrip()[:-3]
+    return cleaned.strip()
+
+
 def _json_candidates(text: str) -> list[str]:
     candidates = [text]
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end > start:
-        inner = text[start:end + 1]
-        if inner != text:
-            candidates.append(inner)
+    balanced = _first_balanced_object(text)
+    if balanced is not None and balanced != text:
+        candidates.append(balanced)
     return candidates
+
+
+def _first_balanced_object(text: str) -> str | None:
+    """返回首个花括号配平的 ``{...}`` 子串。
+
+    逐个字符扫描并跳过字符串字面量，因此不会像贪婪正则那样把「JSON 后面
+    的解释文字」或「第二个对象」一并吞进来。
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
 
 
 def _coerce_memory_item(raw: Any) -> LLMMemoryItem | None:
@@ -920,7 +955,12 @@ class MemoryExtractor:
             return None, None
         payload = _parse_json_object(content)
         if payload is None:
-            logger.warning("memory extraction LLM returned unparseable JSON ({})", track)
+            logger.warning(
+                "memory extraction LLM returned unparseable JSON ({}; len={}; head={!r})",
+                track,
+                len(content),
+                content[:400],
+            )
             return None, "invalid_json"
         return payload, None
 
@@ -1383,15 +1423,3 @@ class MemoryExtractor:
             for m in file_re.finditer(text):
                 out.add(m.group(0))
         return list(out)[:20]
-
-
-def _parse_json_object(text: str) -> dict | None:
-    """宽松提取首个 JSON 对象。"""
-    import json
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(0))
-    except Exception:
-        return None
