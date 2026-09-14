@@ -94,7 +94,7 @@ nano.*.save
 !.env.example
 
 # Agent Harness
-harness-kit/image/
+# harness-kit/image/
 harness-kit/.agents/skills/.skills_store_lock.json
 .DS_Store
 *.lock
