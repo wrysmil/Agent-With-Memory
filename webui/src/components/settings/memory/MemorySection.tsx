@@ -37,13 +37,14 @@ export function MemorySection({
     setError(null);
     try {
       const payload = await client.requestMutation<Record<string, unknown>>(
-        "settings.agent-update",
+        "settings.agent.update",
         { memory_enabled: next },
       );
       if (payload && typeof payload === "object" && "runtime" in payload) {
         onSettingsChange(payload as unknown as SettingsPayload);
       }
     } catch (err) {
+      setEnabled(!next);
       setError((err as Error).message);
     } finally {
       setSaving(false);

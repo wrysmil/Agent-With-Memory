@@ -6,6 +6,7 @@ import {
   installSettingsViewTestHooks,
   jsonResponse,
   renderSettingsView,
+  requestMutationMock,
   settingsPayload,
 } from "@/tests/settings-test-utils";
 
@@ -106,8 +107,8 @@ describe("Settings memory master toggle", () => {
     expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 
-  it("flips the toggle and dispatches settings.agent-update with the new value", async () => {
-    const fetchMock = stubMemoryApi();
+  it("flips the toggle and dispatches settings.agent.update with the new value", async () => {
+    stubMemoryApi();
     const payload = settingsPayload();
     payload.runtime.memory_enabled = false;
     renderSettingsView({
@@ -124,5 +125,29 @@ describe("Settings memory master toggle", () => {
     await waitFor(() => {
       expect(toggle).toHaveAttribute("aria-checked", "true");
     });
+    expect(requestMutationMock).toHaveBeenCalledWith(
+      "settings.agent.update",
+      { memory_enabled: true },
+    );
+  });
+
+  it("reverts the toggle and surfaces the error when the mutation fails", async () => {
+    stubMemoryApi();
+    requestMutationMock.mockRejectedValueOnce(new Error("invalid WebUI mutation action"));
+    const payload = settingsPayload();
+    payload.runtime.memory_enabled = false;
+    renderSettingsView({
+      initialSection: "memory",
+      initialSettings: payload,
+      showSidebar: false,
+    });
+
+    const toggle = screen.getByRole("switch", { name: "Toggle memory extraction" });
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+    });
+    expect(screen.getByText("invalid WebUI mutation action")).toBeInTheDocument();
   });
 });
