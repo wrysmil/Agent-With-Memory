@@ -459,6 +459,7 @@ export function useSettingsController({
 
   return {
     activeSection,
+    applyPayload,
     apiService,
     apiServiceAction,
     apiServiceError,

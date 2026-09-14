@@ -50,6 +50,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Callable
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -183,6 +184,7 @@ class MemoryExtractionHook(AgentHook):
         scratchpad_writer: ScratchpadWriter,
         *,
         runtime: LLMRuntime | None = None,
+        memory_enabled_provider: "Callable[[], bool] | None" = None,
     ) -> None:
         super().__init__()
         self._extractor = extractor
@@ -190,6 +192,12 @@ class MemoryExtractionHook(AgentHook):
         self._scratchpad_writer = scratchpad_writer
         # 未显式注入时回落到 extractor 自带的 runtime（plan §7.3 无 runtime 参数）。
         self._runtime = runtime if runtime is not None else getattr(extractor, "runtime", None)
+        # Hot-switchable user-facing memory toggle. ``None`` preserves legacy
+        # behaviour (always-on when the loop registered extraction). When set,
+        # every callback short-circuits to a no-op while the toggle is off so
+        # that flipping it in the WebUI takes effect without restarting the
+        # gateway.
+        self._memory_enabled_provider = memory_enabled_provider
 
         # T5：允许下一次检测所需的最小 user 消息数。命中 CONTINUE 后 +1（同一转录
         # 状态不重复调 LLM）；命中 NEW 后 +4（同一实例内等效「清空缓冲需再累积 ≥4 条」）。
@@ -220,12 +228,31 @@ class MemoryExtractionHook(AgentHook):
         else:
             self._session_end_orchestrator = None
 
+    def _memory_disabled(self) -> bool:
+        """Return ``True`` when the user-facing memory toggle is wired and off.
+
+        When no provider is wired (legacy behaviour) this returns ``False`` so
+        callbacks proceed unchanged.
+        """
+        provider = self._memory_enabled_provider
+        if provider is None:
+            return False
+        try:
+            return not provider()
+        except Exception:
+            logger.warning(
+                "MemoryExtractionHook: memory_enabled_provider raised; treating as enabled"
+            )
+            return False
+
     # ------------------------------------------------------------------
     # AgentHook 回调
     # ------------------------------------------------------------------
 
     async def before_iteration(self, context: AgentHookContext) -> None:
         """T5 话题切换检测（plan §2.2 / §10 Task 12）。"""
+        if self._memory_disabled():
+            return
         try:
             await self._detect_topic_change(context)
         except Exception:
@@ -236,6 +263,8 @@ class MemoryExtractionHook(AgentHook):
 
     async def after_run(self, context: AgentRunHookContext) -> None:
         """T0 即时同步 + T1 异步提取（plan §2.3）。"""
+        if self._memory_disabled():
+            return
         try:
             await self._apply_immediate_focus(context)
         except Exception:
@@ -254,6 +283,8 @@ class MemoryExtractionHook(AgentHook):
 
     async def on_error(self, context: AgentRunHookContext) -> None:
         """T0' 紧急保存 ``current_focus``（不调 LLM、不调 extractor）。"""
+        if self._memory_disabled():
+            return
         try:
             message = _last_user_message(context.messages)
             if not message:
@@ -273,6 +304,8 @@ class MemoryExtractionHook(AgentHook):
 
         S1: 同时 fire-and-forget 触发 SessionEndOrchestrator 兜底执行。
         """
+        if self._memory_disabled():
+            return
         try:
             await self._await_pending_extractions()
         except Exception:
@@ -578,6 +611,7 @@ def create_memory_extraction_hook_factory(
     scratchpad_writer: ScratchpadWriter | None = None,
     scratchpad_writer_for_key: Callable[[str], ScratchpadWriter] | None = None,
     runtime_provider: Callable[[str], LLMRuntime | None] | None = None,
+    memory_enabled_provider: Callable[[], bool] | None = None,
 ) -> AgentTurnHookFactory:
     """返回 ``AgentTurnHookFactory``：从 ``AgentTurnHookContext`` 取 ``session_key``
     构造 :class:`MemoryExtractionHook`。
@@ -645,6 +679,7 @@ def create_memory_extraction_hook_factory(
             session_key,
             writer,
             runtime=runtime,
+            memory_enabled_provider=memory_enabled_provider,
         )
 
     return _factory

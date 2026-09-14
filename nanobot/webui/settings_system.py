@@ -119,6 +119,7 @@ def system_settings_payload(
                 "schedule": defaults.dream.describe_schedule(),
             },
             "unified_session": defaults.unified_session,
+            "memory_enabled": defaults.memory_enabled,
         },
         "usage": llm_usage_payload(timezone_name=defaults.timezone),
         "advanced": {
@@ -141,10 +142,30 @@ def settings_usage_payload(config: Config) -> dict[str, Any]:
     return llm_usage_payload(timezone_name=config.agents.defaults.timezone)
 
 
+def _coerce_bool(value: str) -> bool:
+    """Accept common on/off / true/false / 1/0 representations."""
+    if value.lower() in ("true", "on", "1"):
+        return True
+    if value.lower() in ("false", "off", "0"):
+        return False
+    raise ValueError(f"cannot coerce {value!r} to bool")
+
+
 def update_agent_system_settings(config: Config, query: QueryParams) -> tuple[bool, bool]:
     defaults = config.agents.defaults
     changed = False
     restart_required = False
+
+    memory_enabled = query_first_alias(query, "memory_enabled", "memoryEnabled")
+    if memory_enabled is not None:
+        try:
+            parsed = _coerce_bool(memory_enabled)
+        except ValueError:
+            raise WebUISettingsError("memory_enabled must be a boolean (true/false/on/off/1/0)") from None
+        if defaults.memory_enabled != parsed:
+            defaults.memory_enabled = parsed
+            changed = True
+            # Hot-switch: no restart_required.
 
     timezone = query_first(query, "timezone")
     if timezone is not None:

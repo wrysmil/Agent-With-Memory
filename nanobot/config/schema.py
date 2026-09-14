@@ -154,6 +154,11 @@ class AgentDefaults(Base):
         default=60,
         ge=0,
     )  # Minimum interval in seconds between scans for idle sessions
+    memory_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("memoryEnabled", "memory_enabled"),
+        serialization_alias="memoryEnabled",
+    )  # User-facing total memory switch; read at runtime via provider in hook/context
     dream: DreamConfig = Field(default_factory=DreamConfig)
 
     @model_validator(mode="before")

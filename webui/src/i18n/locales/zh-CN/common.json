@@ -1087,7 +1087,12 @@
       "scratchpadHint": "与会话同步保留的笔记",
       "scratchpadPlaceholder": "## 当前项目\n- …",
       "scratchpadContent": "内容（Markdown）",
-      "metaLine": "{{type}} · {{priority}} · {{importance}}"
+      "metaLine": "{{type}} · {{priority}} · {{importance}}",
+      "masterToggleTitle": "自动抽取与检索记忆",
+      "masterToggleDescription": "开启后，nanobot 会在对话中抽取事实并在下一轮检索相关记忆。热生效——无需重启。",
+      "masterToggleAria": "记忆抽取开关",
+      "masterToggleOn": "已开启",
+      "masterToggleOff": "已关闭"
     }
   },
   "chat": {

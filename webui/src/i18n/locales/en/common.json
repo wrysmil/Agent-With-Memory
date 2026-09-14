@@ -1087,7 +1087,12 @@
       "scratchpadHint": "Notes kept alongside the session",
       "scratchpadPlaceholder": "## Current project\n- ...",
       "scratchpadContent": "Content (Markdown)",
-      "metaLine": "{{type}} · {{priority}} · {{importance}}"
+      "metaLine": "{{type}} · {{priority}} · {{importance}}",
+      "masterToggleTitle": "Memory auto extraction & retrieval",
+      "masterToggleDescription": "When on, nanobot extracts facts from chats and retrieves relevant memories on the next turn. Hot-takes-effect — no restart needed.",
+      "masterToggleAria": "Toggle memory extraction",
+      "masterToggleOn": "On",
+      "masterToggleOff": "Off"
     }
   },
   "chat": {

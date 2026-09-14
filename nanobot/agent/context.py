@@ -5,7 +5,7 @@ import mimetypes
 import platform
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence, cast
 
 from loguru import logger
 
@@ -51,8 +51,13 @@ def session_extra(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 async def handle_runtime_control(state: Any, msg: InboundMessage, tools: ToolRegistry) -> bool:
-    if msg.metadata.get(INBOUND_META_RUNTIME_CONTROL) == RUNTIME_CONTROL_SESSION_DISCARD:
+    from nanobot.memory.reload import RUNTIME_CONTROL_MEMORY_RELOAD as _MEM_RELOAD, handle_memory_reload as _handle_mem_reload
+    ctrl = msg.metadata.get(INBOUND_META_RUNTIME_CONTROL)
+    if ctrl == RUNTIME_CONTROL_SESSION_DISCARD:
         await state.discard_session(msg.session_key)
+        return True
+    if ctrl == _MEM_RELOAD:
+        await _handle_mem_reload(msg.metadata)
         return True
     return await image_generation_tools.handle_runtime_control(state, msg, tools)
 
@@ -108,6 +113,7 @@ class ContextBuilder:
         disabled_skills: list[str] | None = None,
         active_retrieval_enabled: bool = False,
         retrieval_engine: RetrievalEngine | None = None,
+        memory_enabled_provider: "Callable[[], bool] | None" = None,
     ):
         self.workspace = workspace
         self.timezone = timezone
@@ -118,6 +124,25 @@ class ContextBuilder:
         # ``AgentLoop``) so this builder stays free of retrieval dependencies.
         self._active_retrieval_enabled = active_retrieval_enabled
         self._retrieval_engine = retrieval_engine
+        # Hot-switchable user-facing memory toggle. ``None`` preserves legacy
+        # behaviour (always-on when the loop registered extraction). When set,
+        # every retrieval decision reads the latest ``memory_enabled`` value
+        # via the provider closure, so toggling takes effect without restarting
+        # the gateway.
+        self._memory_enabled_provider = memory_enabled_provider
+
+    def _should_retrieve(self) -> bool:
+        """Combine wiring flags with the hot-switchable user toggle.
+
+        Returns ``True`` only when Layer 4 retrieval is wired AND the user's
+        ``memory_enabled`` toggle is on (or no provider is wired, in which case
+        we preserve the original ``active_retrieval_enabled`` semantics).
+        """
+        if not self._active_retrieval_enabled or self._retrieval_engine is None:
+            return False
+        if self._memory_enabled_provider is not None and not self._memory_enabled_provider():
+            return False
+        return True
 
     async def _build_memory_section(
         self,
@@ -130,7 +155,7 @@ class ContextBuilder:
         Failure-isolated: any retrieval exception is swallowed and logged so
         the system prompt build never breaks because of retrieval.
         """
-        if not self._active_retrieval_enabled or self._retrieval_engine is None:
+        if not self._should_retrieve():
             return ""
         # Lazy import: keeps ``nanobot.agent.context`` importable without
         # pulling the retrieval module eagerly (preserves the historical
@@ -209,8 +234,7 @@ class ContextBuilder:
         # is supplied by the caller (typically pre-computed in
         # ``AgentLoop._build_turn`` to keep the sync prompt builder API).
         if (
-            self._active_retrieval_enabled
-            and self._retrieval_engine is not None
+            self._should_retrieve()
             and retrieved_memory_section
         ):
             parts.append(retrieved_memory_section)

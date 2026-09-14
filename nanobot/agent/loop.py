@@ -316,6 +316,7 @@ class AgentLoop:
         memory_services: MemoryServices | None = None,
         active_retrieval_enabled: bool = False,
         retrieval_engine: Any | None = None,
+        memory_enabled_provider: Callable[[], bool] | None = None,
     ):
         from nanobot.config.schema import ToolsConfig
 
@@ -394,6 +395,7 @@ class AgentLoop:
             disabled_skills=disabled_skills,
             active_retrieval_enabled=active_retrieval_enabled,
             retrieval_engine=retrieval_engine,
+            memory_enabled_provider=memory_enabled_provider,
         )
         self.sessions = session_manager or SessionManager(workspace)
         # One file-read/write tracker per logical session. The tool registry is
@@ -550,11 +552,18 @@ class AgentLoop:
             runtime = _runtime_for_key(session_key)
             return _build_extractor(runtime if runtime is not None else self.llm_runtime())
 
+        # Capture via locals to tolerate callers (notably existing tests) that
+        # invoke ``AgentLoop(...)`` directly without passing
+        # ``memory_enabled_provider`` — fallback to ``None`` so the gate stays
+        # open under legacy wiring.
+        _memory_enabled_provider = locals().get("memory_enabled_provider")
+
         self._hook_factories.append(
             create_memory_extraction_hook_factory(
                 extractor_provider=_extractor_provider,
                 scratchpad_writer_for_key=_scratchpad_writer_for_key,
                 runtime_provider=_runtime_for_key,
+                memory_enabled_provider=_memory_enabled_provider,
             )
         )
 
