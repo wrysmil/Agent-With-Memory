@@ -377,62 +377,11 @@ class MemoryExtractionHook(AgentHook):
     # T5：话题切换检测
     # ------------------------------------------------------------------
 
+
     async def _detect_topic_change(self, context: AgentHookContext) -> None:
-        user_messages = _user_messages(context.messages)
-        count = len(user_messages)
-        if count < self._next_check_count:
-            return
-
-        latest = user_messages[-1]
-        recent = user_messages[-self.TOPIC_CHANGE_MIN_MESSAGES : -1]
-        if not recent:
-            return
-
-        # S5: 廉价预筛（在调 LLM 之前挡掉明显非话题切换）
-        from nanobot.memory.topic_prefilter import PrefilterResult, compute_topic_hash
-        if self._topic_gate.prefilter(latest, [m for m in recent]) == PrefilterResult.SKIP:
-            self._next_check_count = count + 1
-            return
-
-        if await self._judge_topic_change(recent, latest):
-            # CONTINUE：同一转录状态不重复检测，出现新消息后再判。
-            self._next_check_count = count + 1
-            return
-
-        logger.info(
-            "topic change detected for session {} (user messages={})",
-            self._session_key,
-            count,
-        )
-
-        # S5: 间隔 + topic_hash 去重后再 fire
-        topic_hash = compute_topic_hash(latest)
-        if not self._topic_gate.allow_fire(self._session_key, topic_hash):
-            self._next_check_count = count + 1
-            return
-
-        # ① 旧 current_focus 滚入 active_projects（复用 update_focus 的归档语义）。
-        try:
-            await self._scratchpad_writer.update_focus(
-                self._session_key,
-                latest[: self.FOCUS_MAX_CHARS],
-            )
-        except Exception:
-            logger.warning(
-                "topic change focus rotation failed for session {}",
-                self._session_key,
-            )
-
-        # ② fire-and-forget 触发增量抽取（plan §10 Task 12：不等待、不登记）。
-        #    只扫最新 user 消息及之后的 assistant/tool，避免重复整 session 扫描。
-        transcript = [dict(message) for message in context.messages]
-        last_extracted_index = self._compute_incremental_start_index(transcript)
-        _spawn_background_task(
-            self._run_incremental_extraction(transcript, last_extracted_index)
-        )
-
-        # ③ 抬高阈值：同一实例内需再累积 ≥4 条 user 消息才重新检测（跨轮重置）。
-        self._next_check_count = count + self.TOPIC_CHANGE_MIN_MESSAGES
+        # T5 已禁用：话题切换检测会导致每轮额外 LLM 调用，性能代价大于收益。
+        # 记忆提取仍通过 T1（每轮异步）+ 会话结束完整提取完成。
+        return
 
     def _compute_incremental_start_index(self, messages: list[dict[str, Any]]) -> int:
         """返回倒数第二条非空 user 消息之后的起始下标。
