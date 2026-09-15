@@ -90,3 +90,4 @@ class ToolContext:
     timezone: str = "UTC"
     workspace_sandbox: WorkspaceSandboxStatus | None = None
     runtime_control: RuntimeControl | None = None
+    attributes: dict[str, Any] = field(default_factory=dict)

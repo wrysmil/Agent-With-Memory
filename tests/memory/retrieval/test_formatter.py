@@ -152,7 +152,7 @@ def test_score_label_low_zero():
 def test_format_output_keys_complete():
     c = _cand("Python 爬虫脚本", score=0.9, type_value="preference")
     out = RetrievalFormatter().format([c])
-    assert set(out[0].keys()) == {"content", "type", "score", "reason"}
+    assert set(out[0].keys()) == {"content", "type", "score", "reason", "memory_id"}
 
 
 def test_format_output_content_type_reason_match():

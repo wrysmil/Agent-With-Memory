@@ -11,9 +11,11 @@ T0   ``after_run``
      ``scratchpad.current_focus``（同步、不调 LLM）。
 T0'  ``on_error``
      异常退出时紧急保存 ``current_focus``（不调 LLM、不调 extractor）。
-T1   ``after_run`` + ``on_finally``
-     ``after_run`` 创建 fire-and-forget 提取任务并登记；``on_finally`` 等待其完成
-     （默认 5s 上限，超时取消并 warning，不抛）。
+T1   ``after_run``
+     ``after_run`` arm（或重置）本会话的 idle 定时器：sleep ``IDLE_THRESHOLD_SECONDS``
+     后调 ``MemoryExtractor.run_idle_extraction``。定时器是 fire-and-forget，跨 run
+     存活 —— 只有同一会话的**下一次** ``after_run`` 才会取消并替换它，因此
+     ``on_finally`` 绝不可取消它（见该回调 docstring）。
 T5   ``before_iteration``
      从 ``AgentHookContext.messages`` 推导本会话 user 消息序列（plan §2.2
      「session.messages 中 user 消息数 ≥ 4」），达阈值时用轻量 LLM
@@ -49,7 +51,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Callable
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -190,7 +191,7 @@ class MemoryExtractionHook(AgentHook):
 
     #: WU-A: idle 定时器阈值(秒)。每轮 after_run 重置定时器,空闲超过该时长则
     #: 触发 ``MemoryExtractor.run_idle_extraction``。测试可覆盖实例属性以缩短。
-    IDLE_THRESHOLD_SECONDS: float = 600.0
+    IDLE_THRESHOLD_SECONDS: float = 120.0
     #: T5 话题切换检测的 LLM 调用上限（秒）。
     TOPIC_CHANGE_TIMEOUT: float = 10.0
     #: T5 触发检测所需的 user 消息数（plan §2.2「≥4 轮」）。
@@ -207,11 +208,16 @@ class MemoryExtractionHook(AgentHook):
         runtime: LLMRuntime | None = None,
         memory_enabled_provider: "Callable[[], bool] | None" = None,
         idle_seconds: float | None = None,
+        cited_memory_ids: list[str] | None = None,
     ) -> None:
         super().__init__()
         self._extractor = extractor
         self._session_key = session_key
         self._scratchpad_writer = scratchpad_writer
+        # WU-B: 最近一次检索注入的记忆 id。hook 实例随 ``after_run`` arm 的 idle
+        # 定时器跨 run 存活（见模块 docstring「T1」），提取触发时据此做引用评分。
+        # 空列表表示本轮无注入，idle 链路与现状一致（不追加评分段）。
+        self._cited_memory_ids = list(cited_memory_ids or [])
         # 未显式注入时回落到 extractor 自带的 runtime（plan §7.3 无 runtime 参数）。
         self._runtime = runtime if runtime is not None else getattr(extractor, "runtime", None)
         # Hot-switchable user-facing memory toggle. ``None`` preserves legacy
@@ -233,7 +239,7 @@ class MemoryExtractionHook(AgentHook):
 
         # WU-A: idle 定时器状态。每个 hook 实例只对应一个 session_key,因此无需
         # 维护 _pending_tasks 集合;模块级 _PENDING_IDLE_TIMERS 按 session_key
-        # 维护。on_finally 直接取消并弹出当前会话键。
+        # 维护,由 _arm_idle_timer 负责取消/替换。
 
         # S5: 话题预筛 + 间隔节流（plan 2026-09-12）
         from nanobot.memory.topic_prefilter import TopicChangeGate
@@ -328,43 +334,23 @@ class MemoryExtractionHook(AgentHook):
             )
 
     async def on_finally(self, context: AgentRunHookContext) -> None:
-        """WU-A: idle 定时器 fire-and-forget 取消 + S1 会话结束兜底触发。
+        """本回调刻意不做任何事；两条禁令都写在下面。
 
-        行为变更(WU-A Task 3):
-        - 不再 await 任何 pending 提取任务(旧的 EXTRACTION_WAIT_TIMEOUT 5s 等待
-          路径已删除);改为 ``on_finally`` 时直接取消当前会话的 idle 定时器。
-        - idle 定时器本身是 fire-and-forget,即使被取消也不会向用户感知。
-        - S1 的 SessionEndOrchestrator 兜底触发保留(进程退出兜底)。
+        **不能取消 idle 定时器。** ``after_run`` 与 ``on_finally`` 属于同一次
+        ``AgentRunner.run``：after_run 在 ``return`` 前调用，on_finally 在紧随其后的
+        ``finally`` 块调用（runner.py:346 / 352），两者相隔微秒。若在此取消，刚 arm
+        的定时器会在协程被事件循环首次调度之前就被 cancel —— 协程体一行都不会执行，
+        ``except CancelledError`` 也不会跑到，表现为"日志停在 idle timer armed"。
+        定时器生命周期由 ``_arm_idle_timer`` 自己管理：同一会话的下一次 after_run
+        取消并替换旧的；进程退出时随事件循环销毁。
+
+        **不能派发 SessionEndEvent。** ``on_finally`` 是**每条消息**那次 run 的收尾，
+        不是会话结束。早先在此 fire-and-forget 触发 ``SessionEndOrchestrator.run``，
+        导致每条消息都跑一遍完整编排（episode / 画像 / 经验），与 idle 定时器的增量
+        抽取重复处理同一份转录。常态提取统一交给 idle 定时器；
+        ``SessionEndOrchestrator`` 留给真正的会话结束事件（如未来的 USER_CLOSE 端点）。
         """
-        if self._memory_disabled():
-            return
-
-        # 取消当前会话的 idle 定时器(若有)。fire-and-forget:不等待取消完成。
-        try:
-            _cancel_pending_idle_timer(self._session_key)
-        except Exception:
-            logger.warning(
-                "MemoryExtractionHook.on_finally cancel idle timer failed for session {}",
-                self._session_key,
-            )
-
-        # S1: 进程退出兜底触发 SessionEndEvent（fire-and-forget）
-        if self._session_end_orchestrator is not None:
-            from nanobot.memory.session_end_event import SessionEndEvent, SessionEndReason
-            event = SessionEndEvent(
-                session_key=self._session_key,
-                reason=SessionEndReason.PROCESS_SHUTDOWN,
-                transcript=list(context.messages),
-            )
-            try:
-                _spawn_background_task(
-                    self._session_end_orchestrator.run(event)
-                )
-            except Exception:
-                logger.warning(
-                    "SessionEnd orchestrator dispatch failed for session {}",
-                    self._session_key,
-                )
+        return
 
     def _build_orchestrator_extractor(self) -> Any:
         """构造编排器所需的 extractor 适配形态。
@@ -520,8 +506,18 @@ class MemoryExtractionHook(AgentHook):
         try:
             await asyncio.sleep(self.IDLE_THRESHOLD_SECONDS)
         except asyncio.CancelledError:
-            # 新一轮 after_run 触发了 arm_idle_timer 重置,定时器被取消属正常路径。
+            # 同一会话的新一轮 after_run 触发了 _arm_idle_timer 重置,定时器被取消属正常路径。
+            logger.debug(
+                "idle timer cancelled by new message for session {}", self._session_key
+            )
             return
+        logger.info(
+            "idle timer fired for session {} after {}s idle; starting incremental extraction "
+            "({} messages)",
+            self._session_key,
+            self.IDLE_THRESHOLD_SECONDS,
+            len(context.messages),
+        )
         await self._run_idle_extraction(context)
 
     async def _run_idle_extraction(self, context: AgentRunHookContext) -> None:
@@ -534,7 +530,10 @@ class MemoryExtractionHook(AgentHook):
             messages=[dict(message) for message in context.messages],
         )
         try:
-            await self._extractor.run_idle_extraction(session)
+            result = await self._extractor.run_idle_extraction(
+                session,
+                cited_memory_ids=self._cited_memory_ids,
+            )
         except Exception:
             logger.warning(
                 "idle memory extraction failed for session {}",
@@ -542,8 +541,13 @@ class MemoryExtractionHook(AgentHook):
             )
             return
         logger.info(
-            "idle memory extraction finished for session {}",
+            "idle memory extraction finished for session {}: memories={} episodes={} "
+            "skipped={} failed={}",
             self._session_key,
+            getattr(result, "memory_ids", None),
+            getattr(result, "episode_ids", None),
+            getattr(result, "skipped", None),
+            getattr(result, "failed_tracks", None),
         )
 
     async def _run_incremental_extraction(
@@ -657,6 +661,7 @@ def create_memory_extraction_hook_factory(
             runtime=runtime,
             memory_enabled_provider=memory_enabled_provider,
             idle_seconds=idle_seconds,
+            cited_memory_ids=list(context.cited_memory_ids or []),
         )
 
     return _factory

@@ -14,7 +14,8 @@ Scenarios verified:
     ``db_path`` and confirm all three artifacts survive.
 3.  CHAT intent does NOT write ``current_focus`` via hook ``after_run``.
 4.  TASK intent writes ``current_focus`` via hook ``after_run``.
-5.  ``on_finally`` cancels the idle timer (WU-A: no longer awaits/blocks;
+5.  ``on_finally`` does NOT cancel the idle timer (WU-A: the timer must
+    outlive the run it was armed in).
 6.  ``_system_extract`` produces ``ActionNode`` from a tool_call + tool
     response without invoking the LLM.
 7.  LLM episode-track failure is isolated: ``extract_session`` returns
@@ -23,8 +24,8 @@ Scenarios verified:
 8.  ``on_error`` writes ``current_focus`` urgently without calling the
     extractor or LLM.
 9.  **WU-C Idle extraction full cycle** (3 turns → idle timer fires once →
-    state.last_count advances, scratchpad focus updates, rule-signal
-    memories persist).
+    state.last_count advances, scratchpad focus updates, semantic memories
+    and the episode persist).
 10. **WU-C Idle extraction cancellation** (second ``after_run`` cancels the
     first timer; only the second timer fires and advances state).
 11. **WU-C Idle extraction no-op** (pre-populated state matching current
@@ -217,6 +218,36 @@ def _init_db(tmp_path: Path) -> MemoryDatabase:
     database = MemoryDatabase(tmp_path)
     database.init_schema()
     return database
+
+
+# WU-A: idle 抽取现在走完整四阶段流水线（semantic + episode 两路 LLM），
+# 因此集成测试需要给出真实可解析的 payload。
+_IDLE_SEMANTIC_JSON = json.dumps(
+    {
+        "memories": [
+            {
+                "content": "用户以后都用 uv 管理 Python 依赖",
+                "type": "RULE",
+                "priority": "long_term",
+                "importance": 0.8,
+                "tags": ["python"],
+            }
+        ],
+        "experiences": [],
+    },
+    ensure_ascii=False,
+)
+
+_IDLE_EPISODE_JSON = json.dumps(
+    {
+        "summary": "用户通过 nanobot 约定使用 uv 管理依赖",
+        "goal": "约定依赖管理工具",
+        "outcome": "completed",
+        "entities": ["uv"],
+        "tools_used": [],
+    },
+    ensure_ascii=False,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -715,9 +746,11 @@ class TestIdleExtractionIntegration:
     """
 
     async def test_idle_extraction_full_cycle(self, tmp_path: Path):
-        """Case 9：3 个 turn → idle 触发一次 → state 推进 + scratchpad focus 更新 + rule 记忆入库。"""
+        """Case 9：3 个 turn → idle 触发一次 → state 推进 + focus 更新 + 记忆/情节落库。"""
         db = _init_db(tmp_path)
-        provider = _FakeProvider()  # 不期望被调
+        provider = _FakeProvider(
+            semantic=_IDLE_SEMANTIC_JSON, episode=_IDLE_EPISODE_JSON
+        )
         extractor = MemoryExtractor(db, _FakeRuntime(provider))
         writer = ScratchpadWriter(db, user_id="default")
         hook = MemoryExtractionHook(
@@ -771,20 +804,26 @@ class TestIdleExtractionIntegration:
         assert entry is not None
         assert entry.current_focus == "永远禁止在 main 直接 print"
 
-        # --- rule-signal 记忆必须入库(extract_incremental 仅走规则信号)---
+        # --- 语义记忆必须入库(extract_incremental 走完整流水线)---
         with db.connect() as conn:
             hits = search_memories(conn, "uv")
-        # 第二/三条 user 消息含规则关键词,期望至少 1 条 RULE 入库。
-        rule_hits = [h for h in hits if h.type is MemoryType.RULE]
-        assert len(rule_hits) >= 1
+        assert hits, "语义轨记忆未落库"
 
-        # --- run_idle_extraction 不调 LLM(纯规则信号扫描)---
-        assert provider.calls == []
+        # --- episode 必须入库(回归:idle 路径曾恒不产 episode)---
+        with db.connect() as conn:
+            episodes = conn.execute("SELECT id, source FROM episodes").fetchall()
+        assert len(episodes) == 1
+        assert episodes[0][1] == "idle"
+
+        # --- 两路 LLM 各调一次(semantic + episode)---
+        assert len(provider.calls) == 2
 
     async def test_idle_extraction_cancelled_by_new_message(self, tmp_path: Path):
         """Case 10:第二个 ``after_run`` 必须取消第一个 timer,只触发一次抽取,state 推进一次。"""
         db = _init_db(tmp_path)
-        provider = _FakeProvider()
+        provider = _FakeProvider(
+            semantic=_IDLE_SEMANTIC_JSON, episode=_IDLE_EPISODE_JSON
+        )
         extractor = MemoryExtractor(db, _FakeRuntime(provider))
         writer = ScratchpadWriter(db, user_id="default")
         hook = MemoryExtractionHook(
@@ -834,8 +873,8 @@ class TestIdleExtractionIntegration:
         assert state.last_count == 4  # ctx2 的消息总数
         assert state.last_source == "idle"
 
-        # 没有任何 on_finally 调用,provider 不应被调。
-        assert provider.calls == []
+        # 只有第二个 timer 触发了一次抽取 → 2 次 LLM 调用(semantic + episode)。
+        assert len(provider.calls) == 2
 
     async def test_idle_extraction_no_op_when_state_current(self, tmp_path: Path):
         """Case 11:state.last_count == current_count 时,run_idle_extraction 是 no-op。"""
@@ -947,5 +986,5 @@ class TestIdleExtractionIntegration:
         # last_extracted_at 必须被刷新(不再是 10:00:00)。
         assert state.last_extracted_at != "2026-09-15T10:00:00+00:00"
 
-        # 不期望 LLM 被调(run_idle_extraction 是纯规则信号扫描)。
-        assert provider.calls == []
+        # 重试成功时走了完整流水线 → 两路 LLM 各调一次。
+        assert len(provider.calls) == 2

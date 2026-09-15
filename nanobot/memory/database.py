@@ -201,13 +201,14 @@ class MemoryDatabase:
             )
 
     def ensure_schema(self) -> None:
-        """若未初始化则执行 init_schema。"""
-        with self.connect() as conn:
-            row = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='_schema_meta'"
-            ).fetchone()
-        if row is None:
-            self.init_schema()
+        """幂等补建所有表、索引与元数据。
+
+        ``_SCHEMA_STATEMENTS`` 全部使用 ``CREATE TABLE IF NOT EXISTS`` /
+        ``CREATE INDEX IF NOT EXISTS``，对已初始化库重跑也是 no-op，因此本方法
+        无论库处于任何状态都直接走 ``init_schema``：旧库（如 v1）能自动补建后
+        续 WU 新增的表/索引，不会因 ``_schema_meta`` 已存在而被跳过。
+        """
+        self.init_schema()
 
     def replay_fallback(self) -> int:
         """把 ``fallback_dir`` 中的所有 JSON 载荷重新执行一次,成功后删除文件。

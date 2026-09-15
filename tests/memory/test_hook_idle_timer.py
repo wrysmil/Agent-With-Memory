@@ -4,7 +4,7 @@
 - after_run 注册 idle 任务到 ``_PENDING_IDLE_TIMERS``;
 - 第二次 after_run 取消前一个任务;
 - ``IDLE_THRESHOLD_SECONDS`` 触发后调用 ``run_idle_extraction``;
-- on_finally 取消当前会话的 idle 任务。
+- on_finally **不**取消当前会话的 idle 任务(定时器须跨 run 存活)。
 
 测试不依赖真实 provider / LLM,extractor 用 fake (duck-typed) 替代,
 ``_run_idle_extraction`` 内部调 ``run_idle_extraction`` 用 ``asyncio.sleep``
@@ -23,7 +23,6 @@ from nanobot.agent.hooks.memory_extraction import (
     _PENDING_IDLE_TIMERS,
     MemoryExtractionHook,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fakes（鸭子类型）
@@ -45,7 +44,9 @@ class _FakeExtractor:
         self.idle_calls: list[Any] = []
         self.raise_exc = raise_exc
 
-    async def run_idle_extraction(self, session: Any) -> Any:
+    async def run_idle_extraction(
+        self, session: Any, *, cited_memory_ids: list[str] | None = None
+    ) -> Any:
         self.idle_calls.append(session)
         if self.raise_exc is not None:
             raise self.raise_exc
@@ -181,27 +182,42 @@ class TestIdleTimerContract:
         session = extractor.idle_calls[0]
         assert session.key == hook._session_key
 
-    async def test_on_finally_cancels_idle_timer(self):
-        """on_finally 后,idle 任务必须已 cancelled 且从 dict 弹出。"""
-        hook = _make_hook(idle_seconds=5.0)  # 长阈值,确保定时器还没自然触发
+    async def test_on_finally_does_not_cancel_idle_timer(self):
+        """on_finally 必须**保留** idle 任务。
+
+        回归:``after_run`` 与 ``on_finally`` 同属一次 ``AgentRunner.run``(after_run
+        之后紧跟 finally 块),若 on_finally 取消定时器,协程会在被事件循环首次调度
+        前就被 cancel,idle 提取永不触发(线上表现:日志停在 "idle timer armed")。
+        """
+        extractor = _FakeExtractor()
+        hook = _make_hook(extractor=extractor, idle_seconds=0.05)
         ctx = _run_ctx()
         await hook.after_run(ctx)
 
-        assert hook._session_key in _PENDING_IDLE_TIMERS
         timer_task = _PENDING_IDLE_TIMERS[hook._session_key]
         assert not timer_task.done()
 
         await hook.on_finally(ctx)
 
-        # 任务已 cancelled 且 dict 已清空(因为 callback 把 task 弹出)。
-        # 给事件循环一点时间运行 cancel callback。
-        for _ in range(50):
-            if timer_task.done() and hook._session_key not in _PENDING_IDLE_TIMERS:
-                break
-            await asyncio.sleep(0.01)
-        assert timer_task.cancelled() or timer_task.done()
-        # session_key 必须从 _PENDING_IDLE_TIMERS 弹出(on_finally 的 _cancel_*)。
-        assert hook._session_key not in _PENDING_IDLE_TIMERS
+        # 定时器必须仍存活。
+        assert not timer_task.done()
+        assert _PENDING_IDLE_TIMERS.get(hook._session_key) is timer_task
+
+        # 且必须在阈值后真正触发提取。
+        await _drain_pending(timeout=2.0)
+        assert len(extractor.idle_calls) == 1
+
+    async def test_idle_timer_survives_full_run_lifecycle(self):
+        """复刻 runner 顺序 after_run → finally:on_finally,提取必须触发。"""
+        extractor = _FakeExtractor()
+        hook = _make_hook(extractor=extractor, idle_seconds=0.05)
+        ctx = _run_ctx([{"role": "user", "content": "用 uv 管理依赖"}])
+
+        await hook.after_run(ctx)
+        await hook.on_finally(ctx)  # runner.py:352 的 finally 块
+
+        await _drain_pending(timeout=2.0)
+        assert len(extractor.idle_calls) == 1
 
     async def test_multiple_sessions_have_independent_timers(self):
         """两个不同 session_key 的 hook 必须各自维护独立 idle 任务。"""

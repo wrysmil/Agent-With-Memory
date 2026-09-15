@@ -63,8 +63,13 @@ class _FakeExtractor:
             raise self.raise_exc
         return _FakeExtractionResult()
 
-    async def run_idle_extraction(self, session: Any) -> Any:
-        """WU-A: 新增的 idle 入口,与 extract_session 共享延迟/异常语义。"""
+    async def run_idle_extraction(
+        self, session: Any, *, cited_memory_ids: list[str] | None = None
+    ) -> Any:
+        """WU-A: 新增的 idle 入口,与 extract_session 共享延迟/异常语义。
+
+        WU-B: 接受 ``cited_memory_ids``(hook 工厂透传的检索注入记忆 id)。
+        """
         self.idle_calls.append(session)
         if self.delay:
             await asyncio.sleep(self.delay)
@@ -269,21 +274,34 @@ class TestRunExtraction:
         finally:
             await hook.on_finally(_run_ctx())
 
-    async def test_on_finally_cancels_pending_idle(self):
-        """on_finally 不再 await 提取,而是 cancel 当前会话的 idle 任务。"""
+    async def test_on_finally_keeps_pending_idle(self):
+        """on_finally 必须保留 idle 任务:它是一次 run 的收尾,不是空闲的开始。
+
+        after_run 与 on_finally 相隔微秒(同一次 ``AgentRunner.run``),若在此取消,
+        idle 提取永不触发。这里只断言"on_finally 不改动定时器且不阻塞"。
+        """
         extractor = _FakeExtractor(delay=10.0)
         hook = _make_hook(extractor=extractor, idle_seconds=5.0)
         await hook.after_run(_run_ctx("帮我实现一个爬虫"))
         assert "s1" in _PENDING_IDLE_TIMERS
+        timer_task = _PENDING_IDLE_TIMERS["s1"]
 
         started = time.monotonic()
         await hook.on_finally(_run_ctx())
         # 立即返回(< 1s),不阻塞。
         assert time.monotonic() - started < 1.0
-        # session_key 必须从 dict 弹出。
-        assert "s1" not in _PENDING_IDLE_TIMERS
-        # 慢提取不应被调起(已被 cancel)。
+        # 定时器仍在 dict 中,且就是同一个任务对象。
+        assert _PENDING_IDLE_TIMERS.get("s1") is timer_task
+        assert not timer_task.done()
+        # 尚未到阈值,慢提取不应被调起。
         assert len(extractor.idle_calls) == 0
+
+        # 清理:显式取消(阈值 5s 太长,不该让测试等)。
+        timer_task.cancel()
+        try:
+            await timer_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
     async def test_on_finally_without_pending_idle_is_noop(self):
         hook = _make_hook()

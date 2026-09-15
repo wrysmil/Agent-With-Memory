@@ -116,6 +116,62 @@ class TestSchema:
             ).fetchone()[0]
         assert count == 1
 
+    def test_ensure_schema_backfills_missing_tables_on_existing_db(self, workspace: Path):
+        """旧库（_schema_meta 已存在）调用 ensure_schema 必须补建缺失表。
+
+        场景：v1 DB（_schema_meta + memories/episodes/scratchpad）升级到包含
+        session_extraction_state 的代码后，首次 ensure_schema 必须自动补建该表，
+        否则 idle 路径调 get_extraction_state 会因 no such table 抛异常。
+        """
+        import sqlite3
+
+        db_path = workspace / "memory" / "state.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 1. 模拟"用老代码创建的库"：完整 init_schema 后删掉 session_extraction_state
+        #    （保持 v1 时代的状态：_schema_meta 已存在、新表未建）。
+        db = MemoryDatabase(workspace)
+        db.init_schema()
+        with sqlite3.connect(db_path) as raw:
+            raw.execute("DROP TABLE session_extraction_state")
+            # _schema_meta 必须存在（v1 时代已建），确保不走老的"未初始化"分支。
+            rows = raw.execute(
+                "SELECT value FROM _schema_meta WHERE key='version'"
+            ).fetchall()
+            raw.commit()
+            assert rows and rows[0][0] == "1", "_schema_meta 应保持 v1 状态"
+        # 关闭旧连接
+        del db
+
+        # 2. 用新代码的 ensure_schema 打开同一个文件
+        db2 = MemoryDatabase(workspace)
+        db2.ensure_schema()
+
+        # 3. 验证：旧表还在（数据未丢），新表被补建
+        with db2.connect() as conn:
+            legacy_intact = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' "
+                "AND name IN ('_schema_meta', 'memories', 'episodes', 'scratchpad')"
+            ).fetchone()[0]
+            new_table = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' "
+                "AND name='session_extraction_state'"
+            ).fetchone()[0]
+        assert legacy_intact == 4, "旧库表应保留"
+        assert new_table == 1, "session_extraction_state 必须被补建"
+
+    def test_ensure_schema_is_idempotent_on_existing_db(self, workspace: Path):
+        """ensure_schema 连续调用多次：表不重复、数据不丢。"""
+        db = MemoryDatabase(workspace)
+        db.ensure_schema()
+        db.ensure_schema()
+        db.ensure_schema()
+        with db.connect() as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name='memories'"
+            ).fetchone()[0]
+        assert count == 1
+
     def test_memories_table_has_required_columns(self, workspace: Path):
         db = MemoryDatabase(workspace)
         db.init_schema()

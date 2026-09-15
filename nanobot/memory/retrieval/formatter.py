@@ -2,7 +2,8 @@
 
 契约：
 - 输入：``list[RetrievalCandidate]``（来自 Reranker，已写 ``composite_score``）
-- 输出：``list[dict]``，每项含 ``content`` / ``type`` / ``score`` / ``reason``
+- 输出：``list[dict]``，每项含 ``content`` / ``type`` / ``score`` / ``reason`` /
+  ``memory_id``（WU-B：供注入块暴露 ID，保证引用评分闭环能拿到记忆标识）
 - 行为：按 ``composite_score`` 降序取前 ``limit`` 个；空输入或 ``limit=0`` → ``[]``；
   严格按分截断，不去重、不抛异常。
 """
@@ -70,6 +71,7 @@ class RetrievalFormatter:
                 "type": _extract_type_value(c.raw),
                 "score": round(raw_score, 2),
                 "reason": self._score_label(raw_score),
+                "memory_id": c.memory_id,
             })
         return out
 

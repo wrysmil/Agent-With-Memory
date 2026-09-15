@@ -154,9 +154,31 @@ class ContextBuilder:
 
         Failure-isolated: any retrieval exception is swallowed and logged so
         the system prompt build never breaks because of retrieval.
+
+        兼容薄壳：只返回注入块。需要本次注入的 ``memory_id`` 集合的调用方
+        （WU-B 引用评分闭环）应使用 :meth:`_build_memory_section_with_ids`，
+        以在 idle 提取时把同一批记忆作为 ``cited_memories`` 送进评分 prompt。
+        """
+        block, _ids = await self._build_memory_section_with_ids(
+            query=query,
+            recent_messages=recent_messages,
+        )
+        return block
+
+    async def _build_memory_section_with_ids(
+        self,
+        *,
+        query: str,
+        recent_messages: list[Any],
+    ) -> tuple[str, list[str]]:
+        """Return ``(retrieval block, 本次注入的 memory_id 列表)``。
+
+        Failure-isolated: any retrieval exception is swallowed and logged so
+        the system prompt build never breaks because of retrieval. Disabled /
+        engine missing / gate skip → ``("", [])``。
         """
         if not self._should_retrieve():
-            return ""
+            return "", []
         # Lazy import: keeps ``nanobot.agent.context`` importable without
         # pulling the retrieval module eagerly (preserves the historical
         # sync-only path for callers that never enable Layer 4).
@@ -165,8 +187,8 @@ class ContextBuilder:
         try:
             prepared = MemoryQueryPreprocessor.prepare(query, recent_messages)
             if prepared.skip:
-                return ""
-            retrieved = await self._retrieval_engine.retrieve(
+                return "", []
+            retrieved = await self._retrieval_engine.retrieve_with_ids(
                 query=prepared.cleaned_query,
                 recent_messages=recent_messages,
             )
@@ -174,8 +196,9 @@ class ContextBuilder:
             logger.warning(
                 "Active retrieval failed; continuing without Layer 4 block"
             )
-            return ""
-        return retrieved or ""
+            return "", []
+        block, ids = retrieved
+        return block or "", list(ids)
 
     def build_system_prompt(
         self,

@@ -160,7 +160,7 @@ class AgentDefaults(Base):
         serialization_alias="memoryEnabled",
     )  # User-facing total memory switch; read at runtime via provider in hook/context
     memory_idle_seconds: int = Field(
-        default=600,
+        default=120,
         ge=1,
         validation_alias=AliasChoices("memoryIdleSeconds", "memory_idle_seconds"),
         serialization_alias="memoryIdleSeconds",

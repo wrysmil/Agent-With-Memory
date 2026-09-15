@@ -35,6 +35,7 @@ class EpisodeSource(str, Enum):
     TOPIC_CHANGE = 'topic_change'
     DAILY_CONSOLIDATION = 'daily_consolidation'
     DELETION = 'deletion'
+    IDLE = 'idle'
 
 
 def _default_now() -> str:

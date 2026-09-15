@@ -165,6 +165,9 @@ class TurnContext:
     # produced in ``_build_turn`` and forwarded into the ``transcript_builder``
     # partial. Empty string when disabled / engine missing / query gated.
     pending_retrieved_memory_section: str = ""
+    # WU-B: 本次检索注入的记忆 id 集合（与上面 section 同源），供 idle 定时器
+    # 的引用评分（cited_memories）使用。空列表 = 无注入或链路未启用。
+    pending_cited_memory_ids: list[str] = field(default_factory=list)
 
     input_persisted_early: bool = False
     save_skip: int = 0
@@ -321,6 +324,7 @@ class AgentLoop:
         from nanobot.config.schema import ToolsConfig
 
         _tc = tools_config or ToolsConfig()
+        self._retrieval_engine = retrieval_engine
         defaults = AgentDefaults()
         self.bus = bus
         self._recovery_admission = recovery_admission
@@ -792,6 +796,7 @@ class AgentLoop:
             timezone=self.context.timezone or "UTC",
             workspace_sandbox=self.workspace_scopes.sandbox_status,
             runtime_control=AgentRuntimeControl(self),
+            attributes={"retrieval_engine": self._retrieval_engine},
         )
         loader = ToolLoader()
         registered = loader.load(ctx, self.tools)
@@ -1112,6 +1117,7 @@ class AgentLoop:
         request_context: RequestContext | None = None,
         provider_state: ProviderConversationState | None = None,
         retrieved_memory_section: str = "",
+        cited_memory_ids: list[str] | None = None,
     ) -> AgentRunResult:
         """Run the agent iteration loop.
 
@@ -1326,6 +1332,7 @@ class AgentLoop:
                 turn_hooks=list(hooks or []),
                 ephemeral=ephemeral,
                 run_extra_hooks_for_ephemeral=run_extra_hooks_for_ephemeral,
+                cited_memory_ids=list(cited_memory_ids or []),
             ))
             result = await self.runner.run(AgentRunSpec(
                 initial_messages=None,
@@ -2141,9 +2148,11 @@ class AgentLoop:
         # block here so the sync ``transcript_builder`` partial inside
         # ``_run_agent_loop`` can pick it up via ``build_system_prompt``.
         # Failure-isolated — never breaks BUILD even if retrieval errors out.
-        ctx.pending_retrieved_memory_section = await self._compute_retrieval_section(
-            query=ctx.msg.content,
-            recent_messages=list(ctx.history),
+        (ctx.pending_retrieved_memory_section, ctx.pending_cited_memory_ids) = (
+            await self._compute_retrieval_section(
+                query=ctx.msg.content,
+                recent_messages=list(ctx.history),
+            )
         )
 
     async def _compute_retrieval_section(
@@ -2151,16 +2160,17 @@ class AgentLoop:
         *,
         query: str,
         recent_messages: list[dict[str, Any]],
-    ) -> str:
-        """Compute the Layer 4 retrieval markdown block (T-13).
+    ) -> tuple[str, list[str]]:
+        """Compute the Layer 4 retrieval markdown block (T-13) + injected ids (WU-B).
 
-        Returns ``""`` when the feature is disabled, when the engine is not
+        Returns ``("", [])`` when the feature is disabled, when the engine is not
         wired, when the preprocessor gate short-circuits, or when retrieval
         raises. Never propagates exceptions to the caller — failures must not
-        block the BUILD stage.
+        block the BUILD stage. The ``memory_id`` list feeds the idle extraction
+        citation scoring.
         """
         try:
-            return await self.context._build_memory_section(
+            return await self.context._build_memory_section_with_ids(
                 query=query,
                 recent_messages=recent_messages,
             )
@@ -2169,7 +2179,7 @@ class AgentLoop:
                 "Active retrieval failed during _build_turn; "
                 "system prompt will omit the Layer 4 block"
             )
-            return ""
+            return "", []
 
     async def _run_turn(self, ctx: TurnContext) -> None:
         runtime = ctx.require_runtime()
@@ -2193,6 +2203,7 @@ class AgentLoop:
                 request_context=ctx.request_context,
                 provider_state=ctx.provider_state,
                 retrieved_memory_section=ctx.pending_retrieved_memory_section,
+                cited_memory_ids=ctx.pending_cited_memory_ids,
                 events=ctx.events,
             )
         ctx.final_content = result.final_content

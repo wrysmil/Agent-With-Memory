@@ -216,6 +216,53 @@ def update_memory(
         raise KeyError(f"memory not found: {memory_id}")
 
 
+def find_memory_by_subject_predicate(
+    conn: sqlite3.Connection,
+    subject: str,
+    predicate: str,
+    *,
+    workspace_id: str | None = None,
+) -> Memory | None:
+    """按 ``subject`` + ``predicate`` 精确查找一条记忆（S3 画像增量合并用）。
+
+    两者任一为空直接返回 ``None``：空 subject/predicate 不具备合并语义，
+    必须退化为新建，否则会把互不相关的记忆误判为「同一条」。
+    """
+    if not subject or not predicate:
+        return None
+    clauses = ["subject = ?", "predicate = ?"]
+    params: list[Any] = [subject, predicate]
+    if workspace_id is not None:
+        clauses.append("workspace_id = ?")
+        params.append(workspace_id)
+    flat = " ".join(_SELECT_MEMORY_COLUMNS.split())
+    sql = f"SELECT {flat} FROM memories WHERE {' AND '.join(clauses)} LIMIT 1"
+    row = conn.execute(sql, params).fetchone()
+    return _row_to_memory(row) if row is not None else None
+
+
+def bump_access_count(
+    conn: sqlite3.Connection,
+    memory_id: str,
+    delta: int = 1,
+) -> None:
+    """自增一条记忆的 ``access_count``（WU-B 引用评分闭环）。
+
+    由 idle 提取把 LLM 判定 ``useful=true`` 的 ``citation_scores`` 落回
+    ``access_count``，reranker 的 ``access_frequency_score``（``log1p(count)/5``）
+    随之抬升，让“被证明有用”的记忆在后续检索里排更前。
+
+    刻意**不**动 ``updated_at``：那是 recency 的信号，把“最近有用”画上等号
+    会让被证明过一次的记忆同时吃 recency + access 双加成，形成正反馈循环。
+
+    行不存在时静默忽略（记忆可能已在提取间隙被删除），不抛异常。
+    """
+    conn.execute(
+        "UPDATE memories SET access_count = access_count + ? WHERE id = ?",
+        (max(0, int(delta)), memory_id),
+    )
+
+
 # ---------- episodes ----------
 
 _INSERT_EPISODE_SQL = """

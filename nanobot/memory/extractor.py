@@ -18,6 +18,7 @@ import asyncio
 import json
 import math
 import re
+import sqlite3
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -43,6 +44,12 @@ from nanobot.memory.models import (
     MemoryType,
     ScratchpadEntry,
 )
+from nanobot.memory.profile_extractor import (
+    ProfileExtractionResult,
+    ProfileExtractor,
+    ProfileItem,
+    merge_profile_incremental,
+)
 from nanobot.memory.prompts import (
     EPISODE_EXTRACTION_PROMPT,
     SEMANTIC_EXTRACTION_PROMPT,
@@ -50,10 +57,14 @@ from nanobot.memory.prompts import (
 from nanobot.memory.repository import (
     add_episode,
     add_memory,
+    bump_access_count,
+    find_memory_by_subject_predicate,
     get_extraction_state,
+    get_memory,
     get_scratchpad,
     list_memories,
     reset_extraction_state,
+    update_memory,
     update_memory_source_episode,
     upsert_extraction_state,
 )
@@ -126,6 +137,7 @@ _SOURCE_MAP: dict[str, EpisodeSource] = {
     "topic_change": EpisodeSource.TOPIC_CHANGE,
     "deletion": EpisodeSource.DELETION,
     "daily_consolidation": EpisodeSource.DAILY_CONSOLIDATION,
+    "idle": EpisodeSource.IDLE,
 }
 
 
@@ -198,12 +210,19 @@ class LLMExtractionResult:
 
     ``action_nodes`` 承载阶段1 的系统提取结果，用于按 §7.4 的
     ``_apply_filters(llm_result, existing_memories)`` 签名把 ActionNode 传递到阶段3/4。
+
+    ``citation_scores`` / ``cited_memory_ids``（WU-B）：semantic 路 ProfileExtractor
+    返回的引用评分（``[{memory_id, useful}]``）与本次注入记忆集合。仅当
+    ``cited_memory_ids`` 非空时才可能非空；``_persist`` 用它给 ``useful=true``
+    的记忆自增 ``access_count``（评分 id 不在集合内→丢弃，防 LLM 幻觉写错记忆）。
     """
 
     memories: list[LLMMemoryItem] = field(default_factory=list)
     episode: LLMEpisodeItem | None = None
     failed_tracks: list[str] = field(default_factory=list)
     action_nodes: list[ActionNode] = field(default_factory=list)
+    citation_scores: list[dict[str, Any]] = field(default_factory=list)
+    cited_memory_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -213,6 +232,8 @@ class FilteredExtractionResult:
     memories: list[LLMMemoryItem] = field(default_factory=list)
     episode: LLMEpisodeItem | None = None
     action_nodes: list[ActionNode] = field(default_factory=list)
+    citation_scores: list[dict[str, Any]] = field(default_factory=list)
+    cited_memory_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -514,15 +535,51 @@ def _coerce_episode_item(raw: dict[str, Any]) -> LLMEpisodeItem:
     )
 
 
-def _coerce_memory_items(raw_items: Any) -> list[LLMMemoryItem]:
-    if not isinstance(raw_items, list):
+def _profile_item_to_llm(item: ProfileItem) -> LLMMemoryItem:
+    """S3 Track 1 的 ``ProfileItem`` 适配成流水线内部的 ``LLMMemoryItem``。
+
+    适配层刻意保持 ``_apply_filters`` / ``_persist`` 的输入类型不变，
+    避免改动阶段3/4。``type`` 沿用大写原样透传——下游统一 ``.lower()``。
+    """
+    return LLMMemoryItem(
+        content=item.content,
+        type=item.type,
+        priority=item.priority,
+        importance=item.importance,
+        subject=item.subject,
+        predicate=item.predicate,
+        tags=list(item.tags),
+    )
+
+
+def _resolve_cited_memories(
+    database: MemoryDatabase,
+    memory_ids: list[str] | None,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """把记忆 id 列表解析成 ProfileExtractor 引用评分用的 ``[{id, content}]``。
+
+    单次事务批量读取，按 id 去重、截断到 ``limit`` 条，控制进 prompt 的引用体积
+    （CITATION_SCORING_SECTION 每条约 200 token）。记忆已被删除的 id 静默跳过，
+    ``None``/空输入返回 ``[]``——
+    这同时也是 plan §4.3「注入块不含 ID 或 cited_memories 为空 → 跳过评分段」的保底。
+    """
+    if not memory_ids:
         return []
-    items: list[LLMMemoryItem] = []
-    for raw in raw_items:
-        item = _coerce_memory_item(raw)
-        if item is not None:
-            items.append(item)
-    return items
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    with database.connect() as conn:
+        for memory_id in memory_ids:
+            if not memory_id or memory_id in seen:
+                continue
+            seen.add(memory_id)
+            if len(out) >= limit:
+                break
+            memory = get_memory(conn, memory_id)
+            if memory is None:
+                continue
+            out.append({"id": memory.id, "content": memory.content})
+    return out
 
 
 def _normalize_outcome(raw: str | None) -> EpisodeOutcome:
@@ -640,6 +697,9 @@ class MemoryExtractor:
         self.runtime = runtime
         self.workspace_id = workspace_id
         self.user_id = user_id
+        # S3 Track 1：画像 + 引用评分 + 经验。SEMANTIC_EXTRACTION_PROMPT 是双轨输出，
+        # 一次调用同时产出 memories / experiences，交给 ProfileExtractor 统一解析。
+        self.profile_extractor = ProfileExtractor(runtime=runtime)
         # WU-3B: fallback 目录。若 database 暴露了 fallback_dir(B 节),复用;
         # 否则回退到 db_path.parent/_memory_fallback,确保 _safe_write_with_fallback
         # 始终有可写目录。database 可能为 None(generate_episode 路径下),此时
@@ -740,46 +800,82 @@ class MemoryExtractor:
         last_extracted_index: int,
         *,
         source: str = "topic_change",
+        cited_memories: list[dict[str, Any]] | None = None,
     ) -> ExtractionResult:
-        """话题切换触发的轻量增量抽取（只扫新消息，不调 LLM）。
+        """增量抽取：只把 ``messages[last_extracted_index:]`` 喂进完整四阶段流水线。
 
-        ``session.messages[last_extracted_index:]`` 视为新增消息，仅走阶段1 的规则
-        信号抽取，去重与落库复用 ``_load_existing_memories`` + ``_apply_filters``
-        + ``_persist``。``source`` 默认 ``topic_change``（向后兼容 T5 路径），
-        ``run_idle_extraction`` 调起时会传入 ``idle``，便于审计 episode 映射。
+        与 :meth:`extract_session` 的唯一差别是**输入切片**：流水线本身完全一致，
+        因此语义记忆（``SEMANTIC_EXTRACTION_PROMPT`` 的 ``memories[]`` 画像 +
+        ``experiences[]`` 经验）与 episode 都会正常产出并落库。
+
+        ``cited_memories``（WU-B）：本次检索注入的历史记忆 ``[{id, content}]``，
+        透传给 ProfileExtractor 做引用评分；``useful=true`` 的记忆在 ``_persist``
+        阶段自增 ``access_count``。为 ``None``/空时整条链路与现状一致。
+
+        历史注记：本方法原名下是 rule-only（不调 LLM）实现，那是为 T5 话题切换
+        设计的轻量路径；WU-A 把它接成 idle 入口后未同步升级，导致正常聊天既不调
+        LLM 也不产 episode。此处按 plan 原意（决策 #3「让 LLM 跑完」）恢复完整流水线。
+
         失败隔离：任何异常仅 warning，并返回空 :class:`ExtractionResult`。
         """
-        try:
-            if not session.messages:
-                return ExtractionResult()
-            start = max(0, last_extracted_index)
-            new_messages = session.messages[start:]
-            if not new_messages:
-                return ExtractionResult()
+        if not session.messages:
+            return ExtractionResult()
+        start = max(0, last_extracted_index)
+        new_messages = session.messages[start:]
+        if not new_messages:
+            logger.info(
+                "{} extraction: no new messages for session {} (start={})",
+                source,
+                session.key,
+                start,
+            )
+            return ExtractionResult()
 
-            fragments = _collect_rule_signals(new_messages)
-            if not fragments:
-                return ExtractionResult()
-            candidates = [
-                LLMMemoryItem(content=fragment, type=_QUICK_FACT_TYPE)
-                for fragment in fragments
-            ]
-            existing = self._load_existing_memories(candidates)
-            filtered = self._apply_filters(
-                LLMExtractionResult(memories=candidates),
-                existing,
+        # Session 仅在 TYPE_CHECKING 下导入，构造切片需要运行时引用。
+        from nanobot.session.manager import Session as _Session
+
+        slice_session = _Session(
+            key=session.key,
+            messages=[dict(message) for message in new_messages],
+            created_at=session.created_at,
+        )
+        try:
+            system = self._system_extract(slice_session)
+            llm_result = await self._llm_extract(
+                slice_session, system, cited_memories=cited_memories
             )
-            persisted = self._persist(filtered, session, source=source)
-            return ExtractionResult(
-                memory_ids=persisted.memory_ids,
-                episode_ids=persisted.episode_ids,
-                skipped=len(candidates) - len(filtered.memories),
-            )
+            existing = self._load_existing_memories(llm_result.memories)
+            filtered = self._apply_filters(llm_result, existing)
+            persisted = self._persist(filtered, slice_session, source=source)
         except Exception as exc:  # noqa: BLE001 - 增量抽取失败绝不能上抛
             logger.opt(exception=exc).warning("incremental extraction failed: {}", exc)
             return ExtractionResult()
 
-    async def run_idle_extraction(self, session: Session) -> ExtractionResult:
+        skipped = len(llm_result.memories) - len(filtered.memories)
+        logger.info(
+            "{} extraction for session {}: {} new messages -> {} memories, {} episodes "
+            "(skipped={} failed_tracks={})",
+            source,
+            session.key,
+            len(new_messages),
+            len(persisted.memory_ids),
+            len(persisted.episode_ids),
+            skipped,
+            llm_result.failed_tracks,
+        )
+        return ExtractionResult(
+            memory_ids=persisted.memory_ids,
+            episode_ids=persisted.episode_ids,
+            skipped=skipped,
+            failed_tracks=list(llm_result.failed_tracks),
+        )
+
+    async def run_idle_extraction(
+        self,
+        session: Session,
+        *,
+        cited_memory_ids: list[str] | None = None,
+    ) -> ExtractionResult:
         """Idle 定时器触发的入口：读 state、调 incremental、推进 state。
 
         行为契约（plan WU-A Task 2）：
@@ -790,6 +886,11 @@ class MemoryExtractor:
         - 若 ``extract_incremental`` 抛异常：state **不**推进（保留旧值，下次
           重试），warning + 返回空 :class:`ExtractionResult`，不再上抛。
         - state 行缺失时按 ``last_count=0`` 处理（即首跑等价于一次完整增量扫描）。
+
+        ``cited_memory_ids``（WU-B）：最近一次检索注入的记忆 id 列表。extractor
+        内部解析成 ``[{id, content}]`` 后传给 :meth:`extract_incremental` 做引用
+        评分；``useful=true`` 的记忆在 ``_persist`` 自增 ``access_count``。
+        为 ``None``/空时与现状一致。
 
         Args:
             session: 当前会话；其 ``messages`` 是当前转录。
@@ -803,12 +904,33 @@ class MemoryExtractor:
                 state = get_extraction_state(conn, session_key)
             last_count = state.last_count if state is not None else 0
             current_count = len(session.messages)
+            logger.info(
+                "idle extraction start for session {}: messages={} last_extracted={}",
+                session_key,
+                current_count,
+                last_count,
+            )
             if current_count <= last_count:
+                logger.info(
+                    "idle extraction skipped for session {}: no new messages ({} <= {})",
+                    session_key,
+                    current_count,
+                    last_count,
+                )
                 return ExtractionResult()
 
-            # 调用增量抽取（不调 LLM，仅规则信号）。
+            # WU-B：把最近一次检索注入的记忆 id 解析成 ``[{id, content}]``
+            # 透传给增量抽取，供 ProfileExtractor 引用评分（useful=true → 自增
+            # access_count）。解析失败或记忆已删时静默丢弃该条。
+            cited_memories = _resolve_cited_memories(self.database, cited_memory_ids)
+
+            # 调用增量抽取。WU-B 注记：idle 现在跑完整流水线（LLM semantic +
+            # episode），comment 里的「仅规则信号」为历史遗留，已由 WU-A 纠正。
             result = await self.extract_incremental(
-                session, last_extracted_index=last_count, source="idle"
+                session,
+                last_extracted_index=last_count,
+                source="idle",
+                cited_memories=cited_memories,
             )
 
             # 成功后推进 state。失败的增量结果（memory_ids 为空）也算「执行过」，
@@ -948,6 +1070,8 @@ class MemoryExtractor:
         self,
         session: Session,
         system: SystemExtractionResult,
+        *,
+        cited_memories: list[dict[str, Any]] | None = None,
     ) -> LLMExtractionResult:
         semantic_messages = self._build_prompt_messages(
             SEMANTIC_EXTRACTION_PROMPT, session, system
@@ -956,35 +1080,49 @@ class MemoryExtractor:
             EPISODE_EXTRACTION_PROMPT, session, system
         )
 
+        # semantic 路交给 ProfileExtractor（S3 Track 1）：复用上面同一份 prompt
+        # （含阶段1 系统提取结果），一次调用同时拿到 memories / experiences。
+        # WU-B：非空 ``cited_memories`` 时，ProfileExtractor 把引用评分段追加到
+        # 该 prompt 尾部，同一次调用返回 ``citation_scores``。
         raw = await asyncio.gather(
-            self._call_track("semantic", semantic_messages),
+            self.profile_extractor.extract(
+                transcript=session.messages,
+                episode_id="",
+                cited_memories=cited_memories,
+                prompt_messages=semantic_messages,
+                timeout=self.LLM_TIMEOUT,
+            ),
             self._call_track("episode", episode_messages),
             return_exceptions=True,
         )
 
         failed_tracks: list[str] = []
-        semantic_payload: dict[str, Any] | None = None
+        profile: ProfileExtractionResult | None = None
         episode_payload: dict[str, Any] | None = None
 
-        for track, result in zip(("semantic", "episode"), raw):
-            if isinstance(result, BaseException):
-                failed_tracks.append(track)
-                logger.warning("memory extraction track {} raised: {}", track, result)
-                continue
-            payload, error = result
+        profile_raw, episode_raw = raw[0], raw[1]
+
+        if isinstance(profile_raw, BaseException):
+            failed_tracks.append("semantic")
+            logger.warning("memory extraction track semantic raised: {}", profile_raw)
+        else:
+            profile = profile_raw
+            if profile.error is not None:
+                failed_tracks.append("semantic")
+
+        if isinstance(episode_raw, BaseException):
+            failed_tracks.append("episode")
+            logger.warning("memory extraction track episode raised: {}", episode_raw)
+        else:
+            payload, error = episode_raw
             if error is not None:
-                failed_tracks.append(track)
-            if payload is None:
-                continue
-            if track == "semantic":
-                semantic_payload = payload
-            else:
-                episode_payload = payload
+                failed_tracks.append("episode")
+            episode_payload = payload
 
         memories: list[LLMMemoryItem] = []
-        if semantic_payload is not None:
-            memories.extend(_coerce_memory_items(semantic_payload.get("memories")))
-            memories.extend(_coerce_memory_items(semantic_payload.get("experiences")))
+        if profile is not None:
+            memories.extend(_profile_item_to_llm(item) for item in profile.items)
+            memories.extend(_profile_item_to_llm(item) for item in profile.experiences)
 
         episode = _coerce_episode_item(episode_payload) if episode_payload is not None else None
 
@@ -993,6 +1131,14 @@ class MemoryExtractor:
             episode=episode,
             failed_tracks=failed_tracks,
             action_nodes=list(system.action_nodes),
+            citation_scores=(
+                list(profile.scores) if profile is not None else []
+            ),
+            cited_memory_ids=[
+                str(item.get("id") or "")
+                for item in (cited_memories or [])
+                if item.get("id")
+            ],
         )
 
     async def _call_track(
@@ -1136,6 +1282,8 @@ class MemoryExtractor:
             memories=kept,
             episode=llm_result.episode,
             action_nodes=list(llm_result.action_nodes),
+            citation_scores=list(llm_result.citation_scores),
+            cited_memory_ids=list(llm_result.cited_memory_ids),
         )
 
     @staticmethod
@@ -1238,6 +1386,70 @@ class MemoryExtractor:
                 )
             return False
 
+    def _merge_into_existing(
+        self,
+        conn: sqlite3.Connection,
+        item: LLMMemoryItem,
+    ) -> str | None:
+        """命中同一 ``subject``+``predicate`` 的既有画像时增量合并。
+
+        Returns:
+            合并到的既有记忆 id；``None`` 表示未命中（或 subject/predicate 不完整），
+            调用方应按新建处理。
+
+        ``merge_profile_incremental`` 的三态：
+        - ``update``                 → 覆盖 content / importance
+        - ``keep_old_with_conflict`` → **保留旧 content**，新值 id 记入 ``metadata.conflicts_with``
+        - ``create_new``             → 交调用方新建
+
+        失败隔离：合并过程任何异常仅 warning，返回 ``None``（退化为新建），
+        绝不让画像合并失败阻断整批落库。
+        """
+        existing = find_memory_by_subject_predicate(
+            conn, item.subject, item.predicate, workspace_id=self.workspace_id
+        )
+        if existing is None:
+            return None
+
+        result = merge_profile_incremental(
+            {
+                "id": existing.id,
+                "content": existing.content,
+                "subject": existing.subject,
+                "predicate": existing.predicate,
+                "type": existing.type.value,
+                "importance": existing.importance_score,
+            },
+            {
+                "content": item.content,
+                "subject": item.subject,
+                "predicate": item.predicate,
+                "type": item.type,
+                "importance": item.importance,
+                "is_update": True,
+            },
+        )
+        if result.action == "create_new":
+            return None
+        try:
+            if result.action == "update" and result.merged is not None:
+                update_memory(
+                    conn,
+                    existing.id,
+                    content=result.merged.get("content") or existing.content,
+                    importance_score=result.merged.get("importance"),
+                )
+            elif result.action == "keep_old_with_conflict" and result.existing is not None:
+                metadata = dict(existing.metadata or {})
+                metadata["conflicts_with"] = list(
+                    result.existing.get("conflicts_with") or []
+                )
+                update_memory(conn, existing.id, metadata=metadata)
+        except Exception as exc:  # noqa: BLE001 - 合并失败退化为新建，不阻断落库
+            logger.warning("profile merge failed for memory {}: {}", existing.id, exc)
+            return None
+        return existing.id
+
     def _persist(
         self,
         filtered: FilteredExtractionResult,
@@ -1255,6 +1467,15 @@ class MemoryExtractor:
             # 阶段 4a：写入 memories（先写，拿到 ID 供 episode 反向引用）
             memory_by_subject: dict[str, str] = {}
             for item in filtered.memories:
+                # S3 Track 1：命中同一 subject+predicate 的既有画像 → 增量合并，
+                # 不再新建。修复「同一偏好被反复抽成多条」的根因。
+                merged_id = self._merge_into_existing(conn, item)
+                if merged_id is not None:
+                    saved_memory_ids.append(merged_id)
+                    if item.subject:
+                        memory_by_subject.setdefault(item.subject, merged_id)
+                    continue
+
                 memory_id = str(uuid4())
                 memory = Memory(
                     id=memory_id,
@@ -1282,6 +1503,27 @@ class MemoryExtractor:
                 saved_memory_ids.append(memory_id)
                 if item.subject:
                     memory_by_subject.setdefault(item.subject, memory_id)
+
+            # 阶段 4a'：引用评分闭环（WU-B）。LLM 判定 ``useful=true`` 且 id 在
+            # 本次注入集合内的记忆 → 自增 ``access_count``，让 reranker 的
+            # ``access_frequency_score`` 在后续检索抬升该记忆的排序。
+            # 集合外的 id 一律丢弃（防 LLM 幻觉写错记忆）；单条失败仅 warning。
+            allowed_ids = set(filtered.cited_memory_ids)
+            if allowed_ids:
+                for score in filtered.citation_scores:
+                    memory_id = str(score.get("memory_id") or "")
+                    if not memory_id or memory_id not in allowed_ids:
+                        continue
+                    if not score.get("useful"):
+                        continue
+                    try:
+                        bump_access_count(conn, memory_id, delta=1)
+                    except Exception as exc:  # noqa: BLE001 - 评分落库失败不阻断
+                        logger.warning(
+                            "citation score bump failed for memory {}: {}",
+                            memory_id,
+                            exc,
+                        )
 
             # 阶段 4b：反向关联（subject == entity 匹配）
             episode = filtered.episode

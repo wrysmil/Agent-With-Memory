@@ -66,10 +66,38 @@ class RetrievalEngine:
         max_tokens: int | None = None,
         precomputed_keywords: list[str] | None = None,
     ) -> str:
-        """执行检索；gate skip / 无候选时返回 ``""``。"""
+        """执行检索；gate skip / 无候选时返回 ``""``。
+
+        兼容薄壳：只返回 markdown 注入块，丢弃 memory_id 集合——需要 ID 的
+        调用方（WU-B 引用评分闭环）应改用 :meth:`retrieve_with_ids`。
+        """
+        block, _ids = await self.retrieve_with_ids(
+            query=query,
+            recent_messages=recent_messages,
+            active_persona=active_persona,
+            max_tokens=max_tokens,
+            precomputed_keywords=precomputed_keywords,
+        )
+        return block
+
+    async def retrieve_with_ids(
+        self,
+        *,
+        query: str,
+        recent_messages: list,
+        active_persona: Any = None,
+        max_tokens: int | None = None,
+        precomputed_keywords: list[str] | None = None,
+    ) -> tuple[str, list[str]]:
+        """执行检索并同时返回 ``(注入块, 本次注入的 memory_id 列表)``。
+
+        WU-B 入口：markdown 里渲染了每条的 ``memory_id``，调用方拿到 ids 供
+        idle 提取的引用评分（``cited_memories``）使用。gate skip / 无候选时
+        返回 ``("", [])``。
+        """
         prepared = MemoryQueryPreprocessor.prepare(query, recent_messages)
         if prepared.skip:
-            return ""
+            return "", []
 
         tokens = max_tokens if max_tokens is not None else self._default_max_tokens
 
@@ -100,16 +128,6 @@ class RetrievalEngine:
                 compute_recency=recency,
             )
         )
-
-        # eps_task = asyncio.create_task(           # ① 异步调度器：把下面整个调用包装成 Task
-        #     asyncio.to_thread(                     # ② 线程池执行器：把同步函数丢到后台线程跑
-        #         search_episodes,                   # ③ 被调用的同步函数（实际干活的）
-        #         self.store,                        # ④ 位置参数，透传给 search_episodes
-        #         query=prepared.cleaned_query,      # ④ 关键字参数，透传给 search_episodes
-        #         limit=_EPISODES_LIMIT,
-        #         compute_recency=recency,
-        #     )
-        # )
         eps_task = asyncio.create_task(
             asyncio.to_thread(
                 search_episodes,
@@ -163,7 +181,7 @@ class RetrievalEngine:
         )
         limit = max(1, tokens // _TOKENS_PER_CANDIDATE)
         items = RetrievalFormatter(limit=limit).format(ranked)
-        return _render_injection_block(items)
+        return _render_injection_block(items), [item["memory_id"] for item in items]
 
 
 def _dedupe_by_memory_id(
@@ -204,12 +222,18 @@ def _render_injection_block(items: list[dict]) -> str:
 
     契约修正（2026-09-11 实测）：实际 ``RetrievalFormatter.format`` 返回
     ``list[dict]``，不提供静态 ``render_injection_block``。Engine 自渲染 markdown。
+
+    WU-B（2026-09-15）：每条 bullet 尾部追加 ``(ID: <memory_id>)``，让 LLM 在
+    需要时能引用具体记忆，同时 idle 提取方可用 ``cited_memories=[{id, content}]``
+    把同一批注入记忆送进引用评分 prompt。
     """
     if not items:
         return ""
     lines = ["## 相关记忆（自动检索）"]
     for item in items:
         content = item.get("content", "")
+        memory_id = item.get("memory_id", "")
         if content:
-            lines.append(f"- {content}")
+            id_suffix = f" (ID: {memory_id})" if memory_id else ""
+            lines.append(f"- {content}{id_suffix}")
     return "\n".join(lines)

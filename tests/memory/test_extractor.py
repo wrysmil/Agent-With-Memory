@@ -1275,8 +1275,26 @@ class TestRenderTranscript:
 
 class TestExtractIncremental:
     async def test_only_new_messages_are_scanned(self, db):
-        """旧消息中的规则信号不提取，只从 last_extracted_index 之后扫描。"""
-        provider = _FakeProvider()
+        """切片外的旧消息不进 prompt：只从 ``last_extracted_index`` 之后扫描。
+
+        修正（2026-09-15）：本测试原名下断言「只按规则信号抽出 1 条 RULE」，那是
+        rule-only 旧路径的行为。现恢复正常：LLM 在**新切片**上跑完整流水线，
+        因此改为断言 prompt 的切片边界。
+        """
+        provider = _FakeProvider(
+            semantic=_semantic_json(
+                memories=[
+                    {
+                        "content": "必须每次保存日志",
+                        "type": "RULE",
+                        "priority": "long_term",
+                        "importance": 0.7,
+                        "tags": [],
+                    }
+                ]
+            ),
+            episode=EPISODE_JSON,
+        )
         extractor = _make_extractor(db, provider)
         session = _session(
             [
@@ -1289,48 +1307,55 @@ class TestExtractIncremental:
 
         result = await extractor.extract_incremental(session, 2)
 
+        prompts = "\n".join(call[0]["content"] for call in provider.calls)
+        assert "保存日志" in prompts
+        assert "uv" not in prompts, "切片之前的消息不得进 prompt"
         assert len(result.memory_ids) == 1
-        rows = _memory_rows(db)
-        assert len(rows) == 1
-        assert "保存日志" in rows[0].content
-        assert "uv" not in rows[0].content
+        assert _memory_rows(db)[0].content == "必须每次保存日志"
         assert result.skipped == 0
 
-    async def test_no_llm_called(self, db):
-        """增量抽取只走规则信号，不触碰 runtime/provider。"""
+    async def test_calls_both_llm_tracks(self, db):
+        """增量抽取现在走完整流水线：semantic + episode 两路都调。"""
         provider = _FakeProvider(semantic=_semantic_json(), episode=EPISODE_JSON)
         extractor = _make_extractor(db, provider)
         session = _session([{"role": "user", "content": "以后都用 uv 管理依赖"}])
 
         result = await extractor.extract_incremental(session, 0)
 
-        assert provider.calls == []
-        assert len(result.memory_ids) == 1
+        assert provider.tracks == ["semantic", "episode"]
+        assert result.episode_ids, "episode 轨必须落库"
 
-    @pytest.mark.parametrize(
-        ("messages", "start"),
-        [
-            ([], 0),
-            ([{"role": "user", "content": "你好"}], 0),
-            ([{"role": "user", "content": "以后都用 uv"}], 1),
-        ],
-    )
-    async def test_empty_or_no_signals_returns_empty(self, db, messages, start):
-        """空 session、无规则信号、或没有新增消息时返回空 ExtractionResult。"""
-        provider = _FakeProvider()
+    async def test_empty_session_returns_empty_without_llm(self, db):
+        provider = _FakeProvider(semantic=_semantic_json(), episode=EPISODE_JSON)
         extractor = _make_extractor(db, provider)
 
-        result = await extractor.extract_incremental(_session(messages), start)
+        result = await extractor.extract_incremental(_session([]), 0)
 
         assert result.memory_ids == []
         assert result.episode_ids == []
-        assert result.skipped == 0
+        assert provider.calls == []
+
+    async def test_no_new_messages_returns_empty_without_llm(self, db):
+        provider = _FakeProvider(semantic=_semantic_json(), episode=EPISODE_JSON)
+        extractor = _make_extractor(db, provider)
+        messages = [{"role": "user", "content": "以后都用 uv"}]
+
+        result = await extractor.extract_incremental(_session(messages), 1)
+
+        assert result.memory_ids == []
+        assert result.episode_ids == []
         assert provider.calls == []
 
     def test_topic_change_source_maps(self, db):
         extractor = _make_extractor(db, _FakeProvider())
 
         assert extractor._map_source("topic_change") is EpisodeSource.TOPIC_CHANGE
+
+    def test_idle_source_maps(self, db):
+        """``idle`` 必须有专属枚举值，否则会 warning 并错记成 session_end。"""
+        extractor = _make_extractor(db, _FakeProvider())
+
+        assert extractor._map_source("idle") is EpisodeSource.IDLE
 
 
 # ---------------------------------------------------------------------------

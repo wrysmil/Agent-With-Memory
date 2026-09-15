@@ -19,9 +19,14 @@ from nanobot.agent.context import ContextBuilder
 
 
 def _engine(return_value: str = "## 相关记忆（自动检索）\n- Python 爬虫") -> AsyncMock:
-    """Build an AsyncMock that mimics ``RetrievalEngine.retrieve``."""
+    """Build an AsyncMock that mimics ``RetrievalEngine.retrieve``.
+
+    ``_build_memory_section`` 走 ``retrieve_with_ids``（WU-B），故同时 mock 两个
+    方法并保持一致返回：(注入块, 注入的 memory_id 列表)。id 列表默认空。
+    """
     engine = AsyncMock()
     engine.retrieve = AsyncMock(return_value=return_value)
+    engine.retrieve_with_ids = AsyncMock(return_value=(return_value, []))
     return engine
 
 
@@ -57,21 +62,21 @@ async def test_build_memory_section_awaitable_and_returns_block_when_enabled(tmp
         query="我之前写的 Python 爬虫", recent_messages=[]
     )
     assert "Python 爬虫" in section
-    engine.retrieve.assert_awaited_once()
-    call = engine.retrieve.await_args
+    engine.retrieve_with_ids.assert_awaited_once()
+    call = engine.retrieve_with_ids.await_args
     assert call.kwargs.get("query") == "我之前写的 Python 爬虫"
 
 
 @pytest.mark.asyncio
 async def test_build_memory_section_passes_recent_messages_to_engine(tmp_path: Path):
-    """``_build_memory_section`` forwards ``recent_messages`` to ``retrieve``."""
+    """``_build_memory_section`` forwards ``recent_messages`` to the engine."""
     engine = _engine()
     builder = _builder(tmp_path, active_retrieval_enabled=True, retrieval_engine=engine)
     recent = [{"role": "user", "content": "之前的话题"}]
     await builder._build_memory_section(
         query="我们之前讨论过的内容是什么", recent_messages=recent
     )
-    call = engine.retrieve.await_args
+    call = engine.retrieve_with_ids.await_args
     assert call.kwargs.get("recent_messages") is recent
 
 
@@ -86,7 +91,7 @@ async def test_disabled_does_not_call_engine(tmp_path: Path):
     builder = _builder(tmp_path, active_retrieval_enabled=False, retrieval_engine=engine)
     section = await builder._build_memory_section(query="Python 爬虫", recent_messages=[])
     assert section == ""
-    engine.retrieve.assert_not_called()
+    engine.retrieve_with_ids.assert_not_called()
 
 
 def test_disabled_prompt_omits_retrieval_block(tmp_path: Path):
@@ -133,7 +138,9 @@ def test_engine_none_no_block_in_prompt(tmp_path: Path):
 async def test_engine_exception_does_not_break_memory_section(tmp_path: Path):
     """``_build_memory_section`` swallows retrieval failures; returns empty string."""
     engine = AsyncMock()
-    engine.retrieve = AsyncMock(side_effect=RuntimeError("retrieval engine down"))
+    engine.retrieve_with_ids = AsyncMock(
+        side_effect=RuntimeError("retrieval engine down")
+    )
     builder = _builder(tmp_path, active_retrieval_enabled=True, retrieval_engine=engine)
     section = await builder._build_memory_section(
         query="Python 爬虫", recent_messages=[]
@@ -150,7 +157,7 @@ async def test_engine_exception_does_not_break_system_prompt(tmp_path: Path):
     failure. The system prompt must still build.
     """
     engine = AsyncMock()
-    engine.retrieve = AsyncMock(side_effect=RuntimeError("boom"))
+    engine.retrieve_with_ids = AsyncMock(side_effect=RuntimeError("boom"))
     builder = _builder(tmp_path, active_retrieval_enabled=True, retrieval_engine=engine)
 
     precomputed = ""
@@ -183,7 +190,7 @@ async def test_gate_short_circuit_skips_engine(tmp_path: Path):
     builder = _builder(tmp_path, active_retrieval_enabled=True, retrieval_engine=engine)
     section = await builder._build_memory_section(query="好", recent_messages=[])
     assert "相关记忆" not in section
-    engine.retrieve.assert_not_called()
+    engine.retrieve_with_ids.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
