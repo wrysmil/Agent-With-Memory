@@ -36,6 +36,7 @@ from nanobot.config.paths import is_default_workspace
 from nanobot.config.schema import Config
 from nanobot.agent.loop import _MEMORY_WORKSPACE_ID
 from nanobot.memory.retrieval import RetrievalEngine
+from nanobot.memory.retrieval.store_adapter import MemoryStoreAdapter
 from nanobot.webui.memory_services import MemoryServices
 from nanobot.gateway.runtime import GatewayInstance
 from nanobot.security.network import is_loopback_host
@@ -485,7 +486,12 @@ def _run_gateway(
     _memory_services = MemoryServices.for_workspace(
         _MEMORY_WORKSPACE_ID, config.workspace_path,
     )
-    _retrieval_engine = RetrievalEngine(store=_memory_services.database, brain=None)
+    # RCA 2026-09-15 根因 1：store 必须是 MemoryStoreAdapter（通道期望的是
+    # **方法**契约），不能直接传 MemoryDatabase（它只有 connect/schema 方法）。
+    _retrieval_engine = RetrievalEngine(
+        store=MemoryStoreAdapter(_memory_services.database),
+        brain=None,
+    )
 
     def _memory_enabled_provider() -> bool:
         return config.agents.defaults.memory_enabled

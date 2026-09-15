@@ -1,0 +1,268 @@
+"""store adapter 单测 + 中文检索端到端验收（RCA 2026-09-15）。"""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+from loguru import logger
+
+from nanobot.memory.database import MemoryDatabase
+from nanobot.memory.models import Episode, Memory, MemoryType
+from nanobot.memory.repository import add_episode, add_memory, search_memories
+from nanobot.memory.retrieval.engine import RetrievalEngine
+from nanobot.memory.retrieval.store_adapter import MemoryStoreAdapter
+
+_CHINESE_MEMORY = "用户热爱创作，希望AI主动提供创作灵感"
+_SECOND_MEMORY = "用户希望定期收到AI主动推送的灵感内容"
+
+
+def _now_iso() -> str:
+    """生产写入格式：``isoformat()``，即 ``'T'`` 分隔（见 repository._now_iso）。
+
+    刻意**不**把 ``datetime`` 对象直接交给 sqlite3——那会走 sqlite3 自 3.12 起
+    已弃用的隐式适配器（落库为空格分隔格式，并触发 DeprecationWarning），
+    与全部生产写入点（``extractor.py:1459``、``webui/memory_api.py:268``、
+    ``repository.update_memory``）不一致。
+    """
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _seed(db: MemoryDatabase) -> None:
+    """写入 2 条中文记忆（importance 0.9 / 0.8，updated_at=now，生产格式）。"""
+    now = _now_iso()
+    with db.connect() as conn:
+        add_memory(
+            conn,
+            Memory(
+                id="m1",
+                content=_CHINESE_MEMORY,
+                type=MemoryType.PREFERENCE,
+                importance_score=0.9,
+                created_at=now,
+                updated_at=now,
+            ),
+        )
+        add_memory(
+            conn,
+            Memory(
+                id="m2",
+                content=_SECOND_MEMORY,
+                type=MemoryType.PREFERENCE,
+                importance_score=0.8,
+                created_at=now,
+                updated_at=now,
+            ),
+        )
+
+
+@pytest.fixture()
+def db(tmp_path: Path) -> MemoryDatabase:
+    database = MemoryDatabase(tmp_path)
+    database.ensure_schema()
+    _seed(database)
+    return database
+
+
+# ---------- FTS5 中文子串回退（根因 5）----------
+
+
+def test_search_memories_matches_chinese_substring(db: MemoryDatabase):
+    """unicode61 不分词，中文子串必须靠 LIKE 回退命中。"""
+    with db.connect() as conn:
+        hits = search_memories(conn, "创作", limit=10)
+    assert [m.id for m in hits] == ["m1"]
+
+
+def test_search_memories_still_matches_exact_token(db: MemoryDatabase):
+    """FTS5 能命中的整串 token 走原路径，结果不变。"""
+    with db.connect() as conn:
+        hits = search_memories(conn, "用户热爱创作", limit=10)
+    assert "m1" in [m.id for m in hits]
+
+
+def test_search_memories_tolerates_fts_syntax_error(db: MemoryDatabase):
+    """FTS5 语法错误（未闭合引号）不应抛出，且回退后仍能命中子串。
+
+    断言必须**非空**才有价值：先插一条 content 含 ``"创作`` 的记忆，让 LIKE 模式
+    ``%"创作%`` 真正能命中，从而同时验证「不抛异常」与「异常后被 LIKE 回退救回」。
+    实测该 query 在 FTS5 上确实报错（``OperationalError: unterminated string``），
+    在修复前会直接冒泡给调用方。
+    """
+    quote_memory = '用户说"创作灵感"来自晨跑'
+    with db.connect() as conn:
+        add_memory(
+            conn,
+            Memory(
+                id="m9",
+                content=quote_memory,
+                type=MemoryType.PREFERENCE,
+                importance_score=0.7,
+                created_at=_now_iso(),
+                updated_at=_now_iso(),
+            ),
+        )
+    with db.connect() as conn:
+        hits = search_memories(conn, '"创作', limit=10)
+    assert [m.id for m in hits] == ["m9"], "FTS5 语法错误后未由 LIKE 回退救回"
+    assert hits[0].content == quote_memory
+
+
+# ---------- adapter 契约（根因 1）----------
+
+
+def test_adapter_exposes_channel_contract(db: MemoryDatabase):
+    """通道调用的 4 个方法必须存在且可调用（此前全是 AttributeError）。"""
+    adapter = MemoryStoreAdapter(db)
+    scored = adapter.search_semantic_scored("创作", limit=15)
+    assert scored and scored[0][0].id == "m1"
+
+    recent = adapter.query_semantic(min_importance=0.6, since_days=3, limit=5)
+    assert {m.id for m in recent} == {"m1", "m2"}
+
+    assert adapter.search_episodes(entity="不存在", limit=3) == []
+    # attachments 表未进 schema v1：必须返回 []，不得抛 OperationalError
+    assert adapter.search_attachments("图片", intent="search_file", limit=5) == []
+
+
+def test_search_episodes_returns_seeded_episode(db: MemoryDatabase):
+    """episodes 通道契约的**正向**覆盖（上面那条只断言空结果）。
+
+    此前 ``repository.search_episodes`` 选的是 ``episodes.updated_at``，而该列在
+    schema v1 里根本不存在（只有 ``started_at`` / ``ended_at``）→ 每次调用都抛
+    ``no such column: updated_at``。长期不可见的原因：episodes 通道只在 query 含
+    路径/扩展名实体时才被调用（``channels/episodes.py:34``），普通 query 直接返回
+    ``[]``，这条 SQL 从未被执行到。
+    """
+    started = datetime(2026, 9, 1, 10, 0, 0, tzinfo=timezone.utc)
+    ended = datetime(2026, 9, 1, 11, 0, 0, tzinfo=timezone.utc)
+    with db.connect() as conn:
+        add_episode(
+            conn,
+            Episode(
+                id="e1",
+                session_id="s1",
+                summary="调试 main.py 脚本",
+                started_at=started.isoformat(),
+                ended_at=ended.isoformat(),
+            ),
+        )
+    rows = MemoryStoreAdapter(db).search_episodes(entity="main.py", limit=3)
+    assert [r.id for r in rows] == ["e1"]
+    assert rows[0].summary == "调试 main.py 脚本"
+    # _EpisodeRow.updated_at 承载 ``ended_at``（字段名是通道 compute_recency 的契约）
+    assert rows[0].updated_at == ended.isoformat()
+
+
+def test_query_semantic_includes_boundary_day(db: MemoryDatabase):
+    """TEXT 时间比较必须对存储格式不敏感（空格分隔 vs ``'T'`` 分隔）。
+
+    探针取 ``cutoff + 1s`` 并以**空格分隔**格式写入：它落在 3 天窗口之内，且与
+    cutoff **同日**——这正是字符串比较会失准的组合（日期相同时按第 10 位判大小，
+    ``' '(0x20) < 'T'(0x54)`` → 被判为更早而排除）。``datetime()`` 归一后必须保留。
+
+    实测该对值：``'2026-09-15 14:15:31.123456+00:00' >= '2026-09-15T14:15:30.999999+00:00'``
+    → 字符串比较 ``0``，``datetime()`` 比较 ``1``。
+
+    下方两条前置断言把「探针确实落在这个敏感组合上」写成显式契约：若某次运行
+    恰好跨了午夜（cutoff ≈ 23:59:59），测试会**响亮失败**而不是悄悄失去判别力。
+
+    注：UPDATE 必须在**独立**的 ``db.connect()`` 块内提交后再调 adapter——
+    ``MemoryDatabase.connect`` 用非重入 ``threading.Lock``，同线程嵌套
+    ``connect()`` 会死锁（实测 database.py:183 挂起），而 database.py 不在
+    本 WU 允许修改的文件内。
+    """
+    adapter = MemoryStoreAdapter(db)
+    since_days = 3
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=since_days)
+    probe = cutoff + timedelta(seconds=1)
+    assert probe.date() == cutoff.date(), (
+        f"探针与 cutoff 不同日 → 字符串比较的 ' ' vs 'T' 差异不会触发：{probe} vs {cutoff}"
+    )
+    assert probe > cutoff, f"探针必须落在 {since_days} 天窗口内：{probe} <= {cutoff}"
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE memories SET updated_at = ? WHERE id = 'm1'",
+            (probe.strftime("%Y-%m-%d %H:%M:%S.%f+00:00"),),
+        )
+    got = adapter.query_semantic(
+        min_importance=0.6, since_days=since_days, limit=5
+    )
+    assert "m1" in {m.id for m in got}, "边界当天记录被整批排除"
+
+
+# ---------- 端到端验收（RCA §Next 要求的失败测试）----------
+
+
+@pytest.mark.asyncio
+async def test_retrieve_with_ids_returns_chinese_memories(db: MemoryDatabase):
+    """向临时库写入记忆后，中文 query 必须召回非空注入块。
+
+    覆盖根因 1 + 根因 5；``recent_messages`` 给非空以隔离根因 2
+    （首轮门禁由 tests/memory/retrieval/test_preprocessor.py 覆盖）。
+    """
+    engine = RetrievalEngine(store=MemoryStoreAdapter(db), brain=None)
+    block, ids = await engine.retrieve_with_ids(
+        query="我正在规划创作选题",
+        recent_messages=[{"role": "user", "content": "在吗"}, {"role": "assistant", "content": "在"}],
+    )
+    assert block.startswith("## 相关记忆（自动检索）")
+    assert _CHINESE_MEMORY in block
+    assert "m1" in ids
+
+
+# ---------- 通道异常可观测性（根因 1 的「为何多年不可见」）----------
+
+
+class _BrokenSemanticStore:
+    """四路通道契约齐全，但 semantic 抛异常——复刻根因 1 的装配级故障。"""
+
+    def search_semantic_scored(self, query: str, *, limit: int = 30):
+        raise AttributeError(
+            "'MemoryDatabase' object has no attribute 'search_semantic_scored'"
+        )
+
+    def search_episodes(self, *, entity: str, limit: int = 5):
+        return []
+
+    def query_semantic(self, *, min_importance: float, since_days: int, limit: int):
+        return []
+
+    def search_attachments(self, term: str, *, intent: str, limit: int = 5):
+        return []
+
+
+@pytest.mark.asyncio
+async def test_engine_channel_failure_is_logged_not_silent():
+    """通道异常必须留下 ``warning``，而不是被静默 ``continue`` 吞掉。
+
+    这是根因 1「四路召回全废却表现为『记忆是空的』」的**可观测性**修复：
+    异常仍被隔离（不阻断其余通道、不抛给调用方），但通道名 + 异常类型 + 消息
+    必须进日志，否则同类装配故障永不可见。
+
+    放在本文件而非 ``tests/memory/retrieval/test_engine.py``：后者不在本 WU
+    允许修改的文件清单内（WU 边界见 dispatch）。
+    """
+    messages: list[str] = []
+    sink_id = logger.add(
+        lambda message: messages.append(str(message)),
+        level="WARNING",
+        format="{message}",
+    )
+    try:
+        engine = RetrievalEngine(store=_BrokenSemanticStore(), brain=None)
+        block, ids = await engine.retrieve_with_ids(
+            query="我正在规划创作选题",
+            recent_messages=[{"role": "user", "content": "在吗"}],
+        )
+    finally:
+        logger.remove(sink_id)
+
+    # 异常仍被隔离：无候选 → 空块，不向调用方抛出
+    assert block == ""
+    assert ids == []
+    assert any(
+        "retrieval channel semantic failed" in m and "AttributeError" in m
+        for m in messages
+    ), f"通道异常未被记录：{messages}"

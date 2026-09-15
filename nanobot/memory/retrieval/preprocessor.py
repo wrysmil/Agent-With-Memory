@@ -18,6 +18,15 @@ _CONTROL_ONLY = frozenset({
 # 含这些字符的短查询不触发 too_short 跳过（如 "天气?"）
 _KEEP_SHORT_HINTS = ("?", "？", "吗", "呢", "吧", "啥")
 
+# 记忆意图关键词：命中时即使文本超短 / 首轮无历史也放行检索。
+# RCA 2026-09-15 根因 2/3：首轮 ``recent_messages`` 必为空（``loop.py`` 传
+# ``list(ctx.history)``），旧规则把「查一下我的记忆」（7 字）整类拦掉；
+# ``memory_search`` 工具由 LLM 传入的也多是「记忆」「用户偏好」这类短词。
+_MEMORY_INTENT_HINTS = (
+    "记忆", "记得", "回忆", "之前", "上次", "以前", "历史", "过去",
+    "我说过", "提到过", "偏好", "习惯", "我的", "个人",
+)
+
 # 反注入正则黑名单（section header 段落用 re.split 方式精确处理）
 _INJECTION_BLOCK_PATTERNS = (
     r"(?is)<vault-context>.*?</vault-context>",
@@ -52,9 +61,19 @@ class MemoryQueryPreprocessor:
         lowered = text.lower()
         if lowered in cls._CONTROL_ONLY:
             return True, "control_only"
-        if len(text) <= 3 and not any(h in text for h in _KEEP_SHORT_HINTS):
+        has_short_hint = any(h in text for h in _KEEP_SHORT_HINTS)
+        has_memory_intent = any(h in text for h in _MEMORY_INTENT_HINTS)
+        # 明确在问记忆 / 过去 → 无论多短、无论有没有历史都放行。
+        # RCA 2026-09-15 根因 2：旧规则是「无历史 + ≤12 字」即跳过，
+        # 而首轮 recent_messages 必为空 → 每条会话的首条消息永远不检索。
+        if len(text) <= 3 and not has_short_hint and not has_memory_intent:
             return True, "too_short"
-        if len(text) <= 12 and not recent_messages and not any(h in lowered for h in _KEEP_SHORT_HINTS):
+        if (
+            len(text) <= 12
+            and not recent_messages
+            and not has_short_hint
+            and not has_memory_intent
+        ):
             return True, "short_without_context"
         return False, ""
 

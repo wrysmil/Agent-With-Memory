@@ -20,6 +20,8 @@ import asyncio
 from datetime import datetime
 from typing import Any, Callable
 
+from loguru import logger
+
 from nanobot.memory.retrieval.candidate import RetrievalCandidate
 from nanobot.memory.retrieval.channels.attachments import search_attachments
 from nanobot.memory.retrieval.channels.episodes import search_episodes
@@ -164,8 +166,22 @@ class RetrievalEngine:
         )
 
         candidates: list[RetrievalCandidate] = []
-        for chunk in (sem, eps, rec, att):
+        for channel_name, chunk in zip(
+            ("semantic", "episodes", "recent", "attachments"),
+            (sem, eps, rec, att),
+            strict=True,
+        ):
             if isinstance(chunk, Exception):
+                # RCA 2026-09-15 根因 1：这里原本是无条件 ``continue``，把
+                # ``AttributeError: 'MemoryDatabase' object has no attribute
+                # 'search_semantic_scored'`` 这类装配级故障完全吞掉，导致
+                # 「四路召回全废」表现为「记忆里是空的」。定位信息必须留下。
+                logger.warning(
+                    "retrieval channel {} failed: {}: {}",
+                    channel_name,
+                    type(chunk).__name__,
+                    chunk,
+                )
                 continue
             candidates.extend(chunk)
 

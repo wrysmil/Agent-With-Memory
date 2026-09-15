@@ -56,6 +56,21 @@ class TestGate:
         assert skip is False
         assert reason == ""
 
+    @pytest.mark.parametrize(
+        "text",
+        ["查一下我的记忆", "我的偏好是什么", "上次说过什么", "你记得吗"],
+    )
+    def test_should_pass_short_memory_intent_without_context(self, text):
+        """首轮无历史时，含记忆意图关键词的短消息不应被跳过（RCA 根因 2）。"""
+        skip, reason = MemoryQueryPreprocessor.should_skip_retrieval(text, [])
+        assert skip is False, f"{text!r} 被误杀：{reason}"
+
+    def test_should_still_skip_plain_short_without_context(self):
+        """真正的无意图短消息仍跳过，门禁未被整体废掉。"""
+        skip, reason = MemoryQueryPreprocessor.should_skip_retrieval("明天天气怎么样", [])
+        assert skip is True
+        assert reason == "short_without_context"
+
 
 class TestAntiInjection:
     """Injection block removal."""
