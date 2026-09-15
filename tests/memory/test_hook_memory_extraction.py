@@ -1,35 +1,29 @@
-"""Tests for MemoryExtractionHook（plan §10 Task 7 / Task 12）。
+"""Tests for MemoryExtractionHook（plan §10 Task 7 / Task 12 / WU-A）。
 
 覆盖四个生命周期回调：
 - T0  ``after_run``      意图门 + scratchpad.current_focus 写入
 - T0' ``on_error``       仅紧急保存 focus（不调 LLM / extractor）
-- T1  ``after_run``/``on_finally``  异步提取任务登记与 5s 超时等待
-- T5  ``before_iteration``          话题切换检测（转录推导 + fire-and-forget 不阻塞）
+- T1  ``after_run``/``on_finally``  WU-A idle 定时器注册 + 取消
+- T5  ``before_iteration``          话题切换检测已禁用（plan WU-A §1）
 
 extractor / scratchpad_writer / runtime 全部用鸭子类型 fake，不依赖真实 provider。
-T5 的窗口从 ``AgentHookContext.messages``（会话转录）推导，因此测试直接喂转录，
-与 ``build_agent_turn_hook`` 每轮新建实例的生产路径一致。
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from nanobot.agent.hook import AgentHookContext, AgentRunHookContext, AgentTurnHookContext
+from nanobot.agent.hook import AgentRunHookContext, AgentTurnHookContext
 from nanobot.agent.hooks.memory_extraction import (
     _BACKGROUND_TASKS,
     _PENDING_IDLE_TIMERS,
     MemoryExtractionHook,
     create_memory_extraction_hook_factory,
 )
-from nanobot.memory.database import MemoryDatabase
-from nanobot.memory.repository import get_scratchpad
-from nanobot.memory.scratchpad_writer import ScratchpadWriter
 
 # ---------------------------------------------------------------------------
 # Fakes（鸭子类型）
@@ -137,12 +131,6 @@ class _FakeRuntime:
 # 辅助
 # ---------------------------------------------------------------------------
 
-#: 4 条同主题 user 消息（达到 T5 检测阈值）。
-_SAME_TOPIC = ["帮我写一个排序算法", "帮我优化这个函数", "帮我加个单元测试", "帮我再看看性能"]
-
-#: 前 3 条同主题 + 第 4 条跳到完全无关的话题。
-_SWITCHED = ["帮我写一个排序算法", "帮我优化这个函数", "帮我加个单元测试", "今天午饭吃什么"]
-
 
 @pytest.fixture(autouse=True)
 async def _cleanup_background_tasks():
@@ -166,14 +154,6 @@ def _run_ctx(*user_messages: str) -> AgentRunHookContext:
     )
 
 
-def _iter_ctx(*user_messages: str) -> AgentHookContext:
-    return AgentHookContext(
-        iteration=0,
-        messages=[{"role": "user", "content": m} for m in user_messages],
-        session_key="s1",
-    )
-
-
 def _make_hook(
     *,
     extractor: _FakeExtractor | None = None,
@@ -189,14 +169,6 @@ def _make_hook(
         runtime=runtime,
         idle_seconds=idle_seconds,
     )
-
-
-async def _drain_background() -> None:
-    for _ in range(200):
-        if not _BACKGROUND_TASKS:
-            return
-        await asyncio.sleep(0)
-    raise AssertionError("background tasks did not finish")
 
 
 # ---------------------------------------------------------------------------
@@ -368,173 +340,49 @@ class TestOnError:
 
 
 # ---------------------------------------------------------------------------
-# T5：话题切换检测
+# T5：话题切换检测（已禁用 — ``_detect_topic_change`` 直接 return）
 # ---------------------------------------------------------------------------
 
 
-class TestTopicChangeDetection:
-    async def test_below_threshold_skips_detection(self):
+class TestTopicChangeDetectionDisabled:
+    """T5 已被 plan WU-A §1 禁用。``_detect_topic_change`` 是 no-op,
+    因此 ``before_iteration`` 既不调 LLM 也不调 extractor。"""
+
+    async def test_before_iteration_does_nothing(self):
         provider = _FakeProvider(result='{"same_topic": false}')
         extractor = _FakeExtractor()
         hook = _make_hook(extractor=extractor, runtime=_FakeRuntime(provider))
 
-        # 3 条 user 消息 < 阈值 4
-        await hook.before_iteration(_iter_ctx(*_SAME_TOPIC[:3]))
+        # 任意长度的 user 消息：都不应触发。
+        from nanobot.agent.hook import AgentHookContext
 
-        assert provider.calls == []  # 未达阈值，不调检测 LLM
-        assert extractor.calls == []
-
-    async def test_same_topic_does_not_trigger(self):
-        provider = _FakeProvider(result='{"same_topic": true}')
-        extractor = _FakeExtractor()
-        writer = _FakeScratchpadWriter()
-        hook = _make_hook(extractor=extractor, writer=writer, runtime=_FakeRuntime(provider))
-
-        await hook.before_iteration(_iter_ctx(*_SAME_TOPIC))
-
-        assert len(provider.calls) == 1
-        assert extractor.calls == []  # 未触发 semantic 提取
-        assert writer.focus_calls == []  # 未归档
-
-    async def test_topic_change_triggers_extraction_and_rotates_focus(self):
-        provider = _FakeProvider(result='{"same_topic": false}')
-        extractor = _FakeExtractor()
-        writer = _FakeScratchpadWriter()
-        hook = _make_hook(extractor=extractor, writer=writer, runtime=_FakeRuntime(provider))
-
-        await hook.before_iteration(_iter_ctx(*_SWITCHED))
-        await _drain_background()
-
-        # ② fire-and-forget 触发增量提取（不登记到 on_finally）
-        assert extractor.calls == []
-        assert len(extractor.incremental_calls) == 1
-        session, last_extracted_index = extractor.incremental_calls[0]
-        assert last_extracted_index == 3
-        assert session.key == "s1"
-        assert [m["content"] for m in session.messages] == _SWITCHED
-
-        # ① 旧 focus 滚入 active_projects（走 update_focus 归档语义）
-        assert writer.focus_calls[-1] == ("s1", "今天午饭吃什么")
-
-    async def test_topic_change_archives_previous_focus_in_real_scratchpad(self, tmp_path: Path):
-        db = MemoryDatabase(tmp_path)
-        db.init_schema()
-        writer = ScratchpadWriter(db, user_id="default")
-        # 预置上一轮 T0 写入的旧 focus
-        await writer.update_focus("s1", "帮我写排序算法")
-
-        provider = _FakeProvider(result='{"same_topic": false}')
-        hook = MemoryExtractionHook(
-            _FakeExtractor(), "s1", writer, runtime=_FakeRuntime(provider)
+        ctx = AgentHookContext(
+            iteration=0,
+            messages=[{"role": "user", "content": f"消息 {i}"} for i in range(10)],
+            session_key="s1",
         )
+        await hook.before_iteration(ctx)
 
-        await hook.before_iteration(_iter_ctx(*_SWITCHED))
-        await _drain_background()
-
-        with db.connect() as conn:
-            entry = get_scratchpad(conn, "default", "default")
-
-        assert entry is not None
-        assert entry.current_focus == "今天午饭吃什么"
-        assert any("帮我写排序算法" in project for project in entry.active_projects)
-
-    async def test_llm_failure_treated_as_continue(self):
-        provider = _FakeProvider(exc=RuntimeError("llm down"))
-        extractor = _FakeExtractor()
-        hook = _make_hook(extractor=extractor, runtime=_FakeRuntime(provider))
-
-        await hook.before_iteration(_iter_ctx(*_SWITCHED))  # 不抛
-
-        assert extractor.calls == []  # 按 CONTINUE 处理
-
-    async def test_invalid_json_treated_as_continue(self):
-        provider = _FakeProvider(result="not a json object at all")
-        extractor = _FakeExtractor()
-        hook = _make_hook(extractor=extractor, runtime=_FakeRuntime(provider))
-
-        await hook.before_iteration(_iter_ctx(*_SWITCHED))  # 不抛
-
+        assert provider.calls == []
         assert extractor.calls == []
+        assert extractor.idle_calls == []
+        assert extractor.incremental_calls == []
 
-    async def test_no_runtime_treated_as_continue(self):
-        extractor = _FakeExtractor()  # 无 runtime 属性
+    async def test_before_iteration_without_runtime_is_noop(self):
+        extractor = _FakeExtractor()
         writer = _FakeScratchpadWriter()
-        hook = _make_hook(extractor=extractor, writer=writer)
+        hook = _make_hook(extractor=extractor, writer=writer)  # no runtime
 
-        await hook.before_iteration(_iter_ctx(*_SWITCHED))  # 不抛
+        from nanobot.agent.hook import AgentHookContext
 
-        assert extractor.calls == []
+        ctx = AgentHookContext(
+            iteration=0,
+            messages=[{"role": "user", "content": "切换话题"}] * 5,
+            session_key="s1",
+        )
+        await hook.before_iteration(ctx)
+
         assert writer.focus_calls == []
-
-    async def test_same_transcript_not_detected_twice(self):
-        provider = _FakeProvider(result='{"same_topic": true}')
-        hook = _make_hook(runtime=_FakeRuntime(provider))
-        context = _iter_ctx(*_SWITCHED)
-
-        await hook.before_iteration(context)
-        await hook.before_iteration(context)  # 同一 run 内的后续 iteration
-
-        assert len(provider.calls) == 1
-
-    async def test_new_topic_not_retriggered_within_same_transcript(self):
-        provider = _FakeProvider(result='{"same_topic": false}')
-        extractor = _FakeExtractor()
-        hook = _make_hook(extractor=extractor, runtime=_FakeRuntime(provider))
-        context = _iter_ctx(*_SWITCHED)
-
-        await hook.before_iteration(context)
-        await _drain_background()
-        await hook.before_iteration(context)  # 不应二次触发
-        await _drain_background()
-
-        assert extractor.calls == []
-        assert len(extractor.incremental_calls) == 1
-        assert len(provider.calls) == 1
-
-    async def test_cooldown_after_new_within_same_instance(self):
-        """同一 hook 实例内：NEW 后需再累积 ≥4 条 user 消息才重新检测。
-
-        生产每轮新建实例，故该冷却跨轮重置（会话 user 数 ≥4 后每轮检测一次）——
-        见模块 docstring「代价」。
-        """
-        provider = _FakeProvider(result='{"same_topic": false}')
-        extractor = _FakeExtractor()
-        hook = _make_hook(extractor=extractor, runtime=_FakeRuntime(provider))
-
-        await hook.before_iteration(_iter_ctx(*_SWITCHED))  # count=4 → NEW
-        await _drain_background()
-        assert len(provider.calls) == 1
-        assert hook._next_check_count == 8
-
-        # 7 条 < 冷却阈值 8 → 跳过
-        await hook.before_iteration(_iter_ctx(*[f"帮我做任务 {i}" for i in range(7)]))
-        assert len(provider.calls) == 1
-
-        # 8 条 → 重新检测
-        await hook.before_iteration(_iter_ctx(*[f"帮我做任务 {i}" for i in range(8)]))
-        assert len(provider.calls) == 2
-
-    async def test_fire_and_forget_does_not_block(self):
-        provider = _FakeProvider(result='{"same_topic": false}')
-        extractor = _FakeExtractor(delay=10.0)  # 提取很慢
-        hook = _make_hook(extractor=extractor, runtime=_FakeRuntime(provider))
-
-        started = time.monotonic()
-        await asyncio.wait_for(hook.before_iteration(_iter_ctx(*_SWITCHED)), timeout=0.5)
-        assert time.monotonic() - started < 0.5
-        assert len(_BACKGROUND_TASKS) == 1  # 后台任务仍在跑，未被阻塞等待
-
-    async def test_prompt_placeholders_are_substituted(self):
-        provider = _FakeProvider(result='{"same_topic": false}')
-        hook = _make_hook(runtime=_FakeRuntime(provider))
-
-        await hook.before_iteration(_iter_ctx(*_SWITCHED))
-        await _drain_background()
-
-        sent_prompt = provider.calls[0][0]["content"]
-        assert "{recent_messages}" not in sent_prompt
-        assert "{latest_message}" not in sent_prompt
-        assert _SWITCHED[-1] in sent_prompt
 
 
 # ---------------------------------------------------------------------------

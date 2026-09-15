@@ -1,4 +1,5 @@
-"""End-to-end integration tests for Phase 2 memory extraction pipeline (plan §10 Task 10).
+"""End-to-end integration tests for Phase 2 memory extraction pipeline (plan §10 Task 10)
+and the WU-A idle extraction timer flow.
 
 Covers the full lifecycle of memory extraction through the ``MemoryExtractor``,
 ``MemoryExtractionHook``, and ``ScratchpadWriter`` trio with real
@@ -21,6 +22,16 @@ Scenarios verified:
     still persists memory.
 8.  ``on_error`` writes ``current_focus`` urgently without calling the
     extractor or LLM.
+9.  **WU-C Idle extraction full cycle** (3 turns → idle timer fires once →
+    state.last_count advances, scratchpad focus updates, rule-signal
+    memories persist).
+10. **WU-C Idle extraction cancellation** (second ``after_run`` cancels the
+    first timer; only the second timer fires and advances state).
+11. **WU-C Idle extraction no-op** (pre-populated state matching current
+    message count → zero LLM calls, state unchanged).
+12. **WU-C Idle extraction failure isolation** (``extract_incremental``
+    raising does NOT advance state; fixing the failure lets the next run
+    advance state normally).
 
 All fakes are duck-typed (no inheritance from real LLM classes). Business
 modules are NOT modified — any signature mismatch is documented in a
@@ -39,16 +50,19 @@ import pytest
 from nanobot.agent.hook import AgentRunHookContext
 from nanobot.agent.hooks.memory_extraction import (
     _BACKGROUND_TASKS,
+    _PENDING_IDLE_TIMERS,
     MemoryExtractionHook,
 )
 from nanobot.memory.database import MemoryDatabase
 from nanobot.memory.extractor import MemoryExtractor
 from nanobot.memory.models import EpisodeSource, MemoryType
 from nanobot.memory.repository import (
+    get_extraction_state,
     get_memory,
     get_scratchpad,
     list_episodes_by_session,
     search_memories,
+    upsert_extraction_state,
 )
 from nanobot.memory.scratchpad_writer import ScratchpadWriter
 from nanobot.session.manager import Session
@@ -218,6 +232,12 @@ async def _cleanup_background_tasks():
         task.cancel()
     await asyncio.sleep(0)
     _BACKGROUND_TASKS.clear()
+    # WU-A: also drain idle timers so a stuck timer can't leak across tests.
+    for task in list(_PENDING_IDLE_TIMERS.values()):
+        if not task.done():
+            task.cancel()
+    await asyncio.sleep(0)
+    _PENDING_IDLE_TIMERS.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -664,3 +684,268 @@ class TestSourceEpisodeBackfill:
         )
         # episode 仍写入
         assert len(result2.episode_ids) == 1
+
+
+# ---------------------------------------------------------------------------
+# WU-C Cases 9–12: Idle extraction end-to-end flow (plan §2026-09-15 Task 6)
+# ---------------------------------------------------------------------------
+
+
+async def _wait_for_idle_completion(session_key: str, timeout: float = 2.0) -> None:
+    """轮询等待 ``_PENDING_IDLE_TIMERS`` 中对应会话的 idle 任务结束。"""
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if session_key not in _PENDING_IDLE_TIMERS:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError(
+        f"idle timer for {session_key!r} did not finish within {timeout}s"
+    )
+
+
+class TestIdleExtractionIntegration:
+    """WU-C: ``MemoryExtractionHook`` idle 定时器 → ``MemoryExtractor.run_idle_extraction``
+    端到端链路。
+
+    关键不变量：
+    - ``run_idle_extraction`` 不调 LLM（仅规则信号扫描）。
+    - ``state.last_count`` 必须推进到 ``len(session.messages)``（成功执行后）。
+    - 第二次 ``after_run`` 必须取消第一次的 idle 任务。
+    - ``extract_incremental`` 抛错时，``state`` 不推进；下次重试按当前消息数覆盖。
+    """
+
+    async def test_idle_extraction_full_cycle(self, tmp_path: Path):
+        """Case 9：3 个 turn → idle 触发一次 → state 推进 + scratchpad focus 更新 + rule 记忆入库。"""
+        db = _init_db(tmp_path)
+        provider = _FakeProvider()  # 不期望被调
+        extractor = MemoryExtractor(db, _FakeRuntime(provider))
+        writer = ScratchpadWriter(db, user_id="default")
+        hook = MemoryExtractionHook(
+            extractor, "s1", writer, idle_seconds=0.05
+        )
+
+        # 3 个 turn: 每轮 after_run 触发 T0 写 focus + arm idle。
+        # 中间不调 on_finally，否则 idle 会被立即取消（与生产一致：on_finally 是退出兜底）。
+        contexts = [
+            AgentRunHookContext(
+                messages=[
+                    {"role": "user", "content": "我以后都使用 uv"},
+                    {"role": "assistant", "content": "好的"},
+                ]
+            ),
+            AgentRunHookContext(
+                messages=[
+                    {"role": "user", "content": "我以后都使用 uv"},
+                    {"role": "assistant", "content": "好的"},
+                    {"role": "user", "content": "以后必须每次都写测试"},
+                    {"role": "assistant", "content": "明白"},
+                ]
+            ),
+            AgentRunHookContext(
+                messages=[
+                    {"role": "user", "content": "我以后都使用 uv"},
+                    {"role": "assistant", "content": "好的"},
+                    {"role": "user", "content": "以后必须每次都写测试"},
+                    {"role": "assistant", "content": "明白"},
+                    {"role": "user", "content": "永远禁止在 main 直接 print"},
+                    {"role": "assistant", "content": "已记下"},
+                ]
+            ),
+        ]
+        for ctx in contexts:
+            await hook.after_run(ctx)
+
+        # 等最后一个 idle 任务完成(0.05s 阈值 + 余量)。
+        await _wait_for_idle_completion("s1", timeout=2.0)
+
+        # --- state.last_count 必须推进到当前消息总数 ---
+        with db.connect() as conn:
+            state = get_extraction_state(conn, "s1")
+        assert state is not None
+        assert state.last_count == len(contexts[-1].messages) == 6
+        assert state.last_source == "idle"
+
+        # --- scratchpad.current_focus 必须更新到最后一条 user msg(T0)---
+        with db.connect() as conn:
+            entry = get_scratchpad(conn, "default", "default")
+        assert entry is not None
+        assert entry.current_focus == "永远禁止在 main 直接 print"
+
+        # --- rule-signal 记忆必须入库(extract_incremental 仅走规则信号)---
+        with db.connect() as conn:
+            hits = search_memories(conn, "uv")
+        # 第二/三条 user 消息含规则关键词,期望至少 1 条 RULE 入库。
+        rule_hits = [h for h in hits if h.type is MemoryType.RULE]
+        assert len(rule_hits) >= 1
+
+        # --- run_idle_extraction 不调 LLM(纯规则信号扫描)---
+        assert provider.calls == []
+
+    async def test_idle_extraction_cancelled_by_new_message(self, tmp_path: Path):
+        """Case 10:第二个 ``after_run`` 必须取消第一个 timer,只触发一次抽取,state 推进一次。"""
+        db = _init_db(tmp_path)
+        provider = _FakeProvider()
+        extractor = MemoryExtractor(db, _FakeRuntime(provider))
+        writer = ScratchpadWriter(db, user_id="default")
+        hook = MemoryExtractionHook(
+            extractor, "s1", writer, idle_seconds=0.1
+        )
+
+        # 第一个 turn,arm 第一个 idle 任务。
+        ctx1 = AgentRunHookContext(
+            messages=[
+                {"role": "user", "content": "我以后都使用 uv"},
+                {"role": "assistant", "content": "好的"},
+            ]
+        )
+        await hook.after_run(ctx1)
+        first_task = _PENDING_IDLE_TIMERS.get("s1")
+        assert first_task is not None and not first_task.done()
+
+        # 第二个 turn(在第一个 timer 自然触发前):必须取消 first_task,arm 第二个 timer。
+        ctx2 = AgentRunHookContext(
+            messages=[
+                {"role": "user", "content": "我以后都使用 uv"},
+                {"role": "assistant", "content": "好的"},
+                {"role": "user", "content": "永远禁止忘记 commit"},
+                {"role": "assistant", "content": "明白"},
+            ]
+        )
+        await hook.after_run(ctx2)
+        second_task = _PENDING_IDLE_TIMERS.get("s1")
+        assert second_task is not None
+        assert second_task is not first_task
+
+        # 等第二个 idle 完成。
+        await _wait_for_idle_completion("s1", timeout=2.0)
+
+        # 第一个任务已 cancelled。
+        # 给事件循环一点时间处理 cancel callback。
+        for _ in range(50):
+            if first_task.done():
+                break
+            await asyncio.sleep(0.01)
+        assert first_task.cancelled() or first_task.done()
+
+        # state 仅被第二个 timer 推进一次。
+        with db.connect() as conn:
+            state = get_extraction_state(conn, "s1")
+        assert state is not None
+        assert state.last_count == 4  # ctx2 的消息总数
+        assert state.last_source == "idle"
+
+        # 没有任何 on_finally 调用,provider 不应被调。
+        assert provider.calls == []
+
+    async def test_idle_extraction_no_op_when_state_current(self, tmp_path: Path):
+        """Case 11:state.last_count == current_count 时,run_idle_extraction 是 no-op。"""
+        db = _init_db(tmp_path)
+        provider = _FakeProvider()
+        extractor = MemoryExtractor(db, _FakeRuntime(provider))
+
+        session = Session(
+            key="s1",
+            messages=[
+                {"role": "user", "content": "msg1"},
+                {"role": "assistant", "content": "ok"},
+                {"role": "user", "content": "msg2"},
+            ],
+        )
+
+        # 预置 state.last_count = 当前消息数,source="session_end"。
+        with db.connect() as conn:
+            upsert_extraction_state(
+                conn,
+                "s1",
+                last_count=len(session.messages),
+                source="session_end",
+                extracted_at="2026-09-15T10:00:00+00:00",
+            )
+
+        result = await extractor.run_idle_extraction(session)
+
+        # --- 不调 LLM(没机会调,直接走 no-op 短路)---
+        assert provider.calls == []
+        # --- 返回空 ExtractionResult ---
+        assert result.memory_ids == []
+        assert result.episode_ids == []
+        assert result.failed_tracks == []
+        # --- state 保持不变(source 仍为 session_end)---
+        with db.connect() as conn:
+            state = get_extraction_state(conn, "s1")
+        assert state is not None
+        assert state.last_count == len(session.messages)
+        assert state.last_source == "session_end"
+        assert state.last_extracted_at == "2026-09-15T10:00:00+00:00"
+
+    async def test_idle_extraction_advances_state_only_on_success(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Case 12:extract_incremental 抛错 → state 不推进;修复后重试 → state 推进。"""
+        db = _init_db(tmp_path)
+        provider = _FakeProvider()
+        extractor = MemoryExtractor(db, _FakeRuntime(provider))
+
+        session = Session(
+            key="s1",
+            messages=[
+                {"role": "user", "content": "msg1"},
+                {"role": "assistant", "content": "ok"},
+                {"role": "user", "content": "我以后都使用 uv"},
+                {"role": "assistant", "content": "好的"},
+                {"role": "user", "content": "永远禁止直接 print"},
+            ],
+        )
+
+        # 预置 state.last_count = 2(source=session_end 表示上次完整抽取)。
+        with db.connect() as conn:
+            upsert_extraction_state(
+                conn,
+                "s1",
+                last_count=2,
+                source="session_end",
+                extracted_at="2026-09-15T10:00:00+00:00",
+            )
+
+        # Monkey-patch extract_incremental 让它抛错。
+        original_extract_incremental = extractor.extract_incremental
+
+        async def _raise_incremental(
+            *args: Any, **kwargs: Any
+        ) -> Any:
+            raise RuntimeError("simulated incremental failure")
+
+        monkeypatch.setattr(
+            extractor, "extract_incremental", _raise_incremental
+        )
+
+        # 第一次跑:失败,state 不推进。
+        result = await extractor.run_idle_extraction(session)
+        assert result.memory_ids == []
+        assert result.episode_ids == []
+
+        with db.connect() as conn:
+            state = get_extraction_state(conn, "s1")
+        assert state is not None
+        assert state.last_count == 2
+        assert state.last_source == "session_end"  # 保持原 source
+        assert state.last_extracted_at == "2026-09-15T10:00:00+00:00"
+
+        # 修复:还原 extract_incremental。
+        monkeypatch.setattr(
+            extractor, "extract_incremental", original_extract_incremental
+        )
+
+        # 第二次跑:成功,state 推进到 5。
+        await extractor.run_idle_extraction(session)
+
+        with db.connect() as conn:
+            state = get_extraction_state(conn, "s1")
+        assert state is not None
+        assert state.last_count == 5
+        assert state.last_source == "idle"  # 已切换到 idle source
+        # last_extracted_at 必须被刷新(不再是 10:00:00)。
+        assert state.last_extracted_at != "2026-09-15T10:00:00+00:00"
+
+        # 不期望 LLM 被调(run_idle_extraction 是纯规则信号扫描)。
+        assert provider.calls == []
