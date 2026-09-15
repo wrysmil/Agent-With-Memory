@@ -199,8 +199,19 @@ def test_query_semantic_includes_boundary_day(db: MemoryDatabase):
 async def test_retrieve_with_ids_returns_chinese_memories(db: MemoryDatabase):
     """向临时库写入记忆后，中文 query 必须召回非空注入块。
 
-    覆盖根因 1 + 根因 5；``recent_messages`` 给非空以隔离根因 2
-    （首轮门禁由 tests/memory/retrieval/test_preprocessor.py 覆盖）。
+    覆盖范围（2026-09-15 代码审查 C-2 更正）：本用例**只**守住**根因 1**
+    （store 适配层）。经变异实验证实，把 ``repository._search_memories_like``
+    整个禁掉后本用例**仍然通过** —— 因为 ``recent`` 通道
+    （``query_semantic``：importance ≥ 0.6 且 3 天窗口）**与 query 文本无关**，
+    单靠它就足以产出非空块。故「中文 query」在本用例中是**无关变量**，
+    原 docstring 声称的「覆盖根因 5」不成立。
+
+    根因 5（CJK 子串 LIKE 回退）的判别性覆盖见
+    ``test_semantic_channel_alone_recovers_chinese_substring``（下方）与
+    ``tests/memory/test_search.py::TestChineseSubstringFallback``。
+
+    ``recent_messages`` 给非空以隔离门禁（首轮行为由
+    ``tests/memory/retrieval/test_preprocessor.py`` 覆盖）。
     """
     engine = RetrievalEngine(store=MemoryStoreAdapter(db), brain=None)
     block, ids = await engine.retrieve_with_ids(
@@ -210,6 +221,50 @@ async def test_retrieve_with_ids_returns_chinese_memories(db: MemoryDatabase):
     assert block.startswith("## 相关记忆（自动检索）")
     assert _CHINESE_MEMORY in block
     assert "m1" in ids
+
+
+@pytest.mark.asyncio
+async def test_semantic_channel_alone_recovers_chinese_substring(tmp_path: Path):
+    """根因 5 的**判别性**测试：只有语义通道能救回这条记忆。
+
+    构造手法（2026-09-15 代码审查 C-2 要求）：把记忆的 ``updated_at`` 设为
+    ``now - 30 天``，使其**超出 ``recent`` 通道的 3 天窗口**；episodes 通道需要
+    query 含路径/扩展名实体（本 query 无）；attachments 通道被媒体词闸门挡住。
+    → 四路里**只有 semantic** 可能产出候选。
+
+    因此：把 ``_search_memories_like`` 禁掉 → 块必为空（变异实验成立）；
+    保留它 → 块非空。这正是原验收测试缺失的判别力。
+    """
+    database = MemoryDatabase(tmp_path)
+    database.ensure_schema()
+    old = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    with database.connect() as conn:
+        add_memory(
+            conn,
+            Memory(
+                id="old1",
+                content=_CHINESE_MEMORY,
+                type=MemoryType.PREFERENCE,
+                importance_score=0.9,
+                created_at=old,
+                updated_at=old,
+            ),
+        )
+
+    adapter = MemoryStoreAdapter(database)
+    # 前置断言：窗外交付给 recent 通道看不见（否则本用例失去判别力）
+    assert adapter.query_semantic(min_importance=0.6, since_days=3, limit=5) == []
+    # semantic 通道凭 LIKE 子串命中。用 4 字的「创作灵感」而非 2 字的「创作」
+    # ——后者会被 ``too_short`` 门禁（≤3 字且无锚点）拦掉，令本用例失败于无关原因。
+    assert [m.id for m, _ in adapter.search_semantic_scored("创作灵感", limit=15)] == ["old1"]
+
+    engine = RetrievalEngine(store=adapter, brain=None)
+    block, ids = await engine.retrieve_with_ids(
+        query="创作灵感",
+        recent_messages=[{"role": "user", "content": "在吗"}],
+    )
+    assert "old1" in ids, "语义通道未召回窗外的中文记忆——根因 5 回退失效"
+    assert _CHINESE_MEMORY in block
 
 
 # ---------- 通道异常可观测性（根因 1 的「为何多年不可见」）----------
