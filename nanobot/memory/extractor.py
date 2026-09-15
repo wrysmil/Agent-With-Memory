@@ -50,9 +50,12 @@ from nanobot.memory.prompts import (
 from nanobot.memory.repository import (
     add_episode,
     add_memory,
+    get_extraction_state,
     get_scratchpad,
     list_memories,
+    reset_extraction_state,
     update_memory_source_episode,
+    upsert_extraction_state,
 )
 
 if TYPE_CHECKING:
@@ -735,12 +738,15 @@ class MemoryExtractor:
         self,
         session: Session,
         last_extracted_index: int,
+        *,
+        source: str = "topic_change",
     ) -> ExtractionResult:
         """话题切换触发的轻量增量抽取（只扫新消息，不调 LLM）。
 
         ``session.messages[last_extracted_index:]`` 视为新增消息，仅走阶段1 的规则
         信号抽取，去重与落库复用 ``_load_existing_memories`` + ``_apply_filters``
-        + ``_persist``。source 固定为 ``topic_change``，用于 episode 映射审计。
+        + ``_persist``。``source`` 默认 ``topic_change``（向后兼容 T5 路径），
+        ``run_idle_extraction`` 调起时会传入 ``idle``，便于审计 episode 映射。
         失败隔离：任何异常仅 warning，并返回空 :class:`ExtractionResult`。
         """
         try:
@@ -763,7 +769,7 @@ class MemoryExtractor:
                 LLMExtractionResult(memories=candidates),
                 existing,
             )
-            persisted = self._persist(filtered, session, source="topic_change")
+            persisted = self._persist(filtered, session, source=source)
             return ExtractionResult(
                 memory_ids=persisted.memory_ids,
                 episode_ids=persisted.episode_ids,
@@ -772,6 +778,74 @@ class MemoryExtractor:
         except Exception as exc:  # noqa: BLE001 - 增量抽取失败绝不能上抛
             logger.opt(exception=exc).warning("incremental extraction failed: {}", exc)
             return ExtractionResult()
+
+    async def run_idle_extraction(self, session: Session) -> ExtractionResult:
+        """Idle 定时器触发的入口：读 state、调 incremental、推进 state。
+
+        行为契约（plan WU-A Task 2）：
+        - ``current_count <= last_count``（无新增消息或已覆盖）：return 空结果，
+          不调 LLM、不动 state。
+        - 若 ``extract_incremental`` 成功：UPSERT ``state.last_count = current_count``，
+          ``source="idle"``。
+        - 若 ``extract_incremental`` 抛异常：state **不**推进（保留旧值，下次
+          重试），warning + 返回空 :class:`ExtractionResult`，不再上抛。
+        - state 行缺失时按 ``last_count=0`` 处理（即首跑等价于一次完整增量扫描）。
+
+        Args:
+            session: 当前会话；其 ``messages`` 是当前转录。
+
+        Returns:
+            :class:`ExtractionResult`。无新增消息或失败时是空结果。
+        """
+        session_key = session.key
+        try:
+            with self.database.connect() as conn:
+                state = get_extraction_state(conn, session_key)
+            last_count = state.last_count if state is not None else 0
+            current_count = len(session.messages)
+            if current_count <= last_count:
+                return ExtractionResult()
+
+            # 调用增量抽取（不调 LLM，仅规则信号）。
+            result = await self.extract_incremental(
+                session, last_extracted_index=last_count, source="idle"
+            )
+
+            # 成功后推进 state。失败的增量结果（memory_ids 为空）也算「执行过」，
+            # 因为它是确定性无副作用的纯规则扫描；保留 last_count 推进语义
+            # 可避免每次 idle 触发都重扫同一段历史。
+            now = _now_iso()
+            try:
+                with self.database.connect() as conn:
+                    upsert_extraction_state(
+                        conn,
+                        session_key,
+                        last_count=current_count,
+                        source="idle",
+                        extracted_at=now,
+                    )
+            except Exception as exc:  # noqa: BLE001 - state 推进失败不能阻断
+                logger.warning(
+                    "run_idle_extraction: failed to advance state for session {}: {}",
+                    session_key,
+                    exc,
+                )
+            return result
+        except Exception as exc:  # noqa: BLE001 - 整个路径绝不上抛
+            logger.opt(exception=exc).warning(
+                "run_idle_extraction failed for session {}: {}", session_key, exc
+            )
+            return ExtractionResult()
+
+    def reset_session_extraction_state(self, session_key: str) -> None:
+        """删除指定会话的 idle 增量游标（admin/测试用，失败仅 warning）。"""
+        try:
+            with self.database.connect() as conn:
+                reset_extraction_state(conn, session_key)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "reset_session_extraction_state failed for {}: {}", session_key, exc
+            )
 
     # ------------------------------------------------------------------
     # S2b: 用户画像提取（SessionEndOrchestrator Step 2a）
