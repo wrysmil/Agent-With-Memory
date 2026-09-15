@@ -136,6 +136,18 @@ _SCHEMA_STATEMENTS = [
         VALUES (new.rowid, new.content, new.subject, new.predicate, new.tags);
     END
     """,
+    # ----- session_extraction_state -----
+    # WU-A: idle 增量提取的 per-session 游标；由 ``MemoryExtractor.run_idle_extraction``
+    # 读写；表名 ``session_extraction_state`` 已在全仓库 grep 过,无冲突。
+    """
+    CREATE TABLE IF NOT EXISTS session_extraction_state (
+        session_key      TEXT    PRIMARY KEY,
+        last_count       INTEGER NOT NULL,
+        last_source      TEXT    NOT NULL,
+        last_extracted_at TEXT   NOT NULL,
+        updated_at       TEXT    NOT NULL
+    )
+    """,
 ]
 
 

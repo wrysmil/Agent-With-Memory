@@ -159,6 +159,14 @@ class AgentDefaults(Base):
         validation_alias=AliasChoices("memoryEnabled", "memory_enabled"),
         serialization_alias="memoryEnabled",
     )  # User-facing total memory switch; read at runtime via provider in hook/context
+    memory_idle_seconds: int = Field(
+        default=600,
+        ge=1,
+        validation_alias=AliasChoices("memoryIdleSeconds", "memory_idle_seconds"),
+        serialization_alias="memoryIdleSeconds",
+    )  # WU-A: idle 增量提取阈值(秒)。每轮 after_run 重置定时器,空闲超过该
+    # 时长后触发 ``MemoryExtractor.run_idle_extraction``。<=0 不合法;典型值
+    # 600(10 分钟)。测试可短至 0.05 秒验证触发路径。
     dream: DreamConfig = Field(default_factory=DreamConfig)
 
     @model_validator(mode="before")

@@ -23,6 +23,7 @@ import pytest
 from nanobot.agent.hook import AgentHookContext, AgentRunHookContext, AgentTurnHookContext
 from nanobot.agent.hooks.memory_extraction import (
     _BACKGROUND_TASKS,
+    _PENDING_IDLE_TIMERS,
     MemoryExtractionHook,
     create_memory_extraction_hook_factory,
 )
@@ -48,6 +49,7 @@ class _FakeExtractor:
     def __init__(self, *, delay: float = 0.0, raise_exc: BaseException | None = None) -> None:
         self.calls: list[tuple[Any, str]] = []
         self.incremental_calls: list[tuple[Any, int]] = []
+        self.idle_calls: list[Any] = []
         self.delay = delay
         self.raise_exc = raise_exc
 
@@ -61,6 +63,15 @@ class _FakeExtractor:
 
     async def extract_incremental(self, session: Any, last_extracted_index: int) -> Any:
         self.incremental_calls.append((session, last_extracted_index))
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        return _FakeExtractionResult()
+
+    async def run_idle_extraction(self, session: Any) -> Any:
+        """WU-A: 新增的 idle 入口,与 extract_session 共享延迟/异常语义。"""
+        self.idle_calls.append(session)
         if self.delay:
             await asyncio.sleep(self.delay)
         if self.raise_exc is not None:
@@ -141,6 +152,12 @@ async def _cleanup_background_tasks():
         task.cancel()
     await asyncio.sleep(0)
     _BACKGROUND_TASKS.clear()
+    # WU-A: 清理 idle 定时器。
+    for task in list(_PENDING_IDLE_TIMERS.values()):
+        if not task.done():
+            task.cancel()
+    await asyncio.sleep(0)
+    _PENDING_IDLE_TIMERS.clear()
 
 
 def _run_ctx(*user_messages: str) -> AgentRunHookContext:
@@ -163,12 +180,14 @@ def _make_hook(
     writer: Any | None = None,
     runtime: _FakeRuntime | None = None,
     session_key: str = "s1",
+    idle_seconds: float | None = None,
 ) -> MemoryExtractionHook:
     return MemoryExtractionHook(
         extractor or _FakeExtractor(),
         session_key,
         writer or _FakeScratchpadWriter(),
         runtime=runtime,
+        idle_seconds=idle_seconds,
     )
 
 
@@ -225,64 +244,93 @@ class TestAfterRunIntentGate:
         hook = MemoryExtractionHook(extractor, "s1", _BoomWriter())
         await hook.after_run(_run_ctx("帮我实现一个爬虫"))  # 不抛
         await hook.on_finally(_run_ctx())
-        assert len(extractor.calls) == 1
+        # WU-A: T0 失败隔离 — idle 仍未触发(因 on_finally 立即取消)。
+        # 旧测试断言 extractor.calls == 1(旧 T1 路径),该语义已被 idle 定时器替代。
+        assert len(extractor.idle_calls) == 0
+        assert len(extractor.calls) == 0
 
 
 # ---------------------------------------------------------------------------
-# T1：异步提取任务 + on_finally 等待
+# WU-A T1：idle 定时器替代原同步 + on_finally await 模式
 # ---------------------------------------------------------------------------
 
 
 class TestRunExtraction:
-    async def test_after_run_schedules_extraction(self):
+    async def test_after_run_arms_idle_timer(self):
+        """after_run 注册 idle 任务,不立即调 extractor(等阈值)。"""
         extractor = _FakeExtractor()
-        hook = _make_hook(extractor=extractor)
+        hook = _make_hook(extractor=extractor, idle_seconds=5.0)
         await hook.after_run(_run_ctx("帮我实现一个爬虫"))
-        await hook.on_finally(_run_ctx())
+        try:
+            # 任务已登记,且 extract_session / run_idle_extraction 都未调。
+            assert "s1" in _PENDING_IDLE_TIMERS
+            assert not _PENDING_IDLE_TIMERS["s1"].done()
+            assert extractor.calls == []
+            assert extractor.idle_calls == []
+        finally:
+            await hook.on_finally(_run_ctx())
 
-        assert len(extractor.calls) == 1
-        session, source = extractor.calls[0]
-        assert source == "session_end"
-        assert session.key == "s1"
-        assert session.messages[0]["content"] == "帮我实现一个爬虫"
-
-    async def test_empty_messages_skips_extraction(self):
+    async def test_idle_threshold_triggers_idle_extraction(self):
+        """IDLE_THRESHOLD_SECONDS 触发后调 run_idle_extraction,而非 extract_session。"""
         extractor = _FakeExtractor()
-        hook = _make_hook(extractor=extractor)
+        hook = _make_hook(extractor=extractor, idle_seconds=0.05)
+        await hook.after_run(_run_ctx("帮我实现一个爬虫"))
+
+        # 等到 idle 自然触发。
+        deadline = asyncio.get_event_loop().time() + 2.0
+        while asyncio.get_event_loop().time() < deadline:
+            if not _PENDING_IDLE_TIMERS:
+                break
+            await asyncio.sleep(0.01)
+        assert len(extractor.idle_calls) == 1
+        assert extractor.calls == []  # 不再调旧的 extract_session 路径
+        assert extractor.idle_calls[0].key == "s1"
+
+    async def test_empty_messages_still_arms_idle(self):
+        """空 messages 不再「跳过注册」;idle 路径不依赖 messages 非空。"""
+        extractor = _FakeExtractor()
+        hook = _make_hook(extractor=extractor, idle_seconds=5.0)
         await hook.after_run(AgentRunHookContext(messages=[]))
-        await hook.on_finally(_run_ctx())
-        assert extractor.calls == []
+        try:
+            # 旧测试断言 extractor.calls == [],本测试验证 idle 仍注册。
+            assert "s1" in _PENDING_IDLE_TIMERS
+        finally:
+            await hook.on_finally(_run_ctx())
 
-    async def test_on_finally_awaits_completion(self):
-        extractor = _FakeExtractor(delay=0.05)
-        hook = _make_hook(extractor=extractor)
-        await hook.after_run(_run_ctx("帮我实现一个爬虫"))
-        assert len(extractor.calls) == 0  # task 尚未被 await
-        await hook.on_finally(_run_ctx())
-        assert len(extractor.calls) == 1  # on_finally 等待完成
-
-    async def test_on_finally_timeout_does_not_raise(self):
+    async def test_on_finally_cancels_pending_idle(self):
+        """on_finally 不再 await 提取,而是 cancel 当前会话的 idle 任务。"""
         extractor = _FakeExtractor(delay=10.0)
-        hook = _make_hook(extractor=extractor)
-        hook.EXTRACTION_WAIT_TIMEOUT = 0.05
+        hook = _make_hook(extractor=extractor, idle_seconds=5.0)
         await hook.after_run(_run_ctx("帮我实现一个爬虫"))
-        assert len(hook._pending_tasks) == 1
+        assert "s1" in _PENDING_IDLE_TIMERS
 
         started = time.monotonic()
-        await hook.on_finally(_run_ctx())  # 超时 → warning + cancel，不抛
+        await hook.on_finally(_run_ctx())
+        # 立即返回(< 1s),不阻塞。
         assert time.monotonic() - started < 1.0
-        assert hook._pending_tasks == set()
+        # session_key 必须从 dict 弹出。
+        assert "s1" not in _PENDING_IDLE_TIMERS
+        # 慢提取不应被调起(已被 cancel)。
+        assert len(extractor.idle_calls) == 0
 
-    async def test_extraction_failure_does_not_raise(self):
-        extractor = _FakeExtractor(raise_exc=RuntimeError("llm exploded"))
-        hook = _make_hook(extractor=extractor)
-        await hook.after_run(_run_ctx("帮我实现一个爬虫"))
-        await hook.on_finally(_run_ctx())  # 不抛
-        assert len(extractor.calls) == 1
-
-    async def test_on_finally_without_pending_tasks_is_noop(self):
+    async def test_on_finally_without_pending_idle_is_noop(self):
         hook = _make_hook()
         await hook.on_finally(_run_ctx())  # 不抛
+
+    async def test_idle_extraction_failure_does_not_raise(self):
+        """idle 路径抛错时,_run_idle_extraction 内部 try/except 隔离。"""
+        extractor = _FakeExtractor(raise_exc=RuntimeError("idle boom"))
+        hook = _make_hook(extractor=extractor, idle_seconds=0.05)
+        await hook.after_run(_run_ctx("帮我实现一个爬虫"))
+
+        # 等 idle 触发并完成(失败隔离)。
+        deadline = asyncio.get_event_loop().time() + 2.0
+        while asyncio.get_event_loop().time() < deadline:
+            if "s1" not in _PENDING_IDLE_TIMERS:
+                break
+            await asyncio.sleep(0.01)
+        # run_idle 被调一次,但 hook 不抛。
+        assert len(extractor.idle_calls) == 1
 
 
 # ---------------------------------------------------------------------------

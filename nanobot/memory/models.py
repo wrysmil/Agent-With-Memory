@@ -224,3 +224,23 @@ class ScratchpadEntry:
             'next_steps': json.dumps(self.next_steps, ensure_ascii=False),
             'updated_at': self.updated_at,
         }
+
+
+@dataclass
+class ExtractionState:
+    """``session_extraction_state`` 表的行数据模型（WU-A idle 增量提取游标）。
+
+    - ``last_count``: 本会话上次增量抽取覆盖到的 ``session.messages`` 长度；
+      下次 ``extract_incremental(session, last_count)`` 只扫增量。
+    - ``last_source``: 上次抽取的来源标签（``session_end`` / ``deletion`` /
+      ``context_compress`` / ``idle`` / ``topic_change``）；保留用于审计与
+      未来策略判定。
+    - ``last_extracted_at``: 上次成功抽取的 ISO-8601 UTC 时间戳。
+    - ``updated_at``: 本行任意字段最近一次写入时间（UPSERT 总会刷新）。
+    """
+
+    session_key: str
+    last_count: int
+    last_source: str
+    last_extracted_at: str
+    updated_at: str
