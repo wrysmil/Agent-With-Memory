@@ -72,7 +72,8 @@
       "Bash(.venv/Scripts/python.exe -m pytest tests/memory/ -q --ignore=tests/memory/test_fallback.py)",
       "Bash(git fetch *)",
       "Bash(awk '{print \"behind remote: \"$1\" ahead of remote: \"$2}')",
-      "Bash(awk '{print \"behind: \"$1\"  ahead: \"$2}')"
+      "Bash(awk '{print \"behind: \"$1\"  ahead: \"$2}')",
+      "Bash(git worktree *)"
     ],
     "additionalDirectories": [
       "/Users/mima0000"
