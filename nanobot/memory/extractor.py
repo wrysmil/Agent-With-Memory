@@ -1199,7 +1199,11 @@ class MemoryExtractor:
                 ts = _now_iso()
                 uid = uuid.uuid4().hex[:8]
                 safe_kind = str(kind).replace("/", "_").replace("\\", "_")
-                path = fallback_dir / f"{ts}_{safe_kind}_{uid}.json"
+                # Windows 文件名保留字符处理:ISO 时间戳里的 `:` 不能出现在 NTFS
+                # 文件名里(`:` 是设备名分隔符)。替换为 `-` 保持可读。`+` 虽合法
+                # 但与 `:` 同源是 ISO 偏移符号,一起换更稳。
+                safe_ts = ts.replace(":", "-").replace("+", "-")
+                path = fallback_dir / f"{safe_ts}_{safe_kind}_{uid}.json"
                 fallback_dir.mkdir(parents=True, exist_ok=True)
                 # MAJOR #2 / OWASP LLM05: 落盘前对文本字段 redact,防止凭据
                 # 残留到 fallback JSON 中。只处理 content / subject / predicate

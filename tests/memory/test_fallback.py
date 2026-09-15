@@ -107,7 +107,7 @@ class TestReplayFallback:
                 "attempt": f"2026-09-13T00:00:0{i}+00:00",
                 "error": "simulated",
             }
-            (db.fallback_dir / f"2026-09-13T00:00:0{i}_memory_{i:08x}.json").write_text(
+            (db.fallback_dir / f"2026-09-13T00-00-0{i}_memory_{i:08x}.json").write_text(
                 json.dumps(payload, ensure_ascii=False), encoding="utf-8"
             )
 
@@ -117,7 +117,7 @@ class TestReplayFallback:
             "attempt": "2026-09-13T00:00:02+00:00",
             "error": "simulated",
         }
-        (db.fallback_dir / "2026-09-13T00:00:02_episode_99999999.json").write_text(
+        (db.fallback_dir / "2026-09-13T00-00-02_episode_99999999.json").write_text(
             json.dumps(ep_payload, ensure_ascii=False), encoding="utf-8"
         )
 
@@ -160,10 +160,10 @@ class TestReplayFallback:
             "attempt": "2026-09-13T00:00:01+00:00",
             "error": "simulated",
         }
-        (db.fallback_dir / "2026-09-13T00:00:00_memory_aaaaaaaa.json").write_text(
+        (db.fallback_dir / "2026-09-13T00-00-00_memory_aaaaaaaa.json").write_text(
             json.dumps(good_payload, ensure_ascii=False), encoding="utf-8"
         )
-        (db.fallback_dir / "2026-09-13T00:00:01_memory_bbbbbbbb.json").write_text(
+        (db.fallback_dir / "2026-09-13T00-00-01_memory_bbbbbbbb.json").write_text(
             json.dumps(bad_payload, ensure_ascii=False), encoding="utf-8"
         )
 
@@ -172,7 +172,7 @@ class TestReplayFallback:
 
         # 失败文件保留
         remaining = sorted(p.name for p in db.fallback_dir.glob("*.json"))
-        assert remaining == ["2026-09-13T00:00:01_memory_bbbbbbbb.json"]
+        assert remaining == ["2026-09-13T00-00-01_memory_bbbbbbbb.json"]
 
         # DB 只有成功项
         from nanobot.memory.repository import list_memories
@@ -336,7 +336,7 @@ class TestReplayOnInit:
             "attempt": "2026-09-13T00:00:00+00:00",
             "error": "prior failure",
         }
-        (db.fallback_dir / "2026-09-13T00:00:00_memory_initfb01.json").write_text(
+        (db.fallback_dir / "2026-09-13T00-00-00_memory_initfb01.json").write_text(
             json.dumps(payload, ensure_ascii=False), encoding="utf-8"
         )
 
@@ -517,7 +517,7 @@ class TestDatabaseInitReplaysFallback:
             "attempt": "2026-09-13T00:00:00+00:00",
             "error": "prior failure",
         }
-        (db_setup.fallback_dir / "2026-09-13T00:00:00_memory_initdb01.json").write_text(
+        (db_setup.fallback_dir / "2026-09-13T00-00-00_memory_initdb01.json").write_text(
             json.dumps(payload, ensure_ascii=False), encoding="utf-8"
         )
 
@@ -540,7 +540,7 @@ class TestDatabaseInitReplaysFallback:
         db_setup.init_schema()
 
         # 写一个无效的 fallback JSON（缺 item 字段）
-        (db_setup.fallback_dir / "2026-09-13T00:00:00_memory_bad0001.json").write_text(
+        (db_setup.fallback_dir / "2026-09-13T00-00-00_memory_bad0001.json").write_text(
             json.dumps(
                 {"kind": "memory", "attempt": "2026-09-13T00:00:00+00:00"},
                 ensure_ascii=False,
