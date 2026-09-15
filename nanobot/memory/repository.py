@@ -499,7 +499,25 @@ def search_memories(
     except sqlite3.OperationalError as exc:
         # FTS5 语法错误（query 含引号 / 连字符 / 未闭合短语等）不应让整条召回
         # 失败——与 search_backend.Fts5SearchBackend._try_fts5 同策略。
-        logger.debug("FTS5 MATCH failed for {!r}: {}", query, exc)
+        #
+        # 安全审查 M-1（2026-09-15）：原实现无条件吞掉**所有** OperationalError，
+        # 会把「表缺失 / database is locked / disk I/O error / readonly / no such
+        # column」这类**真实故障**也静默降级成全表 LIKE —— 正是 ``episodes.updated_at``
+        # 列名错误得以长期隐藏的机制。现按消息特征区分：查询语法类属预期输入
+        # （debug），其余类型升级为 warning（仍继续走 LIKE 回退，不改变召回契约）。
+        # 注意 ``no such column`` **不**算语法类：它是 schema 缺陷，必须告警。
+        #
+        # 安全审查 M-2：不落 query 原文（PII at rest），只记长度。
+        if _is_fts_syntax_error(exc):
+            logger.debug(
+                "FTS5 MATCH syntax error (query length {}): {}", len(query), exc
+            )
+        else:
+            logger.warning(
+                "FTS5 MATCH failed, falling back to LIKE (query length {}): {}",
+                len(query),
+                exc,
+            )
         rows = []
     if rows:
         return [_row_to_memory(r) for r in rows]
@@ -519,6 +537,24 @@ def _escape_like(value: str) -> str:
     否则会把后续插入的转义符二次转义。
     """
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+# FTS5 查询**语法**类错误的特征子串（小写匹配）。命中 → 视为预期输入（debug）；
+# 未命中 → 视为库级故障（warning）。``no such column`` 刻意**不**在此列：它是
+# schema 缺陷而非查询语法问题，必须告警（``episodes.updated_at`` 之鉴）。
+_FTS_SYNTAX_MARKERS = (
+    "fts5: syntax error",
+    "unterminated string",
+    "unknown special query",
+    "phrase queries are not supported",
+    "no such cursor",
+)
+
+
+def _is_fts_syntax_error(exc: sqlite3.OperationalError) -> bool:
+    """区分「FTS5 查询语法问题」（预期输入）与「库级故障」（需告警）。"""
+    message = str(exc).lower()
+    return any(marker in message for marker in _FTS_SYNTAX_MARKERS)
 
 
 def _search_memories_like(
@@ -689,12 +725,17 @@ def search_episodes(
     普通 query 直接返回 ``[]``，计数器显示的「OK n=0」从未真正执行 SQL。
     改用 ``ended_at`` 作为时间戳，``_EpisodeRow.updated_at`` 字段名保持不变
     （那是通道 ``compute_recency`` 依赖的契约）。
+
+    安全审查 M-4（2026-09-15）：本函数同样要转义 LIKE 元字符。``entity`` 由
+    ``channels/episodes.py`` 的正则抽取，``_`` 属 ``\\w`` 可通过，未转义时
+    entity ``a_c.py`` 会命中 ``abc.py`` / ``aXc.py``（过召回，非注入）。
     """
+    pattern = f"%{_escape_like(entity)}%"
     cur = conn.execute(
         "SELECT id, summary, ended_at FROM episodes "
-        "WHERE summary LIKE ? OR session_id LIKE ? "
+        "WHERE summary LIKE ? ESCAPE '\\' OR session_id LIKE ? ESCAPE '\\' "
         "LIMIT ?",
-        (f"%{entity}%", f"%{entity}%", limit),
+        (pattern, pattern, limit),
     )
     return [
         _EpisodeRow(id=row[0], summary=row[1], updated_at=row[2])
