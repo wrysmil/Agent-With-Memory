@@ -21,6 +21,7 @@ from nanobot.memory.models import (
     Episode,
     EpisodeOutcome,
     EpisodeSource,
+    ExtractionState,
     Memory,
     MemoryPriority,
     MemoryType,
@@ -446,6 +447,84 @@ def search_memories(
     )
     rows = conn.execute(sql, params).fetchall()
     return [_row_to_memory(r) for r in rows]
+
+
+# ---------- session_extraction_state ----------
+# WU-A：idle 增量提取的 per-session 游标。表 schema 见 database.py
+# ``session_extraction_state``；本节函数全部以 ``conn`` 为第一参数，与既有
+# repository 约定一致（无 conn 即不写）。
+
+_INSERT_EXTRACTION_STATE_SQL = """
+    INSERT INTO session_extraction_state (
+        session_key, last_count, last_source, last_extracted_at, updated_at
+    ) VALUES (
+        :session_key, :last_count, :last_source, :last_extracted_at, :updated_at
+    )
+    ON CONFLICT (session_key) DO UPDATE SET
+        last_count = excluded.last_count,
+        last_source = excluded.last_source,
+        last_extracted_at = excluded.last_extracted_at,
+        updated_at = excluded.updated_at
+"""
+
+
+def _row_to_extraction_state(row: sqlite3.Row) -> ExtractionState:
+    return ExtractionState(
+        session_key=row["session_key"],
+        last_count=row["last_count"],
+        last_source=row["last_source"],
+        last_extracted_at=row["last_extracted_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def get_extraction_state(
+    conn: sqlite3.Connection,
+    session_key: str,
+) -> ExtractionState | None:
+    """返回该 ``session_key`` 的最新提取游标；不存在返回 ``None``。"""
+    row = conn.execute(
+        "SELECT session_key, last_count, last_source, last_extracted_at, updated_at "
+        "FROM session_extraction_state WHERE session_key = ?",
+        (session_key,),
+    ).fetchone()
+    return _row_to_extraction_state(row) if row else None
+
+
+def upsert_extraction_state(
+    conn: sqlite3.Connection,
+    session_key: str,
+    last_count: int,
+    source: str,
+    extracted_at: str,
+) -> None:
+    """INSERT OR REPLACE（实际走 ON CONFLICT DO UPDATE）写入或更新游标。
+
+    Args:
+        session_key: 会话 key（PK）。
+        last_count: 本次成功抽取覆盖到的 ``session.messages`` 长度。
+        source: 本次抽取的来源标签（例如 ``idle`` / ``deletion``）。
+        extracted_at: ISO-8601 UTC 时间戳（同时写 ``last_extracted_at`` 与
+            ``updated_at``）。
+    """
+    conn.execute(
+        _INSERT_EXTRACTION_STATE_SQL,
+        {
+            "session_key": session_key,
+            "last_count": int(last_count),
+            "last_source": source,
+            "last_extracted_at": extracted_at,
+            "updated_at": extracted_at,
+        },
+    )
+
+
+def reset_extraction_state(conn: sqlite3.Connection, session_key: str) -> None:
+    """删除该会话的游标行。无行被删除是合法状态，不报错。"""
+    conn.execute(
+        "DELETE FROM session_extraction_state WHERE session_key = ?",
+        (session_key,),
+    )
 
 
 # ---------- T-12 retrieval adapters ----------
