@@ -13,7 +13,7 @@ Scenarios verified:
     ``db_path`` and confirm all three artifacts survive.
 3.  CHAT intent does NOT write ``current_focus`` via hook ``after_run``.
 4.  TASK intent writes ``current_focus`` via hook ``after_run``.
-5.  ``on_finally`` drains a delayed extraction task within the 5s ceiling.
+5.  ``on_finally`` cancels the idle timer (WU-A: no longer awaits/blocks;
 6.  ``_system_extract`` produces ``ActionNode`` from a tool_call + tool
     response without invoking the LLM.
 7.  LLM episode-track failure is isolated: ``extract_session`` returns
@@ -119,11 +119,21 @@ class _FakeExtractor:
 
     def __init__(self, *, delay: float = 0.0, raise_exc: BaseException | None = None) -> None:
         self.calls: list[tuple[Any, str]] = []
+        self.idle_calls: list[Any] = []
         self.delay = delay
         self.raise_exc = raise_exc
 
     async def extract_session(self, session: Any, *, source: str = "session_end") -> Any:
         self.calls.append((session, source))
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        return None
+
+    async def run_idle_extraction(self, session: Any) -> Any:
+        """WU-A: idle 入口,复用相同的 delay/raise 语义。"""
+        self.idle_calls.append(session)
         if self.delay:
             await asyncio.sleep(self.delay)
         if self.raise_exc is not None:
@@ -365,8 +375,8 @@ class TestHookIntentGate:
 
 
 class TestHookOnFinally:
-    async def test_on_finally_drains_delayed_task_without_raising(self, tmp_path: Path):
-        """T1 with delay=0.2s must complete inside the 5s ceiling and call the extractor."""
+    async def test_on_finally_cancels_idle_without_raising(self, tmp_path: Path):
+        """WU-A: ``on_finally`` 不再 await;而是取消 idle 任务,5s ceiling 已删除。"""
         db = _init_db(tmp_path)
         writer = ScratchpadWriter(db, user_id="default")
         extractor = _FakeExtractor(delay=0.2)
@@ -375,11 +385,10 @@ class TestHookOnFinally:
         await hook.after_run(_run_ctx("帮我实现一个爬虫"))
         await hook.on_finally(_run_ctx())  # must not raise
 
-        assert len(extractor.calls) == 1
-        session, source = extractor.calls[0]
-        assert source == "session_end"
-        assert session.key == "s1"
-        assert session.messages[0]["content"] == "帮我实现一个爬虫"
+        # 旧 T1 路径已删除:on_finally 立即取消 idle 任务,不调 extract_session。
+        assert extractor.calls == []
+        # idle 也未触发(on_finally 在 0.2s delay 之前取消)。
+        assert extractor.idle_calls == []
 
 
 # ---------------------------------------------------------------------------
