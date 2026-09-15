@@ -41,7 +41,6 @@ function stubMemoryApi(items: MemoryPayload[] = []) {
     if (url === "/api/settings") return jsonResponse(settingsPayload());
     if (url.startsWith("/api/settings/memory/memories")) return jsonResponse({ items });
     if (url.startsWith("/api/settings/memory/episodes")) return jsonResponse({ items: [] });
-    if (url.startsWith("/api/settings/memory/scratchpad")) return jsonResponse({ scratchpad: null });
     return jsonResponse({});
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -76,7 +75,7 @@ describe("Settings memory section registration", () => {
     });
 
     expect(screen.getByRole("tablist", { name: "Memory sections" })).toBeInTheDocument();
-    for (const label of ["Semantic memory", "Episodes", "Working memory"]) {
+    for (const label of ["Semantic memory", "Episodes"]) {
       expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
     }
 

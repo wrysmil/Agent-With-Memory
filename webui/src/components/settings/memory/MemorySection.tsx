@@ -5,15 +5,13 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useClient } from "@/providers/ClientProvider";
 import { EpisodeListView } from "./EpisodeListView";
 import { MemoryListView } from "./MemoryListView";
-import { ScratchpadEditor } from "./ScratchpadEditor";
 import type { SettingsPayload } from "@/lib/types";
 
-type MemoryTab = "semantic" | "episode" | "scratchpad";
+type MemoryTab = "semantic" | "episode";
 
 const MEMORY_TABS: Array<{ value: MemoryTab; labelKey: string; defaultLabel: string }> = [
   { value: "semantic", labelKey: "settings.memory.tabSemantic", defaultLabel: "Semantic memory" },
   { value: "episode", labelKey: "settings.memory.tabEpisode", defaultLabel: "Episode memory" },
-  { value: "scratchpad", labelKey: "settings.memory.tabScratchpad", defaultLabel: "Working memory" },
 ];
 
 export function MemorySection({
@@ -120,7 +118,6 @@ export function MemorySection({
       />
       {tab === "semantic" && <MemoryListView />}
       {tab === "episode" && <EpisodeListView />}
-      {tab === "scratchpad" && <ScratchpadEditor />}
     </div>
   );
 }

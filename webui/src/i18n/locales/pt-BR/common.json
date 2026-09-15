@@ -1005,7 +1005,6 @@
     "memory": {
       "tabSemantic": "Memórias semânticas",
       "tabEpisode": "Episódios",
-      "tabScratchpad": "Memória de trabalho",
       "tabsLabel": "Seções de memória",
       "type": {
         "fact": "Fato",
@@ -1080,13 +1079,6 @@
       "retry": "Tentar novamente",
       "superseded": "substituída",
       "errorContentRequired": "O conteúdo é obrigatório",
-      "fieldActiveProjects": "Projetos ativos",
-      "fieldOpenQuestions": "Perguntas em aberto",
-      "fieldNextSteps": "Próximos passos",
-      "fieldCurrentFocus": "Foco atual",
-      "scratchpadHint": "Notas mantidas junto à sessão",
-      "scratchpadPlaceholder": "## Projeto atual\n- ...",
-      "scratchpadContent": "Conteúdo (Markdown)",
       "metaLine": "{{type}} · {{priority}} · {{importance}}"
     }
   },

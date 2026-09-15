@@ -1005,7 +1005,6 @@
     "memory": {
       "tabSemantic": "의미 기억",
       "tabEpisode": "에피소드",
-      "tabScratchpad": "작업 기억",
       "tabsLabel": "기억 섹션",
       "type": {
         "fact": "사실",
@@ -1080,13 +1079,6 @@
       "retry": "재시도",
       "superseded": "대체됨",
       "errorContentRequired": "내용은 필수입니다",
-      "fieldActiveProjects": "진행 중인 프로젝트",
-      "fieldOpenQuestions": "미해결 질문",
-      "fieldNextSteps": "다음 단계",
-      "fieldCurrentFocus": "현재 초점",
-      "scratchpadHint": "세션과 함께 보관되는 메모",
-      "scratchpadPlaceholder": "## 현재 프로젝트\n- …",
-      "scratchpadContent": "내용 (Markdown)",
       "metaLine": "{{type}} · {{priority}} · {{importance}}"
     }
   },

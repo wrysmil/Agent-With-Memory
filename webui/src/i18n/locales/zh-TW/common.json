@@ -1005,7 +1005,6 @@
     "memory": {
       "tabSemantic": "語意記憶",
       "tabEpisode": "情節",
-      "tabScratchpad": "工作記憶",
       "tabsLabel": "記憶分類",
       "type": {
         "fact": "事實",
@@ -1080,13 +1079,6 @@
       "retry": "重試",
       "superseded": "已取代",
       "errorContentRequired": "內容不可為空",
-      "fieldActiveProjects": "進行中的專案",
-      "fieldOpenQuestions": "待解決的問題",
-      "fieldNextSteps": "下一步",
-      "fieldCurrentFocus": "目前焦點",
-      "scratchpadHint": "與工作階段同步保存的筆記",
-      "scratchpadPlaceholder": "## 目前專案\n- …",
-      "scratchpadContent": "內容（Markdown）",
       "metaLine": "{{type}} · {{priority}} · {{importance}}"
     }
   },
