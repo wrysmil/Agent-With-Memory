@@ -13,6 +13,7 @@ from typing import Any
 
 from loguru import logger
 
+from nanobot.memory.llm_error import response_error
 from nanobot.memory.prompts import SEMANTIC_EXTRACTION_PROMPT
 
 CITATION_SCORING_SECTION = """\
@@ -125,6 +126,11 @@ class ProfileExtractor:
                 reasoning_effort=getattr(self._runtime.generation, "reasoning_effort", None),
             )
             resp = await asyncio.wait_for(call, timeout=timeout) if timeout else await call
+            # provider 把 HTTP 错误包装成 content 返回（不抛异常），先识别。
+            error = response_error(resp)
+            if error is not None:
+                logger.warning("ProfileExtractor.extract LLM call failed: {}", error)
+                return ProfileExtractionResult(error=f"call_failed: {error}")
             text = (getattr(resp, "content", "") or "").strip()
             if not text or text.upper() == "NONE":
                 return ProfileExtractionResult()

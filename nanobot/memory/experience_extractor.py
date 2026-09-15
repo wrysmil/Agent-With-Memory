@@ -6,6 +6,7 @@ from typing import Any
 
 from loguru import logger
 
+from nanobot.memory.llm_error import response_error
 from nanobot.memory.profile_extractor import _extract_json_obj, _format_conv_lines
 from nanobot.memory.prompts import SEMANTIC_EXTRACTION_PROMPT
 
@@ -55,6 +56,11 @@ class ExperienceExtractor:
                 max_tokens=getattr(self._runtime.generation, "max_tokens", 1000),
                 reasoning_effort=getattr(self._runtime.generation, "reasoning_effort", None),
             )
+            # provider 把 HTTP 错误包装成 content 返回（不抛异常），先识别。
+            error = response_error(resp)
+            if error is not None:
+                logger.warning("ExperienceExtractor.extract LLM call failed: {}", error)
+                return []
             text = (getattr(resp, "content", "") or "").strip()
             data = _extract_json_obj(text)
             if not isinstance(data, dict):

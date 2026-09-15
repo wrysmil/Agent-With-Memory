@@ -64,7 +64,9 @@ from nanobot.agent.hook import (
     AgentTurnHookFactory,
 )
 from nanobot.memory.intent import IntentType, classify_intent
+from nanobot.memory.llm_error import response_error
 from nanobot.memory.prompts import TOPIC_CHANGE_DETECTION_PROMPT
+from nanobot.session.labels import session_label_suffix
 from nanobot.session.manager import Session
 
 if TYPE_CHECKING:
@@ -209,11 +211,16 @@ class MemoryExtractionHook(AgentHook):
         memory_enabled_provider: "Callable[[], bool] | None" = None,
         idle_seconds: float | None = None,
         cited_memory_ids: list[str] | None = None,
+        label: str = "",
     ) -> None:
         super().__init__()
         self._extractor = extractor
         self._session_key = session_key
         self._scratchpad_writer = scratchpad_writer
+        # 会话摘要（WebUI 侧边栏那一行）：只用于日志，让「哪个会话」一眼可辨。
+        # 由 ``create_memory_extraction_hook_factory`` 的 ``label_provider`` 注入；
+        # 直接实例化（单测）时缺省为空，日志不打方括号段。
+        self._session_label = label
         # WU-B: 最近一次检索注入的记忆 id。hook 实例随 ``after_run`` arm 的 idle
         # 定时器跨 run 存活（见模块 docstring「T1」），提取触发时据此做引用评分。
         # 空列表表示本轮无注入，idle 链路与现状一致（不追加评分段）。
@@ -279,9 +286,35 @@ class MemoryExtractionHook(AgentHook):
             )
             return False
 
+    def _label_suffix(self) -> str:
+        """日志用会话摘要后缀（`` [摘要: …]``）；无标签时为空串。"""
+        return session_label_suffix(self._session_label)
+
     # ------------------------------------------------------------------
     # AgentHook 回调
     # ------------------------------------------------------------------
+
+    async def before_run(self, context: AgentRunHookContext) -> None:
+        """本轮有新消息 → 把该会话的 idle 计时器**归零**（只取消，不装备）。
+
+        语义（2026-09-15 spec §3）：触发时刻 = ``max(最后一条用户消息,
+        最后一轮结束) + 阈值``。此前只有 ``after_run`` 会装备计时器，于是
+        「用户打断上一轮」的那一轮不计入重置 —— 计时器量的是「距上一轮正常
+        结束」，用户连发消息时仍会到点。
+
+        这里**不能**顺手装备：``before_run`` 时刻本轮还没跑完，装备会让长轮次
+        （工具调用几分钟）在**对话进行中**被抽。装备仍绑定在已定格的时间点上
+        ——正常结束走 :meth:`after_run`，被打断/失败走 :meth:`on_finally`。
+        """
+        if self._memory_disabled():
+            return
+        try:
+            _cancel_pending_idle_timer(self._session_key)
+        except Exception:
+            logger.exception(
+                "MemoryExtractionHook.before_run reset failed for session {}",
+                self._session_key,
+            )
 
     async def before_iteration(self, context: AgentHookContext) -> None:
         """T5 话题切换检测（plan §2.2 / §10 Task 12）。"""
@@ -334,7 +367,7 @@ class MemoryExtractionHook(AgentHook):
             )
 
     async def on_finally(self, context: AgentRunHookContext) -> None:
-        """本回调刻意不做任何事；两条禁令都写在下面。
+        """被打断/失败的轮次在此**装备** idle 定时器；正常路径不碰定时器。
 
         **不能取消 idle 定时器。** ``after_run`` 与 ``on_finally`` 属于同一次
         ``AgentRunner.run``：after_run 在 ``return`` 前调用，on_finally 在紧随其后的
@@ -344,13 +377,30 @@ class MemoryExtractionHook(AgentHook):
         定时器生命周期由 ``_arm_idle_timer`` 自己管理：同一会话的下一次 after_run
         取消并替换旧的；进程退出时随事件循环销毁。
 
+        **新增（2026-09-15 spec §3）：只对 ``cancelled`` / ``error`` 装备。**
+        ``AgentRunner`` 在这两条出口上直接 ``raise``，**不会**调用 ``after_run``
+        （runner.py 的 ``except`` 分支），若不在此补装备，会留下一个漏洞：用户说完
+        最后一条、那一轮被打断后就再没人装备计时器，这段对话永远不会走 idle 抽取。
+        正常结束（``stop`` / ``length`` / ``tool_calls``）由 ``after_run`` 负责，
+        这里用 ``stop_reason`` 守卫，不会覆盖它刚装的那个。
+
         **不能派发 SessionEndEvent。** ``on_finally`` 是**每条消息**那次 run 的收尾，
         不是会话结束。早先在此 fire-and-forget 触发 ``SessionEndOrchestrator.run``，
         导致每条消息都跑一遍完整编排（episode / 画像 / 经验），与 idle 定时器的增量
         抽取重复处理同一份转录。常态提取统一交给 idle 定时器；
         ``SessionEndOrchestrator`` 留给真正的会话结束事件（如未来的 USER_CLOSE 端点）。
         """
-        return
+        if self._memory_disabled():
+            return
+        if context.stop_reason not in ("cancelled", "error"):
+            return
+        try:
+            self._arm_idle_timer(context)
+        except Exception:
+            logger.exception(
+                "MemoryExtractionHook.on_finally re-arm failed for session {}",
+                self._session_key,
+            )
 
     def _build_orchestrator_extractor(self) -> Any:
         """构造编排器所需的 extractor 适配形态。
@@ -461,6 +511,16 @@ class MemoryExtractionHook(AgentHook):
         content = getattr(response, "content", None)
         if not content or not content.strip():
             return True
+        # provider 把 HTTP 错误包装成 content 返回（不抛异常），先识别，避免报成
+        # 「unparseable JSON」把真实原因埋掉。
+        error = response_error(response)
+        if error is not None:
+            logger.warning(
+                "topic change detection LLM call failed for session {}: {}",
+                self._session_key,
+                error,
+            )
+            return True
         payload = _parse_json_object(content)
         if payload is None:
             logger.warning(
@@ -512,9 +572,10 @@ class MemoryExtractionHook(AgentHook):
             )
             return
         logger.info(
-            "idle timer fired for session {} after {}s idle; starting incremental extraction "
+            "idle timer fired for session {}{} after {}s idle; starting incremental extraction "
             "({} messages)",
             self._session_key,
+            self._label_suffix(),
             self.IDLE_THRESHOLD_SECONDS,
             len(context.messages),
         )
@@ -541,9 +602,10 @@ class MemoryExtractionHook(AgentHook):
             )
             return
         logger.info(
-            "idle memory extraction finished for session {}: memories={} episodes={} "
+            "idle memory extraction finished for session {}{}: memories={} episodes={} "
             "skipped={} failed={}",
             self._session_key,
+            self._label_suffix(),
             getattr(result, "memory_ids", None),
             getattr(result, "episode_ids", None),
             getattr(result, "skipped", None),
@@ -589,6 +651,7 @@ def create_memory_extraction_hook_factory(
     scratchpad_writer_for_key: Callable[[str], ScratchpadWriter] | None = None,
     runtime_provider: Callable[[str], LLMRuntime | None] | None = None,
     memory_enabled_provider: Callable[[], bool] | None = None,
+    label_provider: Callable[[str], str] | None = None,
     idle_seconds: float | None = None,
 ) -> AgentTurnHookFactory:
     """返回 ``AgentTurnHookFactory``：从 ``AgentTurnHookContext`` 取 ``session_key``
@@ -602,6 +665,10 @@ def create_memory_extraction_hook_factory(
             ``scratchpad_writer_for_key`` 胜出。
         runtime_provider: 可选的 ``session_key -> LLMRuntime | None``，用于 T5 话题切换
             检测；缺省时回落 ``extractor.runtime``。
+        memory_enabled_provider: 用户侧记忆总开关，关闭时所有回调短路。
+        label_provider: 可选的 ``session_key -> str``，返回日志用的会话摘要
+            （WebUI 侧边栏那一行：标题优先、空则首条用户消息）。缺省时日志不带摘要。
+            失败隔离：provider 抛错时按空标签处理。
         idle_seconds: WU-A 可选的 idle 阈值(秒),转发给 ``MemoryExtractionHook``。
             通常来自 ``AgentDefaults.memory_idle_seconds``。
 
@@ -654,6 +721,16 @@ def create_memory_extraction_hook_factory(
                     session_key,
                 )
 
+        label = ""
+        if label_provider is not None:
+            try:
+                label = label_provider(session_key) or ""
+            except Exception:
+                logger.exception(
+                    "memory extraction hook factory: label_provider failed for {}",
+                    session_key,
+                )
+
         return MemoryExtractionHook(
             extractor,
             session_key,
@@ -662,6 +739,7 @@ def create_memory_extraction_hook_factory(
             memory_enabled_provider=memory_enabled_provider,
             idle_seconds=idle_seconds,
             cited_memory_ids=list(context.cited_memory_ids or []),
+            label=label,
         )
 
     return _factory

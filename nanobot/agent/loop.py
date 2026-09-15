@@ -84,6 +84,7 @@ from nanobot.session.goal_state import (
 )
 from nanobot.session.history_visibility import HIDDEN_HISTORY_META
 from nanobot.session.keys import UNIFIED_SESSION_KEY, remember_last_channel
+from nanobot.session.labels import session_label, session_label_suffix
 from nanobot.session.manager import SESSION_CACHE_MAX_SIZE, Session, SessionManager
 from nanobot.session.model_selection import (
     SESSION_MODEL_PRESET_METADATA_KEY,
@@ -556,6 +557,19 @@ class AgentLoop:
             runtime = _runtime_for_key(session_key)
             return _build_extractor(runtime if runtime is not None else self.llm_runtime())
 
+        def _session_label_for_key(session_key: str) -> str:
+            """日志用的会话摘要：WebUI 侧边栏那一行（标题优先，空则首条用户消息）。"""
+            try:
+                session = self.sessions.get_or_create(session_key)
+            except Exception as exc:
+                logger.warning(
+                    "memory extraction: session label lookup failed for {}: {}",
+                    session_key,
+                    exc,
+                )
+                return ""
+            return session_label(session.messages, session.metadata)
+
         # Capture via locals to tolerate callers (notably existing tests) that
         # invoke ``AgentLoop(...)`` directly without passing
         # ``memory_enabled_provider`` — fallback to ``None`` so the gate stays
@@ -568,6 +582,7 @@ class AgentLoop:
                 scratchpad_writer_for_key=_scratchpad_writer_for_key,
                 runtime_provider=_runtime_for_key,
                 memory_enabled_provider=_memory_enabled_provider,
+                label_provider=_session_label_for_key,
             )
         )
 
@@ -587,8 +602,9 @@ class AgentLoop:
                 )
                 return
             logger.info(
-                "memory extraction finished for session {} source=deletion",
+                "memory extraction finished for session {}{} source=deletion",
                 session.key,
+                session_label_suffix(session_label(session.messages, session.metadata)),
             )
 
         def _on_session_deleted(session: Session) -> None:

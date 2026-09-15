@@ -15,6 +15,7 @@ from typing import Any
 from loguru import logger
 
 from nanobot.memory.database import MemoryDatabase
+from nanobot.memory.llm_error import response_error
 from nanobot.memory.models import ScratchpadEntry
 from nanobot.memory.prompts import SCRATCHPAD_FORMAT_PROMPT
 from nanobot.memory.repository import get_scratchpad, upsert_scratchpad
@@ -246,6 +247,12 @@ class ScratchpadWriter:
                 max_tokens=getattr(self._runtime.generation, "max_tokens", 1000),
                 reasoning_effort=getattr(self._runtime.generation, "reasoning_effort", None),
             )
+            # provider 把 HTTP 错误包装成 content 返回（不抛异常）。若不拦住，
+            # 「Error: {'message': ...}」会被当成草稿本正文写库。
+            error = response_error(resp)
+            if error is not None:
+                logger.warning("ScratchpadWriter.format_with_llm LLM call failed: {}", error)
+                return self._minimal_fallback(current_scratchpad, episode_summary)
             text = (getattr(resp, "content", "") or "").strip()
             if len(text) > self.SCRATCHPAD_MAX_CHARS:
                 text = text[: self.SCRATCHPAD_MAX_CHARS]

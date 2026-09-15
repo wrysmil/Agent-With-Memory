@@ -35,6 +35,7 @@ from nanobot.memory.filters import (
     is_task_artifact,
     ngram_similarity,
 )
+from nanobot.memory.llm_error import response_error
 from nanobot.memory.models import (
     Episode,
     EpisodeOutcome,
@@ -68,6 +69,7 @@ from nanobot.memory.repository import (
     update_memory_source_episode,
     upsert_extraction_state,
 )
+from nanobot.session.labels import session_label, session_label_suffix
 
 if TYPE_CHECKING:
     from nanobot.session.manager import Session
@@ -853,10 +855,11 @@ class MemoryExtractor:
 
         skipped = len(llm_result.memories) - len(filtered.memories)
         logger.info(
-            "{} extraction for session {}: {} new messages -> {} memories, {} episodes "
+            "{} extraction for session {}{}: {} new messages -> {} memories, {} episodes "
             "(skipped={} failed_tracks={})",
             source,
             session.key,
+            session_label_suffix(session_label(session.messages, session.metadata)),
             len(new_messages),
             len(persisted.memory_ids),
             len(persisted.episode_ids),
@@ -905,8 +908,9 @@ class MemoryExtractor:
             last_count = state.last_count if state is not None else 0
             current_count = len(session.messages)
             logger.info(
-                "idle extraction start for session {}: messages={} last_extracted={}",
+                "idle extraction start for session {}{}: messages={} last_extracted={}",
                 session_key,
+                session_label_suffix(session_label(session.messages, session.metadata)),
                 current_count,
                 last_count,
             )
@@ -1167,6 +1171,13 @@ class MemoryExtractor:
         except Exception as exc:  # noqa: BLE001 - 失败隔离：任何异常都不上抛
             logger.warning("memory extraction LLM call failed ({}): {}", track, exc)
             return None, f"call_failed: {exc}"
+
+        # provider 把 HTTP 错误（401/403/429/5xx）包装成 content 返回，不抛异常。
+        # 必须先识别，否则错误文本会被当成「模型回了段没法解析的文字」。
+        reason = response_error(response)
+        if reason is not None:
+            logger.warning("memory extraction LLM call failed ({}): {}", track, reason)
+            return None, f"call_failed: {reason}"
 
         content = getattr(response, "content", None)
         if not content or not content.strip():
@@ -1637,7 +1648,11 @@ class MemoryExtractor:
                     reasoning_effort=self.runtime.generation.reasoning_effort,
                 )
                 text = getattr(resp, "content", "") or ""
-                data = _parse_json_object(text)
+                error = response_error(resp)
+                if error is not None:
+                    # 保留兜底摘要（行为不变），但把真实原因说清楚。
+                    logger.warning("generate_episode LLM call failed: {}", error)
+                data = _parse_json_object(text) if error is None else None
                 if isinstance(data, dict):
                     summary = str(data.get("summary", "")).strip()
                     if summary:
