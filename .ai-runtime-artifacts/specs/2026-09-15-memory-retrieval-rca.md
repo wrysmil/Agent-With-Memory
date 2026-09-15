@@ -178,6 +178,34 @@ if session_key and hasattr(self, "_sessions"):
 
 ## 待修复项（未实施）
 
+> ### ⚠️ 实施期更正（2026-09-15，修复批次 `c6f66ac`）
+>
+> 本 RCA 在修复实施中被证伪/补正 **3 处**，均已在
+> `.ai-runtime-artifacts/verifications/2026-09-15-memory-retrieval-rca-fix-collective-test.md` 取证：
+>
+> 1. **§根因 1 的修复不足以恢复主召回 —— 遗漏第 5 个根因（CJK 分词）。**
+>    `memories_fts` 用 `tokenize='unicode61 remove_diacritics 2'`，连续 CJK 被切成**一个整 token**，
+>    实测 `search_memories('创作')` → 0 命中（而 content 含「用户热爱创作…」），
+>    `search_memories('用户热爱创作')` → 1 命中。且 `search_memories` **只有 FTS5 MATCH、没有 LIKE 回退**。
+>    → 只修根因 1 的话 `recent` 通道会通、**语义通道仍恒空**。修复已补 LIKE 回退 + `_escape_like`。
+>
+> 2. **遗漏第 6 个根因：`repository.search_episodes` 查了不存在的列。**
+>    schema v1 的 `episodes` 只有 `started_at` / `ended_at`，**没有 `updated_at`**
+>    （已核对真实库 `PRAGMA table_info(episodes)`）→ 每次调用抛 `no such column: updated_at`。
+>    因该通道仅在 query 含路径/扩展名实体时才执行，本 RCA §根因 1 里「episodes **OK** n=0」
+>    的复现结论**是错的**：那条 SQL 从未真正跑过。已改用 `ended_at`。
+>
+> 3. **§根因 1 的复现表与「根因 4 附带发现」的时间格式叙事中，涉及 `updated_at` 存储格式的部分不成立。**
+>    本 RCA 若出现「生产存 `'YYYY-MM-DD HH:MM:SS+00:00'`（空格分隔）」的说法，那是**探针缺陷**：
+>    探针向 `add_memory` 传了 `datetime` 对象，被 sqlite3 的弃用默认适配器转成空格分隔。
+>    生产路径 `Memory.to_row()` 传 `isoformat()`。真实库 8/8 行实测均为 `'T'` 分隔。
+>    详见 `.ai-runtime-artifacts/plans/2026-09-15-memory-retrieval-rca-fix-plan.md` §1.3 更正段。
+>
+> 4. **§意图识别器一节中 `classify_intent` 的调用点行号已随修复批次位移**，语义结论未受影响。
+>
+> 未实施项不变：#5 决定**保留**死代码（`tests/memory/test_hook_topic_prefilter.py` 仍引用）；
+> #7 仍为**产品决策**，修复批次只在 prompt 层写清三层 SQLite 与 `MEMORY.md` 的分工。
+
 | # | 位置 | 修复方向 |
 | --- | --- | --- |
 | 1 | `gateway_runtime.py:488` / `channels/*.py` / `repository.py` | 补齐 store 适配层：让 store 暴露 `search_semantic_scored` / `query_semantic` / `search_episodes` / `search_attachments`（或让 engine 持有 conn 并调模块函数） |
