@@ -1005,7 +1005,6 @@
     "memory": {
       "tabSemantic": "Bộ nhớ ngữ nghĩa",
       "tabEpisode": "Tập",
-      "tabScratchpad": "Bộ nhớ làm việc",
       "tabsLabel": "Mục bộ nhớ",
       "type": {
         "fact": "Sự thật",
@@ -1080,13 +1079,6 @@
       "retry": "Thử lại",
       "superseded": "đã thay thế",
       "errorContentRequired": "Nội dung là bắt buộc",
-      "fieldActiveProjects": "Dự án đang chạy",
-      "fieldOpenQuestions": "Câu hỏi đang mở",
-      "fieldNextSteps": "Bước tiếp theo",
-      "fieldCurrentFocus": "Tiêu điểm hiện tại",
-      "scratchpadHint": "Ghi chú được giữ cùng phiên",
-      "scratchpadPlaceholder": "## Dự án hiện tại\n- ...",
-      "scratchpadContent": "Nội dung (Markdown)",
       "metaLine": "{{type}} · {{priority}} · {{importance}}"
     }
   },

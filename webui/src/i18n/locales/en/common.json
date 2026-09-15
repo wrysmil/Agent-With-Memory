@@ -1005,7 +1005,6 @@
     "memory": {
       "tabSemantic": "Semantic memory",
       "tabEpisode": "Episodes",
-      "tabScratchpad": "Working memory",
       "tabsLabel": "Memory sections",
       "type": {
         "fact": "Fact",
@@ -1080,13 +1079,6 @@
       "retry": "Retry",
       "superseded": "superseded",
       "errorContentRequired": "Content is required",
-      "fieldActiveProjects": "Active projects",
-      "fieldOpenQuestions": "Open questions",
-      "fieldNextSteps": "Next steps",
-      "fieldCurrentFocus": "Current focus",
-      "scratchpadHint": "Notes kept alongside the session",
-      "scratchpadPlaceholder": "## Current project\n- ...",
-      "scratchpadContent": "Content (Markdown)",
       "metaLine": "{{type}} · {{priority}} · {{importance}}",
       "masterToggleTitle": "Memory auto extraction & retrieval",
       "masterToggleDescription": "When on, nanobot extracts facts from chats and retrieves relevant memories on the next turn. Hot-takes-effect — no restart needed.",

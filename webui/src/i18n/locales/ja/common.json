@@ -1005,7 +1005,6 @@
     "memory": {
       "tabSemantic": "セマンティック記憶",
       "tabEpisode": "エピソード",
-      "tabScratchpad": "作業記憶",
       "tabsLabel": "記憶セクション",
       "type": {
         "fact": "事実",
@@ -1080,13 +1079,6 @@
       "retry": "再試行",
       "superseded": "置き換え済み",
       "errorContentRequired": "内容は必須です",
-      "fieldActiveProjects": "進行中のプロジェクト",
-      "fieldOpenQuestions": "未解決の質問",
-      "fieldNextSteps": "次のステップ",
-      "fieldCurrentFocus": "現在の焦点",
-      "scratchpadHint": "セッションと一緒に保持されるメモ",
-      "scratchpadPlaceholder": "## 現在のプロジェクト\n- …",
-      "scratchpadContent": "内容（Markdown）",
       "metaLine": "{{type}} · {{priority}} · {{importance}}"
     }
   },

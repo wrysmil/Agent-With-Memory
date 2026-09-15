@@ -1005,7 +1005,6 @@
     "memory": {
       "tabSemantic": "Memori semantik",
       "tabEpisode": "Episode",
-      "tabScratchpad": "Memori kerja",
       "tabsLabel": "Bagian memori",
       "type": {
         "fact": "Fakta",
@@ -1080,13 +1079,6 @@
       "retry": "Coba lagi",
       "superseded": "digantikan",
       "errorContentRequired": "Konten wajib diisi",
-      "fieldActiveProjects": "Proyek aktif",
-      "fieldOpenQuestions": "Pertanyaan terbuka",
-      "fieldNextSteps": "Langkah berikutnya",
-      "fieldCurrentFocus": "Fokus saat ini",
-      "scratchpadHint": "Catatan yang menyertai sesi",
-      "scratchpadPlaceholder": "## Proyek saat ini\n- ...",
-      "scratchpadContent": "Konten (Markdown)",
       "metaLine": "{{type}} · {{priority}} · {{importance}}"
     }
   },
