@@ -292,6 +292,16 @@ def stats_payload(
     }
 
 
+def _vector_not_ready_reason(vector_runtime: Any) -> str:
+    """向量 store 未就绪时返回原因串；就绪或测试替身（无 state 属性）返回 ``""``。"""
+    state = getattr(vector_runtime, "state", None) or getattr(
+        vector_runtime, "vector_state", None
+    )
+    if state is None or str(state) == "ready":
+        return ""
+    return f"vector not ready: {state}"
+
+
 def reindex_vector(
     services: MemoryServices,
     *,
@@ -315,6 +325,11 @@ def reindex_vector(
         vector_runtime = get_active_store()
     if indexer is None:
         return {"available": False, "indexed": 0, "deleted": 0, "error": "vector disabled"}
+    not_ready = _vector_not_ready_reason(vector_runtime)
+    if not_ready:
+        # store 未就绪时 list_ids 返 []、upsert 静默返 False → 会报「0 改动」的
+        # **假成功**；用户无法区分「已一致」与「向量挂了」。显式报不可用。
+        return {"available": False, "indexed": 0, "deleted": 0, "error": not_ready}
     result = indexer.sync_from_sqlite()
     return {
         "available": True,
@@ -325,7 +340,12 @@ def reindex_vector(
     }
 
 
-def sync_vector(services: MemoryServices, *, indexer: Any = None) -> dict[str, Any]:
+def sync_vector(
+    services: MemoryServices,
+    *,
+    indexer: Any = None,
+    vector_runtime: Any = None,
+) -> dict[str, Any]:
     """增量对账（补 missing + 删 stale），不重建。
 
     未显式传 ``indexer`` 时 fallback 到 ``get_active_indexer()``；未启用向量时
@@ -333,8 +353,13 @@ def sync_vector(services: MemoryServices, *, indexer: Any = None) -> dict[str, A
     """
     if indexer is None:
         indexer = get_active_indexer()
+    if vector_runtime is None:
+        vector_runtime = get_active_store()
     if indexer is None:
         return {"available": False, "indexed": 0, "deleted": 0, "error": "vector disabled"}
+    not_ready = _vector_not_ready_reason(vector_runtime)
+    if not_ready:
+        return {"available": False, "indexed": 0, "deleted": 0, "error": not_ready}
     result = indexer.sync_from_sqlite()
     return {
         "available": True,

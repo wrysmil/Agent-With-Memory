@@ -65,6 +65,30 @@ def test_failed_state_sets_fixed_cooldown(tmp_path):
     assert s._cooldown_seconds == pytest.approx(300.0)
 
 
+def test_cooldown_expiry_triggers_reload(tmp_path, monkeypatch):
+    """D2：冷却到期后任一公开方法访问应重启后台加载（重试机制必须真的生效）。
+
+    回归锁定：`_ready()` 曾读 `self._settings.enabled` 而非 `self.enabled`，
+    导致 `enabled` 属性全仓无调用方、重试逻辑成为死代码——失败后永久停在
+    failed 直到进程重启。
+    """
+    s = VectorStore(_settings(), workspace=tmp_path)
+    s._mark_failed(RuntimeError("boom"), is_import_error=False)
+    assert s.state == "failed"
+
+    reloads: list[int] = []
+    monkeypatch.setattr(s, "_start_background_load", lambda: reloads.append(1))
+
+    # 冷却未到期 → 不重启
+    assert s.search("x") == []
+    assert reloads == []
+
+    # 冷却到期 → 触发重启
+    monkeypatch.setattr(s, "_cooldown_until", 0.0)
+    assert s.search("x") == []
+    assert reloads == [1]
+
+
 def test_import_error_uses_exponential_backoff_capped(tmp_path):
     """D2：ImportError 指数退避，3600 s 封顶。"""
     s = VectorStore(_settings(), workspace=tmp_path)

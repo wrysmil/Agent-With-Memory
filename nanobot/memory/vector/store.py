@@ -176,7 +176,11 @@ class VectorStore:
             return False
 
     def _ready(self) -> bool:
-        return self._settings.enabled and self._state == "ready"
+        # 必须读 self.enabled（而非 self._settings.enabled）：enabled 是**唯一**的
+        # 重试触发点——冷却到期且状态为 idle/failed 时会重启后台加载（D2）。
+        # 此前读 _settings.enabled，导致该属性全仓无调用方、重试机制实际失效，
+        # 向量层一旦失败便永久停在 failed 直到进程重启（D1/D2 未实现）。
+        return self.enabled and self._state == "ready"
 
     def upsert(self, memory_id: str, content: str, metadata: dict[str, Any]) -> bool:
         if not self._ready():

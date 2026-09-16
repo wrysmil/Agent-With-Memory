@@ -247,19 +247,14 @@ class MemoryDatabase:
                 item = payload.get("item")
                 if not isinstance(item, dict):
                     raise ValueError(f"fallback payload missing/invalid 'item': {path.name}")
+                indexed_memory = None
                 with self.connect() as conn:
                     if kind == "memory":
                         from nanobot.memory.models import Memory
 
                         memory = Memory.from_row(item)
                         add_memory(conn, memory)
-                        # 局部 import：避免核心安装经 vector 包拉入重依赖，
-                        # 且绕开 database <-> indexer 的模块级 import 环
-                        from nanobot.memory.vector.indexer import (
-                            index_memory_best_effort,
-                        )
-
-                        index_memory_best_effort(memory)
+                        indexed_memory = memory
                     elif kind == "episode":
                         from nanobot.memory.models import Episode
 
@@ -275,6 +270,16 @@ class MemoryDatabase:
                         update_memory_source_episode(conn, memory_id, episode_id)
                     else:
                         raise ValueError(f"unknown fallback kind: {kind!r}")
+                # 向量挂钩必须在 connect() **之外**调用：connect() 持非可重入锁，
+                # 持锁期间调 indexer（将来若触达 DB）会自死锁（WU-07 踩过的坑）。
+                # 局部 import：避免核心安装经 vector 包拉入重依赖，且绕开
+                # database <-> indexer 的模块级 import 环。
+                if indexed_memory is not None:
+                    from nanobot.memory.vector.indexer import (
+                        index_memory_best_effort,
+                    )
+
+                    index_memory_best_effort(indexed_memory)
                 path.unlink()
                 succeeded += 1
             except Exception as exc:  # noqa: BLE001 - 单文件失败隔离

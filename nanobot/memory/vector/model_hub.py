@@ -46,6 +46,25 @@ def _sync_hf_hub_endpoint(endpoint: str) -> None:
     )
 
 
+def _sync_hf_hub_download_timeout() -> None:
+    """**双写** HF 下载超时。
+
+    与 R-2 的 endpoint 同陷阱：``huggingface_hub.constants`` 在**导入时**读
+    ``HF_HUB_DOWNLOAD_TIMEOUT``，之后只改 ``os.environ`` 无效（恒为默认 10 s）。
+    须同时覆盖 ``constants`` 上的常量。已存在的 env 值优先（尊重显式配置）。
+    """
+    raw = os.environ.get("HF_HUB_DOWNLOAD_TIMEOUT") or str(_DOWNLOAD_TIMEOUT_SECONDS)
+    os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = raw
+    try:
+        from huggingface_hub import constants as hf_constants
+    except ImportError:
+        return
+    try:
+        hf_constants.HF_HUB_DOWNLOAD_TIMEOUT = float(raw)
+    except (TypeError, ValueError):
+        pass
+
+
 def apply_source_env(source: str) -> str | None:
     """按配置写入 endpoint 环境变量。"""
     if source == "auto":
@@ -96,10 +115,9 @@ def _download(model_name: str, source: str) -> str:
     from huggingface_hub import snapshot_download  # 延迟 import
 
     # snapshot_download 没有 timeout 形参（只有 etag_timeout）；下载超时须经
-    # HF_HUB_DOWNLOAD_TIMEOUT 环境变量设置。此前直接传 timeout= 会抛
-    # TypeError: unexpected keyword argument 'timeout'，导致 hf-mirror /
-    # huggingface 两源恒失败（只剩 modelscope），自动下载实际不可用。
-    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", str(_DOWNLOAD_TIMEOUT_SECONDS))
+    # HF_HUB_DOWNLOAD_TIMEOUT 生效，且必须双写 constants（见该 helper 说明）。
+    # 此前直接传 timeout= 会抛 TypeError，导致 hf-mirror / huggingface 两源恒失败。
+    _sync_hf_hub_download_timeout()
     return snapshot_download(repo_id=model_name)
 
 
