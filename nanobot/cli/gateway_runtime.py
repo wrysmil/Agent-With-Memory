@@ -541,6 +541,25 @@ def _run_gateway(
     def _schedule_webui_background(awaitable: Awaitable[None]) -> None:
         agent.schedule_background(cast(Coroutine[Any, Any, None], awaitable))
 
+    # 启动对账：向量写入是异步/可失败的，新记忆会被静默漏掉（spec §3.2）。
+    # 放在后台，绝不阻塞启动（D6）。定义须在 _schedule_webui_background 之后。
+    if _vector_indexer is not None and _vector_settings.sync_on_startup:
+        _startup_indexer = _vector_indexer
+
+        def _startup_vector_sync() -> None:
+            try:
+                result = _startup_indexer.sync_from_sqlite()
+                logger.info(
+                    "vector startup sync: indexed={} deleted={} error={}",
+                    result.get("indexed"),
+                    result.get("deleted"),
+                    result.get("error"),
+                )
+            except Exception as exc:  # noqa: BLE001 - 对账失败不影响启动
+                logger.warning("vector startup sync failed: {}", exc)
+
+        _schedule_webui_background(asyncio.to_thread(_startup_vector_sync))
+
     webui_turn_coordinator = WebuiTurnCoordinator(
         bus=bus,
         sessions=session_manager,
