@@ -10,10 +10,15 @@
 
 本模块是二者之间**唯一**的适配点：对外暴露通道期望的 4 个方法，对内按调用
 粒度开关 ``MemoryDatabase.connect()``，复用 repository 的既有 SQL。
+
+语义方法（``search_semantic_scored``）自 2026-09-16 起做**向量 ∪ FTS5 最高分
+并集**（spec §4.6）：传入 ``vector_store`` 时两路各取 ``limit*3`` 候选按 id 融合，
+不传时行为与改造前完全一致（R2 向后兼容）。
 """
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 from typing import Any
 
 from loguru import logger
@@ -28,6 +33,7 @@ class MemoryStoreAdapter:
     方法契约（与 ``nanobot/memory/retrieval/channels/*.py`` 调用点对应）：
 
     - ``search_semantic_scored(query, *, limit) -> list[(Memory, float)]``
+      向量 ∪ FTS5 最高分并集（需注入 ``vector_store``；未注入 = 纯 FTS5，行为不变）
     - ``search_episodes(*, entity, limit) -> list[_EpisodeRow]``
     - ``query_semantic(*, min_importance, since_days, limit) -> list[_MemoryRow]``
     - ``search_attachments(term, *, intent, limit) -> list[_AttachmentRow]``
@@ -40,16 +46,62 @@ class MemoryStoreAdapter:
     本类与它实现同一方法集（``_StubStore`` 的 attachments 同样返回 ``list[Any]``）。
     """
 
-    def __init__(self, database: MemoryDatabase) -> None:
+    def __init__(
+        self, database: MemoryDatabase, *, vector_store: Any = None
+    ) -> None:
         self._database = database
+        self._vector_store = vector_store
 
     # ----- 语义通道 -----
     def search_semantic_scored(
         self, query: str, *, limit: int = 30
     ) -> list[tuple[Any, float]]:
-        """语义召回：委托 ``repository.search_semantic_scored``。"""
+        """语义召回：向量 ∪ FTS5，按 id 取**最高分**（spec §4.6）。
+
+        融合策略 v1 = 取最高分并集（与 openakita 一致，便于对照排障）。
+        🔴 两侧分数都**已经**是「越大越相关」：FTS5 侧由 Task 9 的页内归一化
+        保证，向量侧由 ``VectorStore._distance_to_score`` 完成符号翻转。
+        本函数**不得**再引入任何 distance 语义。
+
+        已知限制（v1，spec §8.1 R-4）：两路的分数分布不同源，直接比大小理论上
+        不可校准。实测见 V4；v2 备选 RRF。
+        """
+        merged: dict[str, float] = {}
+
+        fts5_hits: list[tuple[Any, float]] = []
         with self._database.connect() as conn:
-            return repository.search_semantic_scored(conn, query, limit=limit)
+            fts5_hits = repository.search_semantic_scored(conn, query, limit=limit * 3)
+        for mem, score in fts5_hits:
+            merged[mem.id] = max(merged.get(mem.id, 0.0), float(score))
+
+        # 向量路：故障时静默降级为纯 FTS5（D4）。
+        # VectorStore.search 自身已有 try/except；此处再包一层是因为 Adapter 是
+        # 契约边界，不应假设任何实现的异常纪律。
+        if self._vector_store is not None:
+            try:
+                vector_hits = self._vector_store.search(query, limit=limit * 3)
+            except Exception as exc:  # noqa: BLE001 - 向量故障绝不上抛
+                logger.warning("vector channel failed, degrading to fts5: {}", exc)
+                vector_hits = []
+            for mid, score in vector_hits:
+                merged[str(mid)] = max(merged.get(str(mid), 0.0), float(score))
+
+        ordered = sorted(merged.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+
+        out: list[tuple[Any, float]] = []
+        fts5_by_id = {mem.id: mem for mem, _s in fts5_hits}
+        with self._database.connect() as conn:
+            for mid, score in ordered:
+                mem = fts5_by_id.get(mid)
+                if mem is None:
+                    # 向量独有 id：回查 SQLite 权威行并做活性过滤（修正 3）。
+                    # FTS5 侧的结果已来自 SQLite，不做重复校验，避免对既有
+                    # FTS5 行为引入回归。
+                    mem = repository.get_memory(conn, mid)
+                    if mem is None or not _is_live(mem):
+                        continue
+                out.append((mem, score))
+        return out
 
     # ----- 情节通道 -----
     def search_episodes(self, *, entity: str, limit: int = 5) -> list[Any]:
@@ -102,3 +154,22 @@ class MemoryStoreAdapter:
         except sqlite3.OperationalError as exc:
             logger.debug("attachments channel unavailable: {}", exc)
             return []
+
+
+def _is_live(memory: Any) -> bool:
+    """向量独有候选的活性判定（spec §4.6）。
+
+    Chroma 的 ``where`` 表达力不足，scope / superseded / expired 三类校验只能
+    在 SQLite 侧做。
+    """
+    if getattr(memory, "superseded_by", None):
+        return False
+    expires_at = getattr(memory, "expires_at", None)
+    if expires_at:
+        try:
+            if datetime.fromisoformat(str(expires_at)) < datetime.now(timezone.utc):
+                return False
+        except (ValueError, TypeError):
+            # 无法解析的 expires_at 视为未过期（宽松），避免误杀
+            pass
+    return True
