@@ -89,6 +89,13 @@ pdf = [
 olostep = [
     "olostep>=0.1.0; python_version < '3.14'",
 ]
+vector = [
+    # CPU-only torch：必须走 PyTorch 官方 index，否则 Windows 默认拉 CUDA wheel
+    # （约 2.5 GB）。openakita 的「2500MB 可选模块」声明即因此产生。
+    "torch>=2.2,<3.0",
+    "chromadb>=1.0,<2.0",
+    "sentence-transformers>=3.0,<7.0",
+]
 dev = [
     "pytest>=9.0.0,<10.0.0",
     "pytest-asyncio>=1.3.0,<2.0.0",
@@ -196,3 +203,11 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
