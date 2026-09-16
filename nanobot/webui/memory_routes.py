@@ -50,6 +50,8 @@ class MemorySettingsOperations:
     update_episode: Callable[..., dict[str, Any]]
     delete_episode: Callable[[str], dict[str, Any]]
     save_scratchpad: Callable[..., dict[str, Any]]
+    reindex_vector: Callable[[], dict[str, Any]]
+    sync_vector: Callable[[], dict[str, Any]]
 
 
 # Canonical set of actions this domain understands; the settings router uses
@@ -59,6 +61,7 @@ MEMORY_ACTION_NAMES = frozenset({
     "memory-create", "memory-update", "memory-delete",
     "episode-list", "episode-get", "episode-update", "episode-delete",
     "scratchpad-get", "scratchpad-save",
+    "vector-reindex", "vector-sync",
 })
 
 
@@ -115,6 +118,12 @@ def dispatch(
 
     if action == "memory-stats":
         return operations.fetch_stats()
+
+    if action == "vector-reindex":
+        return operations.reindex_vector()
+
+    if action == "vector-sync":
+        return operations.sync_vector()
 
     if action == "episode-list":
         return operations.list_episodes(

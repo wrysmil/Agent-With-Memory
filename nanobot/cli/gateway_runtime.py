@@ -37,6 +37,8 @@ from nanobot.config.schema import Config
 from nanobot.agent.loop import _MEMORY_WORKSPACE_ID
 from nanobot.memory.retrieval import RetrievalEngine
 from nanobot.memory.retrieval.store_adapter import MemoryStoreAdapter
+from nanobot.memory.vector.indexer import MemoryIndexer, set_active_indexer
+from nanobot.memory.vector.store import VectorStore
 from nanobot.webui.memory_services import MemoryServices
 from nanobot.gateway.runtime import GatewayInstance
 from nanobot.security.network import is_loopback_host
@@ -486,10 +488,26 @@ def _run_gateway(
     _memory_services = MemoryServices.for_workspace(
         _MEMORY_WORKSPACE_ID, config.workspace_path,
     )
+    # 向量层：默认 search_backend="fts5" → VectorSettings.enabled=False →
+    # 不建目录、不起线程、不联网（D5）。启用时才构造 store。
+    _vector_settings = config.agents.defaults.memory_vector.to_vector_settings(
+        enabled=(config.agents.defaults.memory_search_backend == "chromadb")
+    )
+    _vector_store = VectorStore(_vector_settings, workspace=config.workspace_path)
+    _vector_indexer = (
+        MemoryIndexer(_vector_store, _memory_services.database)
+        if _vector_settings.enabled
+        else None
+    )
+    # 进程级注册（与 WU-08 写路径钩子同构）：WebUI 的 stats/reindex/sync
+    # 未显式传参时 fallback 到这里读取，规避逐层透传与双 VectorStore 撞锁。
+    set_active_indexer(_vector_indexer)
     # RCA 2026-09-15 根因 1：store 必须是 MemoryStoreAdapter（通道期望的是
     # **方法**契约），不能直接传 MemoryDatabase（它只有 connect/schema 方法）。
     _retrieval_engine = RetrievalEngine(
-        store=MemoryStoreAdapter(_memory_services.database),
+        store=MemoryStoreAdapter(
+            _memory_services.database, vector_store=_vector_store
+        ),
         brain=None,
     )
 

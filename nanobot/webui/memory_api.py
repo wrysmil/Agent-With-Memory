@@ -44,6 +44,8 @@ from nanobot.memory.repository import (
     update_memory as _repo_update_memory,
 )
 from nanobot.memory.vector.indexer import (
+    get_active_indexer,
+    get_active_store,
     index_memory_best_effort,
     remove_memory_best_effort,
 )
@@ -233,8 +235,22 @@ def scratchpad_payload(
     return {"scratchpad": scratchpad_payload_from_entry(row)}
 
 
-def stats_payload(services: MemoryServices) -> dict[str, Any]:
-    """Aggregate counts by memory type for the current workspace."""
+def stats_payload(
+    services: MemoryServices,
+    *,
+    vector_runtime: Any = None,
+) -> dict[str, Any]:
+    """Aggregate counts by memory type + 向量层状态（spec §5.4）。
+
+    向量状态必须可见：openakita 把它完全藏在 UI 之外，降级时用户零感知
+    （调研文档 §8.2 的反面教材）。``vector_runtime`` 是 ``VectorStore`` 或
+    ``None``；未显式传参时 fallback 到进程级 ``get_active_store()``（与 WU-08
+    写路径钩子同构，规避逐层透传）。传 ``None`` 时新字段仍全部存在，只是显示
+    为不可用——**字段集恒定**，避免前端做存在性判断。
+    """
+    if vector_runtime is None:
+        vector_runtime = get_active_store()
+
     counters: dict[str, int] = {t.value: 0 for t in MemoryType}
     total = 0
     with services.database.connect() as conn:
@@ -242,7 +258,90 @@ def stats_payload(services: MemoryServices) -> dict[str, Any]:
     for r in rows:
         counters[r.type.value] = counters.get(r.type.value, 0) + 1
         total += 1
-    return {"total": total, "by_type": counters}
+
+    if vector_runtime is None:
+        return {
+            "total": total,
+            "by_type": counters,
+            "search_backend": "fts5",
+            "vector_available": False,
+            "vector_state": "disabled",
+            "vector_count": 0,
+            "vector_model": "",
+            "vector_dimensions": 0,
+            "vector_error": None,
+        }
+
+    # 兼容测试替身（提供 vector_state / search_backend）与生产 VectorStore
+    # （只有 state、无 search_backend）：优先读专有字段，缺失时回退。
+    state = str(
+        getattr(vector_runtime, "vector_state", None)
+        or getattr(vector_runtime, "state", "")
+        or "unknown"
+    )
+    return {
+        "total": total,
+        "by_type": counters,
+        "search_backend": str(getattr(vector_runtime, "search_backend", None) or "chromadb"),
+        "vector_available": state == "ready",
+        "vector_state": state,
+        "vector_count": int(getattr(vector_runtime, "count", lambda: 0)()),
+        "vector_model": str(getattr(vector_runtime, "model_name", "")),
+        "vector_dimensions": int(getattr(vector_runtime, "dimensions", 0)),
+        "vector_error": getattr(vector_runtime, "error", None),
+    }
+
+
+def reindex_vector(
+    services: MemoryServices,
+    *,
+    indexer: Any = None,
+    vector_runtime: Any = None,
+) -> dict[str, Any]:
+    """全量重建向量索引（spec §5.4）。
+
+    ``sync_from_sqlite`` 本身就是双向修复（补 missing + 删 stale），因此「重建」
+    与「同步」在实现上是同一操作；差别只在**语义契约**：``reindex`` 承诺
+    「调用后索引与 SQLite 一致」，``sync`` 承诺「增量对账」。保留两个端点是为了
+    让运维意图显式，且 openakita **没有**任何手动重建入口（调研文档 §9 末）。
+
+    未显式传 ``indexer`` / ``vector_runtime`` 时 fallback 到进程级单例
+    （``get_active_indexer`` / ``get_active_store``）。向量未启用时两者皆
+    ``None``，端点返回明确的不可用信号而非 500。
+    """
+    if indexer is None:
+        indexer = get_active_indexer()
+    if vector_runtime is None:
+        vector_runtime = get_active_store()
+    if indexer is None:
+        return {"available": False, "indexed": 0, "deleted": 0, "error": "vector disabled"}
+    result = indexer.sync_from_sqlite()
+    return {
+        "available": True,
+        "indexed": int(result.get("indexed", 0)),
+        "deleted": int(result.get("deleted", 0)),
+        "error": result.get("error", ""),
+        "vector_count": int(getattr(vector_runtime, "count", lambda: 0)()),
+    }
+
+
+def sync_vector(services: MemoryServices, *, indexer: Any = None) -> dict[str, Any]:
+    """增量对账（补 missing + 删 stale），不重建。
+
+    未显式传 ``indexer`` 时 fallback 到 ``get_active_indexer()``；未启用向量时
+    返回明确的不可用信号而非 500。
+    """
+    if indexer is None:
+        indexer = get_active_indexer()
+    if indexer is None:
+        return {"available": False, "indexed": 0, "deleted": 0, "error": "vector disabled"}
+    result = indexer.sync_from_sqlite()
+    return {
+        "available": True,
+        "indexed": int(result.get("indexed", 0)),
+        "deleted": int(result.get("deleted", 0)),
+        "error": result.get("error", ""),
+    }
 
 
 # ---- write actions ----------------------------------------------------------

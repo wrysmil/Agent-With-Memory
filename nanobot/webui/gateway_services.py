@@ -75,6 +75,11 @@ def build_memory_operations(
         update_episode=partial(memory_api.update_episode, services),
         delete_episode=partial(memory_api.delete_episode, services),
         save_scratchpad=partial(memory_api.save_scratchpad, services),
+        # reindex/sync 不注入 indexer/vector_runtime：由 memory_api 内部 fallback
+        # 到进程级单例（get_active_indexer / get_active_store），与写路径钩子同构，
+        # 规避双 VectorStore 撞 ChromaDB 内部 sqlite 锁。
+        reindex_vector=partial(memory_api.reindex_vector, services),
+        sync_vector=partial(memory_api.sync_vector, services),
     )
 
 

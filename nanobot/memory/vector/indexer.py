@@ -35,6 +35,12 @@ def get_active_indexer() -> "MemoryIndexer | None":
     return _ACTIVE_INDEXER
 
 
+def get_active_store():
+    """进程级 indexer 背后的 store（VectorStore）；无 indexer 时返回 None。供 stats 读取向量状态。"""
+    indexer = _ACTIVE_INDEXER
+    return getattr(indexer, "_store", None) if indexer is not None else None
+
+
 def index_memory_best_effort(memory: Memory) -> None:
     """写路径钩子：**绝不抛出**。
 

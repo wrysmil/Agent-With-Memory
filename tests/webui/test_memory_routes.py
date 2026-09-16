@@ -51,6 +51,9 @@ def operations(services: MemoryServices) -> MemorySettingsOperations:
         update_episode=partial(memory_api.update_episode, services),
         delete_episode=partial(memory_api.delete_episode, services),
         save_scratchpad=partial(memory_api.save_scratchpad, services),
+        # reindex/sync 不注入依赖：走 memory_api 内部进程级 fallback，与生产同构。
+        reindex_vector=partial(memory_api.reindex_vector, services),
+        sync_vector=partial(memory_api.sync_vector, services),
     )
 
 

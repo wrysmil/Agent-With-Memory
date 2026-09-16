@@ -158,6 +158,8 @@ _SYSTEM_ROUTES = {
     "/api/settings/memory/scratchpad": "scratchpad-get",
     "/api/settings/memory/scratchpad/save": "scratchpad-save",
     "/api/settings/memory/stats": "memory-stats",
+    "/api/settings/memory/vector/reindex": "vector-reindex",
+    "/api/settings/memory/vector/sync": "vector-sync",
     **{
         path: f"mcp-{action}"
         for path, action in _MCP_PRESET_ACTIONS_BY_PATH.items()
@@ -171,6 +173,8 @@ _MEMORY_MUTATION_PATHS = frozenset({
     "/api/settings/memory/episodes/update",
     "/api/settings/memory/episodes/delete",
     "/api/settings/memory/scratchpad/save",
+    "/api/settings/memory/vector/reindex",
+    "/api/settings/memory/vector/sync",
 })
 
 _SETTINGS_MUTATION_PATHS = frozenset({
@@ -256,6 +260,8 @@ def _null_memory_operations() -> MemorySettingsOperations:
         update_episode=_unavailable,
         delete_episode=_unavailable,
         save_scratchpad=_unavailable,
+        reindex_vector=_unavailable,
+        sync_vector=_unavailable,
     )
 
 
