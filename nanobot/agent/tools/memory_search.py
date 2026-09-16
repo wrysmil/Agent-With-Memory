@@ -15,6 +15,7 @@ from nanobot.agent.tools.schema import IntegerSchema, StringSchema, tool_paramet
 
 if TYPE_CHECKING:
     from nanobot.memory.retrieval import RetrievalEngine
+    from nanobot.session.manager import SessionManager
 
 
 @tool_parameters(
@@ -54,8 +55,16 @@ class MemorySearchTool(Tool):
     def __init__(
         self,
         retrieval_engine_provider: Callable[[], "RetrievalEngine | None"],
+        sessions: "SessionManager | None" = None,
     ) -> None:
         self._get_engine = retrieval_engine_provider
+        # RCA 2026-09-15 根因 3：此前 ``execute`` 里判断的是
+        # ``hasattr(self, "_sessions")``，但全仓库没有任何代码给该工具实例注入
+        # ``_sessions``（实测 instance dict keys == ['_get_engine']）→ 该分支恒
+        # False → ``recent`` 恒为 ``[]``，工具拿不到会话上下文，随之撞上根因 2 的
+        # ``short_without_context`` 门禁。改为在 ``create`` 阶段经
+        # ``ToolContext.sessions`` 注入，与 ``long_task.py::_GoalToolsMixin`` 同模式。
+        self._sessions = sessions
 
     @classmethod
     def create(cls, ctx: ToolContext) -> Tool:
@@ -65,7 +74,10 @@ class MemorySearchTool(Tool):
             attrs = getattr(ctx, "attributes", {})
             return attrs.get("retrieval_engine")
 
-        return cls(retrieval_engine_provider=provider)
+        return cls(
+            retrieval_engine_provider=provider,
+            sessions=getattr(ctx, "sessions", None),
+        )
 
     @classmethod
     def enabled(cls, ctx: ToolContext) -> bool:
@@ -79,7 +91,7 @@ class MemorySearchTool(Tool):
 
         recent: list[dict[str, Any]] = []
         session_key = current_request_session_key()
-        if session_key and hasattr(self, "_sessions"):
+        if session_key and self._sessions is not None:
             session = self._sessions.get_cached(session_key)
             if session is not None:
                 recent = session.messages[-10:]  # last 10 messages as context

@@ -17,6 +17,8 @@ import json
 import sqlite3
 from typing import Any, Literal
 
+from loguru import logger
+
 from nanobot.memory.models import (
     Episode,
     EpisodeOutcome,
@@ -492,6 +494,108 @@ def search_memories(
         f"WHERE {where} "
         f"ORDER BY rank, m.importance_score DESC{limit_sql}"
     )
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    except sqlite3.OperationalError as exc:
+        # FTS5 语法错误（query 含引号 / 连字符 / 未闭合短语等）不应让整条召回
+        # 失败——与 search_backend.Fts5SearchBackend._try_fts5 同策略。
+        #
+        # 安全审查 M-1（2026-09-15）：原实现无条件吞掉**所有** OperationalError，
+        # 会把「表缺失 / database is locked / disk I/O error / readonly / no such
+        # column」这类**真实故障**也静默降级成全表 LIKE —— 正是 ``episodes.updated_at``
+        # 列名错误得以长期隐藏的机制。现按消息特征区分：查询语法类属预期输入
+        # （debug），其余类型升级为 warning（仍继续走 LIKE 回退，不改变召回契约）。
+        # 注意 ``no such column`` **不**算语法类：它是 schema 缺陷，必须告警。
+        #
+        # 安全审查 M-2：不落 query 原文（PII at rest），只记长度。
+        if _is_fts_syntax_error(exc):
+            logger.debug(
+                "FTS5 MATCH syntax error (query length {}): {}", len(query), exc
+            )
+        else:
+            logger.warning(
+                "FTS5 MATCH failed, falling back to LIKE (query length {}): {}",
+                len(query),
+                exc,
+            )
+        rows = []
+    if rows:
+        return [_row_to_memory(r) for r in rows]
+    # 中文子串回退（RCA 2026-09-15 根因 5）：memories_fts 用
+    # tokenize='unicode61'，连续 CJK 被切成一个整 token，因此「创作」永远匹配
+    # 不到 content 里的「用户热爱创作，…」。无此回退时中文查询恒空。
+    return _search_memories_like(
+        conn, query, type=type, workspace_id=workspace_id, limit=limit
+    )
+
+
+def _escape_like(value: str) -> str:
+    """转义 LIKE 元字符（``%`` ``_`` ``\\``），避免 query 语义被通配符劫持。
+
+    不转义时 ``search_memories(conn, "_")`` 会命中**整张表**（模式 ``%_%``
+    等价于「任意非空串」），把子串回退退化成全表返回。反斜杠必须最先替换，
+    否则会把后续插入的转义符二次转义。
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+# FTS5 查询**语法**类错误的特征子串（小写匹配）。命中 → 视为预期输入（debug）；
+# 未命中 → 视为库级故障（warning）。``no such column`` 刻意**不**在此列：它是
+# schema 缺陷而非查询语法问题，必须告警（``episodes.updated_at`` 之鉴）。
+_FTS_SYNTAX_MARKERS = (
+    "fts5: syntax error",
+    "unterminated string",
+    "unknown special query",
+    "phrase queries are not supported",
+    "no such cursor",
+)
+
+
+def _is_fts_syntax_error(exc: sqlite3.OperationalError) -> bool:
+    """区分「FTS5 查询语法问题」（预期输入）与「库级故障」（需告警）。"""
+    message = str(exc).lower()
+    return any(marker in message for marker in _FTS_SYNTAX_MARKERS)
+
+
+def _search_memories_like(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    type: MemoryType | None,
+    workspace_id: str | None,
+    limit: int | None,
+) -> list[Memory]:
+    """FTS5 零结果 / 语法错误时的 ``LIKE %query%`` 子串回退。
+
+    为什么必需：``memories_fts`` 使用 ``tokenize='unicode61 remove_diacritics 2'``
+    （``database.py`` §memories_fts），对连续 CJK 不做分词，整串是一个 token。
+    因此任何**中文子串**查询（「创作」「记忆」）都命中不了 FTS5。
+    排序与 ``search_backend.Fts5SearchBackend._fallback_like`` 一致
+    （``ORDER BY importance_score DESC``）。
+
+    已知不完整（非回归，2026-09-15 审查记录）：调用方 ``search_memories`` 只在
+    FTS **零命中**时才走这里，因此「query 是 A 行的整 token、同时又是 B 行 content
+    的子串」时 B 行不会入选（删除无关的 A 行反而会让 B 行出现）。彻底修需要把
+    FTS 与 LIKE 两段 SELECT 用 ``UNION`` 合并并定义去重/排序语义，属独立改动。
+
+    与 ``_fallback_like`` 的唯一差异：本函数转义 LIKE 元字符（见 ``_escape_like``），
+    且额外支持 ``type`` / ``workspace_id`` 过滤。
+    """
+    flat = " ".join(_SELECT_MEMORY_COLUMNS.split())
+    clauses = ["content LIKE ? ESCAPE '\\'"]
+    params: list[Any] = [f"%{_escape_like(query)}%"]
+    if type is not None:
+        clauses.append("type = ?")
+        params.append(type.value)
+    if workspace_id is not None:
+        clauses.append("workspace_id = ?")
+        params.append(workspace_id)
+    where = " AND ".join(clauses)
+    limit_sql = f" LIMIT {int(limit)}" if limit is not None else ""
+    sql = (
+        f"SELECT {flat} FROM memories WHERE {where} "
+        f"ORDER BY importance_score DESC{limit_sql}"
+    )
     rows = conn.execute(sql, params).fetchall()
     return [_row_to_memory(r) for r in rows]
 
@@ -613,12 +717,25 @@ def search_episodes(
     """按实体名 LIKE 模糊匹配 episodes 表。
 
     真实 FTS5 关联属于未来增强（不在本 plan 范围）；最小实现用 LIKE 兜底。
+
+    列名修正（2026-09-15，与 RCA 根因 1 同族）：原实现选 ``updated_at``，但
+    ``episodes`` 表自 schema v1 起就没有该列（只有 ``started_at`` / ``ended_at``），
+    因此**每次调用**都抛 ``no such column: updated_at``。之所以从未暴露：episodes
+    通道仅在 query 含路径/扩展名实体时才走到这里（``channels/episodes.py:34``），
+    普通 query 直接返回 ``[]``，计数器显示的「OK n=0」从未真正执行 SQL。
+    改用 ``ended_at`` 作为时间戳，``_EpisodeRow.updated_at`` 字段名保持不变
+    （那是通道 ``compute_recency`` 依赖的契约）。
+
+    安全审查 M-4（2026-09-15）：本函数同样要转义 LIKE 元字符。``entity`` 由
+    ``channels/episodes.py`` 的正则抽取，``_`` 属 ``\\w`` 可通过，未转义时
+    entity ``a_c.py`` 会命中 ``abc.py`` / ``aXc.py``（过召回，非注入）。
     """
+    pattern = f"%{_escape_like(entity)}%"
     cur = conn.execute(
-        "SELECT id, summary, updated_at FROM episodes "
-        "WHERE summary LIKE ? OR session_id LIKE ? "
+        "SELECT id, summary, ended_at FROM episodes "
+        "WHERE summary LIKE ? ESCAPE '\\' OR session_id LIKE ? ESCAPE '\\' "
         "LIMIT ?",
-        (f"%{entity}%", f"%{entity}%", limit),
+        (pattern, pattern, limit),
     )
     return [
         _EpisodeRow(id=row[0], summary=row[1], updated_at=row[2])
@@ -637,10 +754,19 @@ def query_semantic(
     from datetime import datetime, timedelta, timezone
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+    # 时间比较**不能**直接比 TEXT：生产写入点（``extractor.py:1459``、
+    # ``webui/memory_api.py:268``、``update_memory``）都走 ``isoformat()``，即
+    # ``'T'`` 分隔；而把 ``datetime`` 对象直接绑进 SQLite 时（sqlite3 自 3.12 起
+    # 已弃用该隐式适配器）落库为**空格分隔**的 'YYYY-MM-DD HH:MM:SS.ffffff+00:00'。
+    # 两种格式混存时字符串比较会失准：日期相同时按第 10 位判大小，
+    # ``' '(0x20) < 'T'(0x54)`` → 空格分隔的**当日**记录被整批判为更早而排除。
+    # ``datetime()`` 把两侧都归一后再比，对两种格式与 ``+00:00`` 偏移都成立，
+    # 使查询不再耦合于存储端的文本格式（实测 sqlite 3.52；EXPLAIN QUERY PLAN 与
+    # 旧写法一致，仍走 idx_memories_importance）。
     cur = conn.execute(
         "SELECT id, content, importance_score, updated_at, access_count "
         "FROM memories "
-        "WHERE importance_score >= ? AND updated_at >= ? "
+        "WHERE importance_score >= ? AND datetime(updated_at) >= datetime(?) "
         "ORDER BY importance_score DESC LIMIT ?",
         (min_importance, cutoff.isoformat(), limit),
     )

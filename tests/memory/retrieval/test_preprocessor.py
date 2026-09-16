@@ -3,11 +3,18 @@ from __future__ import annotations
 
 import pytest
 
-from nanobot.memory.retrieval.preprocessor import MemoryQueryPreprocessor
+from nanobot.memory.retrieval.preprocessor import (
+    _MEMORY_INTENT_HINTS,
+    MemoryQueryPreprocessor,
+)
 
 
 class TestGate:
-    """Gate conditions: empty / control_only / too_short / short_without_context."""
+    """Gate conditions: empty / control_only / too_short.
+
+    注：``short_without_context`` 分支已于 2026-09-15 删除（代码审查 I-1），
+    见 ``test_short_message_without_context_is_not_skipped``。
+    """
 
     @pytest.mark.parametrize("text", ["", "   ", None])
     def test_should_skip_empty(self, text):
@@ -27,11 +34,15 @@ class TestGate:
         assert skip is True
         assert reason == "too_short"
 
-    def test_should_skip_short_without_context(self):
-        """12-char Chinese phrase without context triggers skip."""
+    def test_short_message_without_context_is_not_skipped(self):
+        """首轮无历史时，正常短消息**不应**被跳过（RCA 根因 2）。
+
+        原 ``short_without_context`` 分支已删除：``recent_messages`` 在会话首轮
+        必然为空（``loop.py`` 传 ``list(ctx.history)``），拿「无历史」当跳过依据
+        会让每条会话的第一条消息永远不检索——正是用户报告的症状。
+        """
         skip, reason = MemoryQueryPreprocessor.should_skip_retrieval("明天天气怎么样", [])
-        assert skip is True
-        assert reason == "short_without_context"
+        assert skip is False, f"首轮短消息被误杀：{reason}"
 
     def test_should_pass_with_context(self):
         """Rich query with prior messages should NOT skip."""
@@ -55,6 +66,45 @@ class TestGate:
         )
         assert skip is False
         assert reason == ""
+
+    @pytest.mark.parametrize(
+        "text",
+        ["查一下我的记忆", "我的偏好是什么", "上次说过什么", "你记得吗"],
+    )
+    def test_should_pass_short_memory_intent_without_context(self, text):
+        """首轮无历史时，含记忆意图关键词的短消息不应被跳过（RCA 根因 2）。"""
+        skip, reason = MemoryQueryPreprocessor.should_skip_retrieval(text, [])
+        assert skip is False, f"{text!r} 被误杀：{reason}"
+
+    def test_should_still_skip_too_short_plain_text(self):
+        """门禁未被整体废掉：≤3 字的纯寒暄/无语义文本仍跳过。"""
+        for text in ("hi", "嗯嗯", "哈喽"):
+            skip, reason = MemoryQueryPreprocessor.should_skip_retrieval(text, [])
+            assert skip is True, f"{text!r} 应被跳过但未跳过"
+            assert reason == "too_short"
+
+    def test_control_only_still_skipped(self):
+        """控制词整类仍跳过。"""
+        for text in ("好", "嗯", "ok", "继续", "收到"):
+            skip, reason = MemoryQueryPreprocessor.should_skip_retrieval(text, [])
+            assert skip is True
+            assert reason == "control_only"
+
+    @pytest.mark.parametrize("text", ["记忆", "偏好", "记得"])
+    def test_two_char_memory_anchors_still_retrieve(self, text):
+        """≤3 字的记忆锚点必须放行——``memory_search`` 工具常传这类短词。"""
+        skip, _ = MemoryQueryPreprocessor.should_skip_retrieval(text, [])
+        assert skip is False
+
+    @pytest.mark.parametrize("text", ["我的天哪", "个人觉得还行", "习惯就好"])
+    def test_weak_pronoun_words_are_not_memory_intent(self, text):
+        """2026-09-15 审查 I-1：所有格/口语词不再被当作记忆意图锚点。
+
+        这些词在 >3 字路径上本就由「短消息不跳过」覆盖，故这里断言的是
+        ``_MEMORY_INTENT_HINTS`` 已收窄为强锚点——避免它们被当作「记忆锚点」
+        而在 ≤3 字路径上误放行（如「我的」+1 字）。
+        """
+        assert not any(h in text for h in _MEMORY_INTENT_HINTS)
 
 
 class TestAntiInjection:
