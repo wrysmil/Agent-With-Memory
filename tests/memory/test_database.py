@@ -94,7 +94,7 @@ class TestSchema:
             ver = conn.execute(
                 "SELECT value FROM _schema_meta WHERE key='version'"
             ).fetchone()[0]
-        assert ver == '1'
+        assert ver == '2'
 
     def test_init_schema_is_idempotent(self, workspace: Path):
         db = MemoryDatabase(workspace)
@@ -139,7 +139,7 @@ class TestSchema:
                 "SELECT value FROM _schema_meta WHERE key='version'"
             ).fetchall()
             raw.commit()
-            assert rows and rows[0][0] == "1", "_schema_meta 应保持 v1 状态"
+            assert rows and rows[0][0] == "2", "_schema_meta 应升至 v2"
         # 关闭旧连接
         del db
 

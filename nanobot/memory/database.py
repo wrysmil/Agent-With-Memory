@@ -17,7 +17,7 @@ from nanobot.memory.repository import (
     update_memory_source_episode,
 )
 
-_SCHEMA_VERSION = "1"
+_SCHEMA_VERSION = "2"
 
 _SCHEMA_STATEMENTS = [
     # ----- _schema_meta -----
@@ -146,6 +146,19 @@ _SCHEMA_STATEMENTS = [
         last_source      TEXT    NOT NULL,
         last_extracted_at TEXT   NOT NULL,
         updated_at       TEXT    NOT NULL
+    )
+    """,
+    # ----- vector_sync_state -----
+    # 向量索引增量同步游标（spec §5.2 Q2 选新表）。单行表：id 恒为 1。
+    # 表名 vector_sync_state 已在全仓库 grep 过，无冲突。
+    """
+    CREATE TABLE IF NOT EXISTS vector_sync_state (
+        id           INTEGER PRIMARY KEY CHECK (id = 1),
+        cursor       TEXT    NOT NULL DEFAULT '',
+        indexed      INTEGER NOT NULL DEFAULT 0,
+        deleted      INTEGER NOT NULL DEFAULT 0,
+        last_error   TEXT    NOT NULL DEFAULT '',
+        updated_at   TEXT    NOT NULL
     )
     """,
 ]

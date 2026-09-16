@@ -838,3 +838,61 @@ class _AttachmentRow:
     content: str = ""
     updated_at: str = ""
     importance_score: float = 0.5
+
+
+# ---------- vector_sync_state ----------
+# Q2 选新表（database.py § vector_sync_state）。单行表，id 恒为 1。
+
+
+@dataclass
+class VectorSyncState:
+    """``vector_sync_state`` 单行表映射。"""
+
+    cursor: str
+    indexed: int
+    deleted: int
+    last_error: str
+    updated_at: str
+
+
+def get_vector_sync_state(conn: sqlite3.Connection) -> VectorSyncState | None:
+    """读取同步游标；表空返回 ``None``。"""
+    row = conn.execute(
+        "SELECT cursor, indexed, deleted, last_error, updated_at "
+        "FROM vector_sync_state WHERE id = 1"
+    ).fetchone()
+    if row is None:
+        return None
+    return VectorSyncState(
+        cursor=row["cursor"],
+        indexed=row["indexed"],
+        deleted=row["deleted"],
+        last_error=row["last_error"],
+        updated_at=row["updated_at"],
+    )
+
+
+def upsert_vector_sync_state(
+    conn: sqlite3.Connection,
+    *,
+    cursor: str,
+    indexed: int,
+    deleted: int,
+    last_error: str,
+) -> None:
+    """写入单行同步游标（id 恒为 1）。"""
+    conn.execute(
+        "INSERT INTO vector_sync_state (id, cursor, indexed, deleted, last_error, updated_at) "
+        "VALUES (1, :cursor, :indexed, :deleted, :last_error, :updated_at) "
+        "ON CONFLICT (id) DO UPDATE SET "
+        "cursor = excluded.cursor, indexed = excluded.indexed, "
+        "deleted = excluded.deleted, last_error = excluded.last_error, "
+        "updated_at = excluded.updated_at",
+        {
+            "cursor": cursor,
+            "indexed": int(indexed),
+            "deleted": int(deleted),
+            "last_error": last_error,
+            "updated_at": _now_iso(),
+        },
+    )
