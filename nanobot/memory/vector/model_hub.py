@@ -95,10 +95,12 @@ def _download(model_name: str, source: str) -> str:
         return modelscope.snapshot_download(model_name)
     from huggingface_hub import snapshot_download  # 延迟 import
 
-    return snapshot_download(
-        repo_id=model_name,
-        timeout=float(os.environ.get("HF_HUB_DOWNLOAD_TIMEOUT", str(_DOWNLOAD_TIMEOUT_SECONDS))),
-    )
+    # snapshot_download 没有 timeout 形参（只有 etag_timeout）；下载超时须经
+    # HF_HUB_DOWNLOAD_TIMEOUT 环境变量设置。此前直接传 timeout= 会抛
+    # TypeError: unexpected keyword argument 'timeout'，导致 hf-mirror /
+    # huggingface 两源恒失败（只剩 modelscope），自动下载实际不可用。
+    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", str(_DOWNLOAD_TIMEOUT_SECONDS))
+    return snapshot_download(repo_id=model_name)
 
 
 def is_cached(model_name: str) -> bool:
