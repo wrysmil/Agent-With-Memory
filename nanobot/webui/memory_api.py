@@ -43,6 +43,10 @@ from nanobot.memory.repository import (
 from nanobot.memory.repository import (
     update_memory as _repo_update_memory,
 )
+from nanobot.memory.vector.indexer import (
+    index_memory_best_effort,
+    remove_memory_best_effort,
+)
 from nanobot.webui.memory_services import MemoryServices
 from nanobot.webui.settings_contracts import WebUISettingsError
 
@@ -287,7 +291,23 @@ def create_memory(
     except Exception:
         logger.exception("create_memory failed: id={}", memory_id)
         raise WebUIMemoryError("failed to persist memory", status=500)
+    # 向量挂钩：SQLite 落库成功（try 块之后）才 best-effort 索引
+    index_memory_best_effort(memory)
     return {"memory": memory_payload(memory)}
+
+
+def fetch_and_index(services: MemoryServices, memory_id: str) -> Memory:
+    """回读权威行并 best-effort 同步向量索引。
+
+    更新走 repository 后必须回读，因为 ``_repo_update_memory`` 只吃 kwargs、
+    不返回新行；同时保证索引里存的是**落库后**的内容。
+    """
+    with services.database.connect() as conn:
+        row = get_memory(conn, memory_id)
+    if row is None:
+        raise WebUIMemoryError("memory not found", status=404)
+    index_memory_best_effort(row)
+    return row
 
 
 def update_memory(
@@ -333,7 +353,8 @@ def update_memory(
             _repo_update_memory(conn, memory_id, **kwargs)
     except KeyError:
         raise WebUIMemoryError("memory not found", status=404)
-    return fetch_memory_payload(services, memory_id)
+    updated = fetch_and_index(services, memory_id)
+    return {"memory": memory_payload(updated)}
 
 
 def delete_memory(services: MemoryServices, memory_id: str) -> dict[str, Any]:
@@ -342,6 +363,8 @@ def delete_memory(services: MemoryServices, memory_id: str) -> dict[str, Any]:
         if cur.fetchone() is None:
             raise WebUIMemoryError("memory not found", status=404)
         _repo_delete_memory(conn, memory_id)
+    # 向量挂钩：SQLite 删除成功后 best-effort 移除索引
+    remove_memory_best_effort(memory_id)
     return {"ok": True}
 
 

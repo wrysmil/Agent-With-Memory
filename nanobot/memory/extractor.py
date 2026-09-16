@@ -69,6 +69,7 @@ from nanobot.memory.repository import (
     update_memory_source_episode,
     upsert_extraction_state,
 )
+from nanobot.memory.vector.indexer import index_memory_best_effort
 from nanobot.session.labels import session_label, session_label_suffix
 
 if TYPE_CHECKING:
@@ -1511,6 +1512,8 @@ class MemoryExtractor:
                 )
                 if not ok:
                     continue
+                # 向量挂钩：SQLite 落库成功之后才索引（真相源优先，spec §4.5）
+                index_memory_best_effort(memory)
                 saved_memory_ids.append(memory_id)
                 if item.subject:
                     memory_by_subject.setdefault(item.subject, memory_id)

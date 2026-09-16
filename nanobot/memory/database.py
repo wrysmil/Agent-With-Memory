@@ -253,6 +253,13 @@ class MemoryDatabase:
 
                         memory = Memory.from_row(item)
                         add_memory(conn, memory)
+                        # 局部 import：避免核心安装经 vector 包拉入重依赖，
+                        # 且绕开 database <-> indexer 的模块级 import 环
+                        from nanobot.memory.vector.indexer import (
+                            index_memory_best_effort,
+                        )
+
+                        index_memory_best_effort(memory)
                     elif kind == "episode":
                         from nanobot.memory.models import Episode
 
