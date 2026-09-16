@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from nanobot.config.timezone import detect_system_timezone
 from nanobot.config_base import Base
 from nanobot.cron.types import CronSchedule
+from nanobot.memory.vector.settings import VectorSettings
 
 if TYPE_CHECKING:
     from nanobot.agent.tools.cli_apps import CliAppsToolConfig
@@ -113,6 +114,68 @@ class ModelPresetConfig(Base):
         )
 
 
+class MemoryVectorConfig(Base):
+    """向量索引配置（spec §5.3）。
+
+    ``embedding_dimensions`` 是**必填语义**字段：openakita 因缺此字段而硬编码
+    1024，与 1536 维模型混用直接报维度错（调研文档 §5 缺陷 1）。维度不匹配时
+    Chroma 只校验长度、**不报错**，只会让排序全错（R-3），故必须显式。
+    """
+
+    embedding_model: str = Field(
+        default="BAAI/bge-small-zh-v1.5",
+        validation_alias=AliasChoices("embeddingModel", "embedding_model"),
+        serialization_alias="embeddingModel",
+    )
+    embedding_dimensions: int = Field(
+        default=512,
+        ge=1,
+        validation_alias=AliasChoices("embeddingDimensions", "embedding_dimensions"),
+        serialization_alias="embeddingDimensions",
+    )
+    device: Literal["cpu", "cuda"] = "cpu"
+    download_source: Literal["auto", "huggingface", "hf-mirror", "modelscope"] = Field(
+        default="auto",
+        validation_alias=AliasChoices("downloadSource", "download_source"),
+        serialization_alias="downloadSource",
+    )
+    local_model_dir: str = Field(
+        default="",
+        validation_alias=AliasChoices("localModelDir", "local_model_dir"),
+        serialization_alias="localModelDir",
+    )  # 空 = 走 model_hub 下载 / HF 缓存
+    index_path: str = Field(
+        default="",
+        validation_alias=AliasChoices("indexPath", "index_path"),
+        serialization_alias="indexPath",
+    )  # 空 = {workspace}/memory/chromadb
+    sync_on_startup: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("syncOnStartup", "sync_on_startup"),
+        serialization_alias="syncOnStartup",
+    )
+    max_candidates: int = Field(
+        default=45,
+        ge=1,
+        validation_alias=AliasChoices("maxCandidates", "max_candidates"),
+        serialization_alias="maxCandidates",
+    )  # limit*3 的上限
+
+    def to_vector_settings(self, *, enabled: bool) -> VectorSettings:
+        """映射为 ``VectorStore`` 的冻结配置。``enabled`` 由 backend 开关决定。"""
+        return VectorSettings(
+            enabled=enabled,
+            model=self.embedding_model,
+            dimensions=self.embedding_dimensions,
+            device=self.device,
+            download_source=self.download_source,
+            local_model_dir=self.local_model_dir,
+            index_path=self.index_path,
+            sync_on_startup=self.sync_on_startup,
+            max_candidates=self.max_candidates,
+        )
+
+
 class AgentDefaults(Base):
     """Default agent configuration."""
 
@@ -167,6 +230,17 @@ class AgentDefaults(Base):
     )  # WU-A: idle 增量提取阈值(秒)。每轮 after_run 重置定时器,空闲超过该
     # 时长后触发 ``MemoryExtractor.run_idle_extraction``。<=0 不合法;典型值
     # 600(10 分钟)。测试可短至 0.05 秒验证触发路径。
+    memory_search_backend: Literal["fts5", "chromadb", "api_embedding"] = Field(
+        default="fts5",
+        validation_alias=AliasChoices("memorySearchBackend", "memory_search_backend"),
+        serialization_alias="memorySearchBackend",
+    )  # 显式开关。openakita 靠 search_backend=="chromadb" 隐式决定，缺独立布尔
+    # 开关（调研文档 §5 缺陷 2）；本方案默认 "fts5" → 现有用户升级后行为不变。
+    memory_vector: MemoryVectorConfig = Field(
+        default_factory=MemoryVectorConfig,
+        validation_alias=AliasChoices("memoryVector", "memory_vector"),
+        serialization_alias="memoryVector",
+    )
     dream: DreamConfig = Field(default_factory=DreamConfig)
 
     @model_validator(mode="before")
