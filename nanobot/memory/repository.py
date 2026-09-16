@@ -696,16 +696,51 @@ def search_semantic_scored(
     *,
     limit: int = 30,
 ) -> list[tuple[Memory, float]]:
-    """语义召回：复用 search_memories + bm25 归一化分（索引伪 rank）。
+    """语义召回：FTS5 真实 ``bm25()`` 分（页内归一化）。
 
-    真实 bm25 rank 列注入属于未来增强（不在本 plan 范围）；此处以
-    ``bm25_rank_to_score`` 兼容通道侧 ``search_semantic`` 的 (Memory, score) 形态。
+    修正记录（2026-09-16）：原实现用 ``_pseudo_bm25_score(float(idx))``，即
+    **枚举序号**而非 bm25 —— 首名恒 1.0、次名恒 0.5、第三名 0.333，形成阶梯。
+    这在纯 FTS5 场景无害，但向量并集（spec §4.6 的 ``max()`` 融合）会因此
+    让 FTS5 首名永远压过向量分（bge 中文短句实测 0.5~0.9），表现为「向量接上了
+    但排序毫无变化」。
+
+    归一化刻意用**页内 min-max** 而非 ``1/(1+rank)`` 一类绝对值压缩：FTS5 的
+    ``bm25()`` 取值是负的且无界（更相关 = 更负），min-max 只依赖**次序**，
+    对符号约定免疫，且保证首名 = 1.0、末名 = 0.0，与向量的 [0,1] 同量纲。
     """
-    results = search_memories(conn, query=query, limit=limit)
-    out: list[tuple[Memory, float]] = []
-    for idx, mem in enumerate(results):
-        out.append((mem, _pseudo_bm25_score(float(idx))))
-    return out
+    flat = ", ".join(f"m.{c.strip()}" for c in _SELECT_MEMORY_COLUMNS.split(","))
+    sql = (
+        f"SELECT {flat}, bm25(memories_fts) AS _rank "
+        f"FROM memories m JOIN memories_fts f ON f.rowid = m.rowid "
+        f"WHERE memories_fts MATCH ? "
+        f"ORDER BY _rank LIMIT ?"
+    )
+    try:
+        rows = conn.execute(sql, (query, int(limit))).fetchall()
+    except sqlite3.OperationalError as exc:
+        if _is_fts_syntax_error(exc):
+            logger.debug("FTS5 MATCH syntax error in semantic scored: {}", exc)
+        else:
+            logger.warning("FTS5 MATCH failed in semantic scored: {}", exc)
+        rows = []
+
+    if rows:
+        ranks = [float(r["_rank"]) for r in rows]
+        lo, hi = min(ranks), max(ranks)
+        span = hi - lo
+        out: list[tuple[Memory, float]] = []
+        for row, rank in zip(rows, ranks, strict=True):
+            # rank 越小越相关（FTS5 惯例），故 (hi - rank) / span 使首名 = 1.0
+            score = 1.0 if span <= 0.0 else (hi - rank) / span
+            out.append((_row_to_memory(row), score))
+        return out
+
+    return [
+        (mem, _pseudo_bm25_score(float(idx)))
+        for idx, mem in enumerate(
+            _search_memories_like(conn, query, type=None, workspace_id=None, limit=limit)
+        )
+    ]
 
 
 def search_episodes(
