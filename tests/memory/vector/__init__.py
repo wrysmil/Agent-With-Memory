@@ -1,1 +1,1 @@
-"""Vector search memory tests."""
+"""向量检索测试包。"""
