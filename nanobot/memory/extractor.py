@@ -689,6 +689,19 @@ class MemoryExtractor:
     #: 阶段3 预载同类型历史记忆的窗口大小（plan §5.2 比对集来源）。
     EXISTING_MEMORY_LIMIT: int = 500
 
+    #: idle 增量抽取的切片条数下限：连「user 提问 + assistant 回复」都不足时无内容可抽。
+    #:
+    #: 刻意取 2，**不照搬** ``SessionEndOrchestrator`` 的 L1（``< 3``）：那边以「整个
+    #: 会话」为抽取单元，3 是会话的最小可观形态；idle 抽的是增量切片，一轮实质对话
+    #: （user + assistant 共 2 条）本身就是完整单元。区分「琐碎」与「实质」的职责交给
+    #: :data:`IDLE_MIN_SINGLE_USER_CHARS`（即 L2 口径）——一句「你好」仍会被它拦下。
+    #: 改本常量时须一并审视 ``orchestrator.py`` 的 L1/L2（那边是裸字面量 3 / 10）。
+    IDLE_MIN_NEW_MESSAGES: int = 2
+
+    #: 新增切片只有一条 user 消息、内容短于该字符数且无工具调用 → 不调 LLM。
+    #: 切片内有工具调用则豁免（对齐 ``orchestrator.py`` 的 L2）。
+    IDLE_MIN_SINGLE_USER_CHARS: int = 10
+
     def __init__(
         self,
         database: MemoryDatabase,
@@ -874,6 +887,31 @@ class MemoryExtractor:
             failed_tracks=list(llm_result.failed_tracks),
         )
 
+    def _has_enough_idle_signal(self, messages: list[dict[str, Any]]) -> bool:
+        """idle 抽取的信号门槛：只拦「明显不值得抽」的切片。
+
+        - 条数：不足 :data:`IDLE_MIN_NEW_MESSAGES` 条 → 无内容可抽（例如只有一条
+          尚未得到回复的 user 消息）。
+        - 内容：切片只有一条 user 消息、其文本短于 :data:`IDLE_MIN_SINGLE_USER_CHARS`
+          且切片内无工具调用 → 无实质内容（例如「你好」）。有工具调用则豁免。
+
+        第二条对齐 ``SessionEndOrchestrator`` 的 L2；第一条**不照搬**其 L1（``< 3``），
+        理由见 :data:`IDLE_MIN_NEW_MESSAGES`。
+
+        与编排器版本的差别：此处用 :func:`_content_text` 归一化 content。真实转录的
+        content 可能是 content-block 列表，编排器里直接 ``.strip()`` 会抛
+        ``AttributeError``。
+        """
+        if len(messages) < self.IDLE_MIN_NEW_MESSAGES:
+            return False
+        user_msgs = [m for m in messages if m.get("role") == "user"]
+        if len(user_msgs) == 1:
+            content = _content_text(user_msgs[0].get("content")).strip()
+            has_tool_calls = any(m.get("tool_calls") for m in messages)
+            if len(content) < self.IDLE_MIN_SINGLE_USER_CHARS and not has_tool_calls:
+                return False
+        return True
+
     async def run_idle_extraction(
         self,
         session: Session,
@@ -885,6 +923,11 @@ class MemoryExtractor:
         行为契约（plan WU-A Task 2）：
         - ``current_count <= last_count``（无新增消息或已覆盖）：return 空结果，
           不调 LLM、不动 state。
+        - 新增切片未过信号门槛（``_has_enough_idle_signal``）：return 空结果，
+          **不动 state** —— 被跳过的消息留在增量窗口内，用户继续发言时会随下一段
+          切片一并抽取。代价：若用户此后不再发言，这段内容**不会入库**（idle 定时器
+          只在 ``after_run`` / ``on_finally`` 重新装备，会话结束编排器当前是死路径，
+          没有兜底）。
         - 若 ``extract_incremental`` 成功：UPSERT ``state.last_count = current_count``，
           ``source="idle"``。
         - 若 ``extract_incremental`` 抛异常：state **不**推进（保留旧值，下次
@@ -921,6 +964,23 @@ class MemoryExtractor:
                     session_key,
                     current_count,
                     last_count,
+                )
+                return ExtractionResult()
+
+            # 信号门槛：琐碎切片不调 LLM，否则一句「你好」也会触发两路 LLM 提取。
+            # 刻意**不推进 state** —— 被跳过的消息留在增量窗口内，用户继续发言时
+            # 会随下一段切片一并抽取。注意这不等于「一定不丢」：用户此后不再发言时
+            # 这段内容不会入库（idle 定时器只在 after_run / on_finally 重新装备）。
+            new_slice = session.messages[last_count:]
+            if not self._has_enough_idle_signal(new_slice):
+                logger.info(
+                    "idle extraction skipped for session {}: {} new message(s) below "
+                    "signal threshold (min {} messages; single user turn needs "
+                    ">= {} chars or a tool call)",
+                    session_key,
+                    len(new_slice),
+                    self.IDLE_MIN_NEW_MESSAGES,
+                    self.IDLE_MIN_SINGLE_USER_CHARS,
                 )
                 return ExtractionResult()
 
