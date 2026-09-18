@@ -1002,6 +1002,11 @@
       "configureProvider": "Configure provider",
       "languageAuto": "Auto"
     },
+    "identity": {
+      "compileNotEnabled": "Compile is not available yet",
+      "loadFailed": "Failed to load identity files",
+      "saveFailed": "Save failed"
+    },
     "memory": {
       "tabSemantic": "Semantic memory",
       "tabEpisode": "Episodes",

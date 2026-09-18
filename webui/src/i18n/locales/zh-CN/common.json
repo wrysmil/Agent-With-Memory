@@ -1002,6 +1002,11 @@
       "configureProvider": "配置提供商",
       "languageAuto": "自动"
     },
+    "identity": {
+      "compileNotEnabled": "编译能力尚未启用",
+      "loadFailed": "加载身份文件失败",
+      "saveFailed": "保存失败"
+    },
     "memory": {
       "tabSemantic": "语义记忆",
       "tabEpisode": "情节",
