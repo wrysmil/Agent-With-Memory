@@ -494,9 +494,9 @@ def _refresh_memory_md_after_mutation(
 
         lifecycle = MemoryLifecycle.for_workspace(workspace_id, services)
         lifecycle.refresh_memory_md_sync(workspace_id)
-    except Exception:
+    except Exception as e:
         _logger = logging.getLogger(__name__)
-        _logger.warning("[MemoryLifecycle] refresh_memory_md failed after mutation: %s")
+        _logger.warning("[MemoryLifecycle] refresh_memory_md failed after mutation: %s", e)
 
 
 # ---- write actions -----------------------------------------------------------

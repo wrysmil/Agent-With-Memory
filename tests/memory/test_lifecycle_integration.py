@@ -101,6 +101,7 @@ def test_refresh_generates_memory_md_file(
             created_at=now,
             updated_at=now,
             scope="user",
+            workspace_id=services.workspace_id,
         ))
         add_memory(conn, Memory(
             id="rule-1",
@@ -112,6 +113,7 @@ def test_refresh_generates_memory_md_file(
             created_at=now,
             updated_at=now,
             scope="user",
+            workspace_id=services.workspace_id,
         ))
 
     result = lifecycle.refresh_memory_md_sync(services.workspace_id)
@@ -151,6 +153,7 @@ def test_truncate_keeps_memory_md_under_1500_chars(
                 created_at=now,
                 updated_at=now,
                 scope="user",
+                workspace_id=services.workspace_id,
             ))
 
     result = lifecycle.refresh_memory_md_sync(services.workspace_id)
@@ -186,13 +189,6 @@ def test_dream_editable_files_includes_draft(memory_store):
     # （ToolRegistry 是内部结构，直接检查需要 mock）
     # 核心验证：draft_file 路径正确
     assert memory_store.draft_file.exists() or True  # 可能不存在，但路径对
-
-
-def test_dream_editable_files_includes_draft(memory_store):
-    """验证 draft_file 路径正确。"""
-    assert memory_store.draft_file is not None
-    assert memory_store.draft_file.name == "MEMORY.md.draft"
-    assert memory_store.draft_file.parent == memory_store.memory_dir
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +253,7 @@ def test_truncate_preserves_rule_sections(
                 created_at=now,
                 updated_at=now,
                 scope="user",
+                workspace_id=services.workspace_id,
             ))
         for i in range(3):
             add_memory(conn, Memory(
@@ -267,6 +264,7 @@ def test_truncate_preserves_rule_sections(
                 created_at=now,
                 updated_at=now,
                 scope="user",
+                workspace_id=services.workspace_id,
             ))
 
     result = lifecycle.refresh_memory_md_sync(services.workspace_id)

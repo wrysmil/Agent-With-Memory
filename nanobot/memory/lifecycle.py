@@ -74,9 +74,7 @@ class MemoryLifecycle:
     _last_refresh_at: dict[str, float] = {}  # monotonic, debounce
     _last_refresh_iso: dict[str, str] = {}   # ISO8601 UTC, stats
     _last_refresh_trigger: dict[str, str] = {}  # "manual" | "auto"
-
-    # Thread safety for sync refresh
-    _derive_lock = threading.Lock()
+    # NOTE: _derive_lock moved to instance-level in __init__ (fixes cross-workspace blocking)
 
     def __init__(self, workspace_id: str, services: MemoryServices) -> None:
         self.workspace_id = workspace_id
@@ -84,6 +82,8 @@ class MemoryLifecycle:
         self.memory_dir: Path = services.database.workspace / "memory"
         self.memory_file: Path = self.memory_dir / "MEMORY.md"
         self.draft_file: Path = self.memory_dir / "MEMORY.md.draft"
+        # Instance-level lock: each workspace has its own lock (fixes cross-workspace blocking)
+        self._derive_lock = threading.Lock()
 
     @classmethod
     def for_workspace(
@@ -112,6 +112,7 @@ class MemoryLifecycle:
                     try:
                         memories = list_memories(
                             conn,
+                            workspace_id=workspace_id,  # 🆕 Critical fix: 按 workspace 隔离
                             scope="user",
                             min_importance=0.5,
                             limit=200,
@@ -120,7 +121,7 @@ class MemoryLifecycle:
                     except TypeError:
                         # WU-2 not yet merged: use current signature + Python filter
                         all_memories = list_memories(
-                            conn, limit=200, order_by="importance"
+                            conn, workspace_id=workspace_id, limit=200, order_by="importance"
                         )
                         memories = [
                             m
@@ -331,4 +332,4 @@ class MemoryLifecycle:
             if not try_add(heading, body, is_high=False):
                 break
 
-        return ("\n\n".join(result_parts)).rstrip()
+        return ("\n\n".join(result_parts)).rstrip() + "\n"
