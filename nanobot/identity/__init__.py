@@ -9,6 +9,7 @@ from nanobot.identity.catalog import (
     discover_personas,
     resolve_identity_dir,
 )
+from nanobot.identity.store import IdentityStore, IdentityStoreError
 
 __all__ = [
     "CHAR_LIMIT",
@@ -16,6 +17,8 @@ __all__ = [
     "IDENTITY_DIR_NAME",
     "PERSONAS_SUBDIR",
     "IdentityFileSpec",
+    "IdentityStore",
+    "IdentityStoreError",
     "discover_personas",
     "resolve_identity_dir",
 ]
