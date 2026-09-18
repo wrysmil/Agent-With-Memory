@@ -1644,3 +1644,21 @@ export interface MemoryStats {
   total: number;
   by_type: Record<MemoryType, number>;
 }
+
+// ── Identity Files ─────────────────────────────────────────────────────────────
+
+export interface IdentityBadge {
+  tone: string;
+  labelKey: string;
+}
+
+export type IdentityFileGroup = "core" | "personas";
+
+export interface IdentityFileEntry {
+  name: string;
+  group: IdentityFileGroup;
+  logicalPath?: string;
+  exists: boolean;
+  restricted: boolean;
+  badge?: IdentityBadge;
+}

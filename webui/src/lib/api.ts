@@ -9,6 +9,7 @@ import type {
   CliAppsPayload,
   EpisodePayload,
   FilePreviewPayload,
+  IdentityFileEntry,
   ImageGenerationSettingsUpdate,
   McpPresetsPayload,
   McpOAuthFlowPayload,
@@ -1290,4 +1291,71 @@ export async function saveScratchpad(
       : {}),
     ...(input.nextSteps !== undefined ? { next_steps: input.nextSteps } : {}),
   });
+}
+
+// ── Identity Files ─────────────────────────────────────────────────────────────
+
+const IDENTITY_BASE = "/api/settings/identity";
+
+export interface IdentityFilesResponse {
+  files: IdentityFileEntry[];
+  charLimit: number;
+}
+
+export async function listIdentityFiles(
+  token: string,
+  base: string = "",
+): Promise<IdentityFilesResponse> {
+  return request<IdentityFilesResponse>(
+    `${base}${IDENTITY_BASE}/files`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export interface IdentityFileResponse {
+  name: string;
+  content: string;
+}
+
+export async function fetchIdentityFile(
+  token: string,
+  name: string,
+  base: string = "",
+): Promise<IdentityFileResponse> {
+  // encodeURIComponent 而非 URLSearchParams：后者把空格编码成 '+'，
+  // 语义等价但可读性差，且部分代理会错误处理未转义的 '+'。
+  const query = `name=${encodeURIComponent(name)}`;
+  return request<IdentityFileResponse>(
+    `${base}${IDENTITY_BASE}/file?${query}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export interface SaveIdentityFileInput {
+  name: string;
+  content: string;
+}
+
+export async function saveIdentityFile(
+  transport: WebUIMutationTransport,
+  input: SaveIdentityFileInput,
+): Promise<{ saved: boolean }> {
+  return mutation<{ saved: boolean }>(transport, "identity.file.save", {
+    name: input.name,
+    content: input.content,
+  });
+}
+
+export interface ReloadIdentityResponse {
+  status: string;
+}
+
+export async function reloadIdentity(
+  transport: WebUIMutationTransport,
+): Promise<ReloadIdentityResponse> {
+  return mutation<ReloadIdentityResponse>(transport, "identity.reload");
 }
