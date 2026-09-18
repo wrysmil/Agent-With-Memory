@@ -1,0 +1,108 @@
+"""Identity file catalog: single source of truth for whitelist, grouping, constants."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from nanobot.memory.lifecycle import MEMORY_MD_MAX_CHARS
+
+IDENTITY_DIR_NAME = "identity"
+PERSONAS_SUBDIR = "personas"
+PROMPTS_SUBDIR = "prompts"
+
+# Frontend IdentityView charMax derives from here (via /api/settings/identity/files).
+# Shares the same constant with MEMORY.md truncation logic.
+CHAR_LIMIT = MEMORY_MD_MAX_CHARS
+
+# Badge labelKey directly reuses frontend i18n keys; backend only passes them through.
+BADGE_NEEDS_COMPILE = "settings.identity.badgeNeedsCompile"
+BADGE_AUTO_REGEN = "settings.identity.badgeAutoRegen"
+BADGE_SYSTEM_SECTION = "settings.identity.badgeSystemSection"
+BADGE_FULL_TEXT_INJECT = "settings.identity.badgeFullTextInject"
+
+
+@dataclass(frozen=True)
+class IdentityFileSpec:
+    """Static description of a single identity file."""
+
+    name: str
+    group: str  # "core" | "personas"
+    restricted: bool = False
+    badge_tone: str | None = None  # "amber" | "sage" | "clay"
+    badge_label_key: str | None = None
+    # Relative path within identity/. Defaults to same as name.
+    # Personas use bare filenames but land under personas/.
+    logical_path: str = ""
+
+    @property
+    def path(self) -> str:
+        return self.logical_path or self.name
+
+
+CORE_FILES: tuple[IdentityFileSpec, ...] = (
+    IdentityFileSpec(name="SOUL.md", group="core"),
+    IdentityFileSpec(
+        name="AGENT.md",
+        group="core",
+        restricted=True,
+        badge_tone="clay",
+        badge_label_key=BADGE_NEEDS_COMPILE,
+    ),
+    IdentityFileSpec(name="USER.md", group="core"),
+    IdentityFileSpec(
+        name="MEMORY.md",
+        group="core",
+        restricted=True,
+        badge_tone="amber",
+        badge_label_key=BADGE_AUTO_REGEN,
+    ),
+    IdentityFileSpec(name="POLICIES.yaml", group="core", restricted=True),
+    IdentityFileSpec(
+        name="prompts/policies.md",
+        group="core",
+        restricted=True,
+        badge_tone="amber",
+        badge_label_key=BADGE_SYSTEM_SECTION,
+    ),
+)
+
+# Full-text injection personas: same as openakita, injected verbatim rather than summarized.
+FULL_TEXT_PERSONAS: frozenset[str] = frozenset({"default.md", "tech_expert.md"})
+
+
+def resolve_identity_dir(workspace: Path) -> Path:
+    """Return identity directory under *workspace* (existence not guaranteed)."""
+    return workspace / IDENTITY_DIR_NAME
+
+
+def discover_personas(workspace: Path) -> list[Path]:
+    """Return all *.md files under personas/, sorted by filename.
+
+    Returns empty list when directory does not exist — "personas not created yet"
+    is a valid state, not an error.
+    """
+    persona_dir = resolve_identity_dir(workspace) / PERSONAS_SUBDIR
+    if not persona_dir.is_dir():
+        return []
+    return sorted(
+        (p for p in persona_dir.iterdir() if p.is_file() and p.suffix == ".md"),
+        key=lambda p: p.name,
+    )
+
+
+def build_persona_specs(workspace: Path) -> list[IdentityFileSpec]:
+    """Convert real persona files under personas/ into spec list."""
+    specs: list[IdentityFileSpec] = []
+    for path in discover_personas(workspace):
+        is_full_text = path.name in FULL_TEXT_PERSONAS
+        specs.append(
+            IdentityFileSpec(
+                name=path.name,
+                group="personas",
+                logical_path=f"{PERSONAS_SUBDIR}/{path.name}",
+                badge_tone="sage" if is_full_text else None,
+                badge_label_key=BADGE_FULL_TEXT_INJECT if is_full_text else None,
+            )
+        )
+    return specs

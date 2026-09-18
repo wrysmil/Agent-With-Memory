@@ -21,6 +21,7 @@ from nanobot.bus.events import (
     RUNTIME_CONTROL_SESSION_DISCARD,
     InboundMessage,
 )
+from nanobot.identity.catalog import resolve_identity_dir
 from nanobot.runtime_context import (
     RUNTIME_CONTEXT_MESSAGE_META,
     RuntimeContextBlock,
@@ -51,7 +52,8 @@ def session_extra(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 async def handle_runtime_control(state: Any, msg: InboundMessage, tools: ToolRegistry) -> bool:
-    from nanobot.memory.reload import RUNTIME_CONTROL_MEMORY_RELOAD as _MEM_RELOAD, handle_memory_reload as _handle_mem_reload
+    from nanobot.memory.reload import RUNTIME_CONTROL_MEMORY_RELOAD as _MEM_RELOAD
+    from nanobot.memory.reload import handle_memory_reload as _handle_mem_reload
     ctrl = msg.metadata.get(INBOUND_META_RUNTIME_CONTROL)
     if ctrl == RUNTIME_CONTROL_SESSION_DISCARD:
         await state.discard_session(msg.session_key)
@@ -308,10 +310,12 @@ class ContextBuilder:
         """Load project instructions plus the agent's global profile files."""
         parts: list[str] = []
         project_root = workspace or self.workspace
+        identity_dir = resolve_identity_dir(self.workspace)
         sources = [
-            ("AGENTS.md", project_root),
-            ("SOUL.md", self.workspace),
-            ("USER.md", self.workspace),
+            ("AGENTS.md", project_root),  # project-level instructions: do not move
+            # Identity files: prefer identity/ dir, fall back to workspace root for unmigrated old workspaces
+            ("SOUL.md", identity_dir if (identity_dir / "SOUL.md").exists() else self.workspace),
+            ("USER.md", identity_dir if (identity_dir / "USER.md").exists() else self.workspace),
         ]
 
         for filename, root in sources:
