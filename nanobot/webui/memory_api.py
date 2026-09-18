@@ -8,6 +8,8 @@ machinery; transport lives elsewhere.
 
 from __future__ import annotations
 
+import logging
+import time
 import uuid
 from typing import Any
 
@@ -235,6 +237,97 @@ def scratchpad_payload(
     return {"scratchpad": scratchpad_payload_from_entry(row)}
 
 
+# ---- MEMORY.md derived-state helpers ----------------------------------------
+
+
+def _get_last_refresh_at(workspace_id: str) -> str | None:
+    """从 MemoryLifecycle._last_refresh_iso 读取上次刷新时间（ISO8601 UTC）。"""
+    from nanobot.memory.lifecycle import MemoryLifecycle
+
+    return MemoryLifecycle._last_refresh_iso.get(workspace_id)
+
+
+def _get_last_refresh_trigger(workspace_id: str) -> str | None:
+    from nanobot.memory.lifecycle import MemoryLifecycle
+
+    return MemoryLifecycle._last_refresh_trigger.get(workspace_id)
+
+
+def _draft_exists(workspace_id: str) -> bool:
+    """检查 MEMORY.md.draft 是否存在。"""
+    from nanobot.memory.lifecycle import MemoryLifecycle
+
+    inst = MemoryLifecycle._instances.get(workspace_id)
+    if inst is None:
+        return False
+    return inst.draft_file.exists()
+
+
+def _draft_age_seconds(workspace_id: str) -> int | None:
+    """draft 文件距今秒数，不存在返回 None。"""
+    from nanobot.memory.lifecycle import MemoryLifecycle
+
+    inst = MemoryLifecycle._instances.get(workspace_id)
+    if inst is None or not inst.draft_file.exists():
+        return None
+    try:
+        return int(time.time() - inst.draft_file.stat().st_mtime)
+    except OSError:
+        return None
+
+
+def _current_memory_md_chars(workspace_id: str) -> int:
+    """MEMORY.md 当前字符数，不存在返回 0。"""
+    from nanobot.memory.lifecycle import MemoryLifecycle
+
+    inst = MemoryLifecycle._instances.get(workspace_id)
+    if inst is None or not inst.memory_file.exists():
+        return 0
+    try:
+        return inst.memory_file.stat().st_size
+    except OSError:
+        return 0
+
+
+def _read_memory_md_content(workspace_id: str) -> str | None:
+    """读取 MEMORY.md 文件内容，不存在返回 None。"""
+    from nanobot.memory.lifecycle import MemoryLifecycle
+
+    inst = MemoryLifecycle._instances.get(workspace_id)
+    if inst is None or not inst.memory_file.exists():
+        return None
+    try:
+        return inst.memory_file.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _read_draft_content(workspace_id: str) -> str | None:
+    """读取 MEMORY.md.draft 文件内容，不存在返回 None。"""
+    from nanobot.memory.lifecycle import MemoryLifecycle
+
+    inst = MemoryLifecycle._instances.get(workspace_id)
+    if inst is None or not inst.draft_file.exists():
+        return None
+    try:
+        return inst.draft_file.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def get_memory_md_content(services: MemoryServices) -> dict[str, Any]:
+    """读取 MEMORY.md 和 draft 内容，用于前端 Modal 展示。"""
+    workspace_id = services.workspace_id
+    memory_md = _read_memory_md_content(workspace_id)
+    draft = _read_draft_content(workspace_id)
+    return {
+        "memory_md": memory_md,
+        "draft": draft,
+        "memory_md_exists": memory_md is not None,
+        "draft_exists": draft is not None,
+    }
+
+
 def stats_payload(
     services: MemoryServices,
     *,
@@ -270,6 +363,14 @@ def stats_payload(
             "vector_model": "",
             "vector_dimensions": 0,
             "vector_error": None,
+            "memory_md": {
+                "last_refresh_at": _get_last_refresh_at(services.workspace_id),
+                "last_refresh_trigger": _get_last_refresh_trigger(services.workspace_id),
+                "draft_exists": _draft_exists(services.workspace_id),
+                "draft_age_seconds": _draft_age_seconds(services.workspace_id),
+                "current_chars": _current_memory_md_chars(services.workspace_id),
+                "max_chars": 1500,
+            },
         }
 
     # 兼容测试替身（提供 vector_state / search_backend）与生产 VectorStore
@@ -289,6 +390,14 @@ def stats_payload(
         "vector_model": str(getattr(vector_runtime, "model_name", "")),
         "vector_dimensions": int(getattr(vector_runtime, "dimensions", 0)),
         "vector_error": getattr(vector_runtime, "error", None),
+        "memory_md": {
+            "last_refresh_at": _get_last_refresh_at(services.workspace_id),
+            "last_refresh_trigger": _get_last_refresh_trigger(services.workspace_id),
+            "draft_exists": _draft_exists(services.workspace_id),
+            "draft_age_seconds": _draft_age_seconds(services.workspace_id),
+            "current_chars": _current_memory_md_chars(services.workspace_id),
+            "max_chars": 1500,
+        },
     }
 
 
@@ -369,7 +478,28 @@ def sync_vector(
     }
 
 
-# ---- write actions ----------------------------------------------------------
+# ---- write action hooks ------------------------------------------------------
+
+
+def _refresh_memory_md_after_mutation(
+    workspace_id: str, services: "MemoryServices"
+) -> None:
+    """在 SQLite 写操作后触发 MEMORY.md 派生（同步调用）。
+
+    派生失败只记日志，不抛给 mutation 调用方。
+    60s 去抖在 MemoryLifecycle 层面处理。
+    """
+    try:
+        from nanobot.memory.lifecycle import MemoryLifecycle
+
+        lifecycle = MemoryLifecycle.for_workspace(workspace_id, services)
+        lifecycle.refresh_memory_md_sync(workspace_id)
+    except Exception:
+        _logger = logging.getLogger(__name__)
+        _logger.warning("[MemoryLifecycle] refresh_memory_md failed after mutation: %s")
+
+
+# ---- write actions -----------------------------------------------------------
 
 
 def create_memory(
@@ -417,6 +547,8 @@ def create_memory(
         raise WebUIMemoryError("failed to persist memory", status=500)
     # 向量挂钩：SQLite 落库成功（try 块之后）才 best-effort 索引
     index_memory_best_effort(memory)
+    # 🆕 WU-3: 触发 MEMORY.md 派生
+    _refresh_memory_md_after_mutation(services.workspace_id, services)
     return {"memory": memory_payload(memory)}
 
 
@@ -478,6 +610,8 @@ def update_memory(
     except KeyError:
         raise WebUIMemoryError("memory not found", status=404)
     updated = fetch_and_index(services, memory_id)
+    # 🆕 WU-3: 触发 MEMORY.md 派生
+    _refresh_memory_md_after_mutation(services.workspace_id, services)
     return {"memory": memory_payload(updated)}
 
 
@@ -489,6 +623,8 @@ def delete_memory(services: MemoryServices, memory_id: str) -> dict[str, Any]:
         _repo_delete_memory(conn, memory_id)
     # 向量挂钩：SQLite 删除成功后 best-effort 移除索引
     remove_memory_best_effort(memory_id)
+    # 🆕 WU-3: 触发 MEMORY.md 派生
+    _refresh_memory_md_after_mutation(services.workspace_id, services)
     return {"ok": True}
 
 
@@ -525,6 +661,18 @@ def delete_episode(services: MemoryServices, episode_id: str) -> dict[str, Any]:
     except KeyError:
         raise WebUIMemoryError("episode not found", status=404)
     return {"ok": True}
+
+
+def refresh_memory_md(services: "MemoryServices") -> dict[str, Any]:
+    """手动触发 MEMORY.md 从 SQLite 重建。
+
+    供 WebUI mutation 调用。
+    """
+    from nanobot.memory.lifecycle import MemoryLifecycle
+
+    lifecycle = MemoryLifecycle.for_workspace(services.workspace_id, services)
+    result = lifecycle.refresh_memory_md_sync(services.workspace_id)
+    return result
 
 
 def save_scratchpad(

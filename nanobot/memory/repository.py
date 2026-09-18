@@ -111,6 +111,8 @@ def list_memories(
     workspace_id: str | None = None,
     order_by: Literal["created", "importance"] = "created",
     limit: int | None = None,
+    scope: str | None = None,
+    min_importance: float | None = None,
 ) -> list[Memory]:
     clauses = []
     params: list[Any] = []
@@ -120,6 +122,12 @@ def list_memories(
     if workspace_id is not None:
         clauses.append("workspace_id = ?")
         params.append(workspace_id)
+    if scope is not None:
+        clauses.append("scope = ?")
+        params.append(scope)
+    if min_importance is not None:
+        clauses.append("importance_score >= ?")
+        params.append(min_importance)
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     order_sql = {
         "created": "created_at DESC",

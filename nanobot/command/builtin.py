@@ -498,7 +498,11 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             if completed:
                 store.set_last_dream_cursor(last_cursor)
                 if diff_body:
-                    content = f"Dream completed in {elapsed:.1f}s."
+                    content = (
+                        f"Dream 草稿已生成：memory/MEMORY.md.draft "
+                        f"（{elapsed:.1f}s）。MEMORY.md 真值由记忆系统从 SQLite 自动生成，"
+                        f"60 秒内自动重建。"
+                    )
                 else:
                     content = f"Dream completed in {elapsed:.1f}s; no memory changes."
             else:

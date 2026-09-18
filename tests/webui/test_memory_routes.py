@@ -54,6 +54,8 @@ def operations(services: MemoryServices) -> MemorySettingsOperations:
         # reindex/sync 不注入依赖：走 memory_api 内部进程级 fallback，与生产同构。
         reindex_vector=partial(memory_api.reindex_vector, services),
         sync_vector=partial(memory_api.sync_vector, services),
+        refresh_memory_md=partial(memory_api.refresh_memory_md, services),  # 🆕 WU-4
+        get_memory_md_content=partial(memory_api.get_memory_md_content, services),  # 🆕 WU-6
     )
 
 
