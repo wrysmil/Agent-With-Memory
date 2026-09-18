@@ -15,14 +15,11 @@ import yaml
 from nanobot.identity.catalog import (
     CHAR_LIMIT,
     CORE_FILES,
+    LIFECYCLE_OWNED_FILES,
     IdentityFileSpec,
     build_persona_specs,
     resolve_identity_dir,
 )
-
-# 由记忆生命周期托管的文件：写入必须经 MemoryLifecycle 的备份语义，
-# 不允许从 IdentityStore 开出第二个写入口。
-_LIFECYCLE_OWNED_FILES = frozenset({"MEMORY.md"})
 
 
 class IdentityStoreError(ValueError):
@@ -121,7 +118,7 @@ class IdentityStore:
         ``MemoryLifecycle._safe_write_with_backup``，由 API 层分流。在这里拦住，
         是为了保证「谁能写 MEMORY.md」只有那一个入口。
         """
-        if name in _LIFECYCLE_OWNED_FILES:
+        if name in LIFECYCLE_OWNED_FILES:
             raise IdentityStoreError(
                 f"{name} 由记忆生命周期托管，必须经 MemoryLifecycle 的备份写入，"
                 "不能通过 IdentityStore 直接落盘",
