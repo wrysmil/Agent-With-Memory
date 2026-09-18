@@ -159,17 +159,16 @@ class TestBuildDreamPrompt:
         assert cursor == 2
         assert "usable memory" in prompt
 
-    def test_dream_prompt_consumes_consolidator_attribute_tags(self):
-        prompt = render_template(
-            "agent/dream.md",
-            strip=True,
-            skill_creator_path="skills/skill-creator/SKILL.md",
-        )
-
-        assert "History attribute tags" in prompt
-        assert "[skip]: audit-only" in prompt
-        assert "[correction]: replace the older conflicting fact" in prompt
-        assert "Always strip these bracketed tags from saved memory content" in prompt
+    def test_dream_prompt_excludes_memory_file_routing(self, store):
+        """新 prompt 不包含 'edit memory.md' 类指令。"""
+        prompt = store._dream_template()
+        # 不应包含 "edit memory/MEMORY.md" 或类似指令
+        assert "edit memory/MEMORY.md" not in prompt
+        assert "write memory/MEMORY.md" not in prompt.lower()
+        # 应包含 MEMORY.md.draft 相关指令
+        assert "MEMORY.md.draft" in prompt
+        # File routing 表中明确说明禁止写入
+        assert "do not write" in prompt.lower() or "禁止" in prompt
 
 
 class TestDreamRunCompletion:
@@ -212,10 +211,29 @@ class TestDreamTools:
             "write_file",
         }
 
+    def test_dream_tools_excludes_memory_file(self, store):
+        """Dream 工具有白名单，memory_file 不在写入允许列表。"""
+        tools = store.build_dream_tools()
+        write_tool = next(t for t in tools._tools.values() if "write" in t.name.lower())
+        # 断言 memory_file 不在白名单
+        assert store.memory_file not in write_tool._extra_write_allowed_files
+        # 断言 draft_file 在白名单
+        assert store.draft_file in write_tool._extra_write_allowed_files
+        # 断言 soul_file 和 user_file 仍在白名单
+        assert store.soul_file in write_tool._extra_write_allowed_files
+        assert store.user_file in write_tool._extra_write_allowed_files
+
+    def test_draft_file_path(self, store):
+        """draft_file 路径正确。"""
+        assert store.draft_file.name == "MEMORY.md.draft"
+        assert store.draft_file.parent == store.memory_dir
+
     @pytest.mark.asyncio
-    async def test_dream_can_edit_canonical_memory_files(self, store):
+    async def test_dream_can_edit_canonical_files_except_memory(self, store):
+        """Dream 可以编辑 SOUL.md/USER.md/draft_file，但拒绝 MEMORY.md。"""
         tools = store.build_dream_tools()
 
+        # 验证 MEMORY.md 写入被拒绝
         memory_result = await tools.execute(
             "apply_patch",
             {
@@ -229,6 +247,10 @@ class TestDreamTools:
                 ]
             },
         )
+        assert "outside allowed directory" in memory_result
+        assert "Project Y active" not in store.memory_file.read_text(encoding="utf-8")
+
+        # 验证 SOUL.md 写入成功
         soul_result = await tools.execute(
             "edit_file",
             {
@@ -237,6 +259,10 @@ class TestDreamTools:
                 "new_text": "Precise",
             },
         )
+        assert "Successfully edited" in soul_result
+        assert "Precise" in store.soul_file.read_text(encoding="utf-8")
+
+        # 验证 USER.md 写入成功
         user_result = await tools.execute(
             "write_file",
             {
@@ -244,13 +270,19 @@ class TestDreamTools:
                 "content": "# User Profile\n\n- **Name**: Ada\n",
             },
         )
-
-        assert "Patch applied" in memory_result
-        assert "Successfully edited" in soul_result
         assert "Successfully wrote" in user_result
-        assert "Project Y active" in store.memory_file.read_text(encoding="utf-8")
-        assert "Precise" in store.soul_file.read_text(encoding="utf-8")
         assert "**Name**: Ada" in store.user_file.read_text(encoding="utf-8")
+
+        # 验证 draft_file 写入成功
+        draft_result = await tools.execute(
+            "write_file",
+            {
+                "path": "memory/MEMORY.md.draft",
+                "content": "# Draft Memory\n\n- Project Z active",
+            },
+        )
+        assert "Successfully wrote" in draft_result
+        assert "Project Z active" in store.draft_file.read_text(encoding="utf-8")
 
     @pytest.mark.asyncio
     async def test_dream_can_write_workspace_skills(self, store):

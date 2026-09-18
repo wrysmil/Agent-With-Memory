@@ -80,6 +80,8 @@ def build_memory_operations(
         # 规避双 VectorStore 撞 ChromaDB 内部 sqlite 锁。
         reindex_vector=partial(memory_api.reindex_vector, services),
         sync_vector=partial(memory_api.sync_vector, services),
+        refresh_memory_md=partial(memory_api.refresh_memory_md, services),  # 🆕 WU-4
+        get_memory_md_content=partial(memory_api.get_memory_md_content, services),  # 🆕 WU-6
     )
 
 

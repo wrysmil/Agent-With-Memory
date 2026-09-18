@@ -80,6 +80,7 @@ class MemoryStore:
         self.legacy_history_file = self.memory_dir / "HISTORY.md"
         self.soul_file = workspace / "SOUL.md"
         self.user_file = workspace / "USER.md"
+        self.draft_file = self.memory_dir / "MEMORY.md.draft"
         self._cursor_file = self.memory_dir / ".cursor"
         self._dream_cursor_file = self.memory_dir / ".dream_cursor"
         self._corruption_logged = False  # rate-limit invalid cursor warning
@@ -589,7 +590,7 @@ class MemoryStore:
         skills_dir.mkdir(parents=True, exist_ok=True)
 
         extra_read = [BUILTIN_SKILLS_DIR] if BUILTIN_SKILLS_DIR.exists() else None
-        editable_files = [self.memory_file, self.soul_file, self.user_file]
+        editable_files = [self.soul_file, self.user_file, self.draft_file]
 
         tools.register(ReadFileTool(
             workspace=workspace,

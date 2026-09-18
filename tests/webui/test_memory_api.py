@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from nanobot.memory.database import MemoryDatabase
+from nanobot.memory.lifecycle import MemoryLifecycle
 from nanobot.memory.models import (
     Episode,
     EpisodeOutcome,
@@ -292,3 +293,36 @@ def test_save_scratchpad_upserts(services: MemoryServices):
             "SELECT COUNT(*) AS c FROM scratchpad WHERE user_id='default'"
         ).fetchone()
     assert row["c"] == 1
+
+
+# ---- MEMORY.md derived-state --------------------------------------------------
+
+
+def test_stats_includes_memory_md_field(services: MemoryServices):
+    """stats_payload 返回包含 memory_md 字段。"""
+    payload = stats_payload(services)
+    assert "memory_md" in payload
+    md = payload["memory_md"]
+    assert "last_refresh_at" in md
+    assert "last_refresh_trigger" in md
+    assert "draft_exists" in md
+    assert "draft_age_seconds" in md
+    assert "current_chars" in md
+    assert md["max_chars"] == 1500
+
+
+def test_stats_memory_md_no_lifecycle(services: MemoryServices):
+    """无 MemoryLifecycle 单例时，各字段返回 None/False/0。"""
+    # Ensure no singleton exists for this workspace
+    MemoryLifecycle._instances.pop(services.workspace_id, None)
+    MemoryLifecycle._last_refresh_iso.pop(services.workspace_id, None)
+    MemoryLifecycle._last_refresh_trigger.pop(services.workspace_id, None)
+
+    payload = stats_payload(services)
+    md = payload["memory_md"]
+    assert md["last_refresh_at"] is None
+    assert md["last_refresh_trigger"] is None
+    assert md["draft_exists"] is False
+    assert md["draft_age_seconds"] is None
+    assert md["current_chars"] == 0
+    assert md["max_chars"] == 1500

@@ -157,6 +157,17 @@ def compute_content_hash(content: str, subject: str, predicate: str) -> str:
     return hashlib.sha1(normalized.encode("utf-8")).hexdigest()
 
 
+def content_hash_legacy(content: str) -> str:
+    """SHA-1 hex digest of stripped content.
+
+    Used by ``lifecycle.refresh_memory_md`` for content-level deduplication
+    when deriving MEMORY.md. Differs from ``compute_content_hash`` in that it
+    only hashes the stripped content string (no subject/predicate), matching
+    the legacy dedup strategy from the original lifecycle implementation.
+    """
+    return hashlib.sha1(content.strip().encode("utf-8")).hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # N-Gram 相似度
 # ---------------------------------------------------------------------------

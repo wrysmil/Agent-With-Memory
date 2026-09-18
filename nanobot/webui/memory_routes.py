@@ -52,6 +52,8 @@ class MemorySettingsOperations:
     save_scratchpad: Callable[..., dict[str, Any]]
     reindex_vector: Callable[[], dict[str, Any]]
     sync_vector: Callable[[], dict[str, Any]]
+    refresh_memory_md: Callable[..., dict[str, Any]]  # 🆕 WU-4
+    get_memory_md_content: Callable[..., dict[str, Any]]  # 🆕 WU-6: 读取 MEMORY.md 内容
 
 
 # Canonical set of actions this domain understands; the settings router uses
@@ -62,6 +64,8 @@ MEMORY_ACTION_NAMES = frozenset({
     "episode-list", "episode-get", "episode-update", "episode-delete",
     "scratchpad-get", "scratchpad-save",
     "vector-reindex", "vector-sync",
+    "memory-refresh-md",  # 🆕 WU-4
+    "memory-get-md-content",  # 🆕 WU-6: 读取 MEMORY.md 内容
 })
 
 
@@ -185,6 +189,12 @@ def dispatch(
             open_questions=payload.get("open_questions") or [],
             next_steps=payload.get("next_steps") or [],
         )
+
+    if action == "memory-refresh-md":
+        return operations.refresh_memory_md()
+
+    if action == "memory-get-md-content":  # 🆕 WU-6
+        return operations.get_memory_md_content()
 
     # Unreachable for known actions; kept as a guard against future additions.
     raise WebUISettingsError(f"unsupported memory action: {action}")
