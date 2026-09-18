@@ -89,6 +89,7 @@ from nanobot.webui.http_utils import (
 from nanobot.webui.http_utils import (
     safe_host_header as _safe_host_header,
 )
+from nanobot.webui.identity_routes import IdentitySettingsOperations
 from nanobot.webui.ingress_policy import WebUIIngressPolicy
 from nanobot.webui.media_gateway import WebUIMediaGateway
 from nanobot.webui.memory_routes import MemorySettingsOperations
@@ -195,6 +196,8 @@ _WEBUI_MUTATION_PATHS = {
     "episode.update": "/api/settings/memory/episodes/update",
     "episode.delete": "/api/settings/memory/episodes/delete",
     "scratchpad.save": "/api/settings/memory/scratchpad/save",
+    "identity.file.save": "/api/settings/identity/file/save",
+    "identity.reload": "/api/settings/identity/reload",
 }
 
 _WEBUI_CHANNEL_CONNECT_ACTIONS = {
@@ -338,6 +341,7 @@ class GatewayHTTPHandler:
             Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]] | None
         ) = None,
         memory_operations: MemorySettingsOperations | None = None,
+        identity_operations: IdentitySettingsOperations | None = None,
         log: Any = logger,
     ) -> None:
         self.config = config
@@ -352,6 +356,7 @@ class GatewayHTTPHandler:
         self.settings = settings
         self.skills_workspace_path = skills_workspace_path
         self.memory_operations = memory_operations
+        self.identity_operations = identity_operations
         self.disabled_skills: set[str] = (
             disabled_skills if disabled_skills is not None else set()
         )
@@ -386,6 +391,7 @@ class GatewayHTTPHandler:
             mcp_reload=mcp_reload,
             mcp_oauth_redirect_uri=self._mcp_oauth_redirect_uri,
             memory_operations=self.memory_operations,
+            identity_operations=self.identity_operations,
         )
 
     def workspace_controls_available(self, connection: Any) -> bool:

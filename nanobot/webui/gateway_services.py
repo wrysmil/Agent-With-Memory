@@ -11,9 +11,11 @@ from typing import TYPE_CHECKING, Any, Callable
 from loguru import logger as default_logger
 
 from nanobot.config.loader import get_config_path
-from nanobot.webui import memory_api
+from nanobot.memory.lifecycle import MemoryLifecycle
+from nanobot.webui import identity_api, memory_api
 from nanobot.webui.gateway_endpoint import WebUIGatewayEndpoint
 from nanobot.webui.gateway_tokens import GatewayTokenStore
+from nanobot.webui.identity_routes import IdentitySettingsOperations
 from nanobot.webui.ingress_policy import DEFAULT_WEBUI_INGRESS_POLICY, WebUIIngressPolicy
 from nanobot.webui.media_gateway import WebUIMediaGateway
 from nanobot.webui.memory_routes import MemorySettingsOperations
@@ -82,6 +84,35 @@ def build_memory_operations(
         sync_vector=partial(memory_api.sync_vector, services),
         refresh_memory_md=partial(memory_api.refresh_memory_md, services),  # 🆕 WU-4
         get_memory_md_content=partial(memory_api.get_memory_md_content, services),  # 🆕 WU-6
+    )
+
+
+def build_identity_operations(
+    *,
+    workspace_id: str,
+    workspace_path: Path,
+) -> IdentitySettingsOperations:
+    """Wire the real ``identity_api`` actions to a workspace-scoped store.
+
+    Every callable arrives pre-bound: the handler passes business arguments
+    (name/content/mode) only. ``MEMORY.md`` writes and reloads go through the
+    workspace's ``MemoryLifecycle`` singleton, matching the write-path hook and
+    avoiding a second ``VectorStore``.
+    """
+    services = MemoryServices.for_workspace(workspace_id, workspace_path)
+    lifecycle = MemoryLifecycle.for_workspace(workspace_id, services)
+    workspace = Path(workspace_path)
+    return IdentitySettingsOperations(
+        list_files=partial(identity_api.identity_list_files, workspace),
+        read_file=partial(identity_api.identity_read_file, workspace),
+        write_file=partial(
+            identity_api.identity_write_file, workspace, lifecycle=lifecycle
+        ),
+        reload=partial(
+            identity_api.identity_reload,
+            refresh_memory_md=partial(memory_api.refresh_memory_md, services),
+        ),
+        compile=identity_api.identity_compile,
     )
 
 
@@ -164,6 +195,10 @@ def build_gateway_services(
         skills_workspace_path=workspace_path,
         disabled_skills=disabled_skills,
         memory_operations=build_memory_operations(
+            workspace_id="default",
+            workspace_path=workspace_path,
+        ),
+        identity_operations=build_identity_operations(
             workspace_id="default",
             workspace_path=workspace_path,
         ),

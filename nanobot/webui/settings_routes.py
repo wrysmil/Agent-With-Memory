@@ -19,6 +19,7 @@ from nanobot.bus.queue import MessageBus
 from nanobot.channels.registry import load_channel_plugin
 from nanobot.channels.validation import validate_channel_config
 from nanobot.pairing import approve_code, deny_code, list_pending
+from nanobot.webui import identity_routes as identity_domain
 from nanobot.webui import memory_routes as memory_domain
 from nanobot.webui import settings_capabilities as capability_domain
 from nanobot.webui import settings_contracts as contracts
@@ -27,6 +28,7 @@ from nanobot.webui import settings_system as system_domain
 from nanobot.webui.cli_apps_api import cli_apps_action, cli_apps_payload
 from nanobot.webui.http_utils import http_response as _http_response
 from nanobot.webui.http_utils import is_local_browser_request as _is_local_browser_request
+from nanobot.webui.identity_routes import IdentitySettingsOperations
 from nanobot.webui.mcp_oauth_api import McpOAuthManager
 from nanobot.webui.mcp_presets_api import (
     ensure_mcp_oauth_server,
@@ -162,6 +164,11 @@ _SYSTEM_ROUTES = {
     "/api/settings/memory/vector/sync": "vector-sync",
     "/api/settings/memory/refresh-md": "memory-refresh-md",  # 🆕 WU-4
     "/api/settings/memory/memory-md/content": "memory-get-md-content",  # 🆕 WU-6
+    "/api/settings/identity/files": "identity-list-files",
+    "/api/settings/identity/file": "identity-read-file",
+    "/api/settings/identity/file/save": "identity-write-file",
+    "/api/settings/identity/reload": "identity-reload",
+    "/api/settings/identity/compile": "identity-compile",
     **{
         path: f"mcp-{action}"
         for path, action in _MCP_PRESET_ACTIONS_BY_PATH.items()
@@ -178,6 +185,12 @@ _MEMORY_MUTATION_PATHS = frozenset({
     "/api/settings/memory/vector/reindex",
     "/api/settings/memory/vector/sync",
     "/api/settings/memory/refresh-md",  # 🆕 WU-4
+})
+
+_IDENTITY_MUTATION_PATHS = frozenset({
+    "/api/settings/identity/file/save",
+    "/api/settings/identity/reload",
+    "/api/settings/identity/compile",
 })
 
 _SETTINGS_MUTATION_PATHS = frozenset({
@@ -213,6 +226,7 @@ _SETTINGS_MUTATION_PATHS = frozenset({
     "/api/settings/mcp-oauth/cancel",
     *_MCP_PRESET_ACTIONS_BY_PATH,
     *_MEMORY_MUTATION_PATHS,
+    *_IDENTITY_MUTATION_PATHS,
 })
 
 
@@ -270,6 +284,22 @@ def _null_memory_operations() -> MemorySettingsOperations:
     )
 
 
+def _null_identity_operations() -> IdentitySettingsOperations:
+    """Fallback operations so the identity domain still responds when the
+    gateway hasn't injected a real workspace yet (everything returns 503)."""
+
+    def _unavailable(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise WebUISettingsError("identity service is not configured", status=503)
+
+    return IdentitySettingsOperations(
+        list_files=_unavailable,
+        read_file=_unavailable,
+        write_file=_unavailable,
+        reload=_unavailable,
+        compile=_unavailable,
+    )
+
+
 class WebUISettingsRouter:
     """Authenticate and dispatch settings requests to transport-neutral domains."""
 
@@ -291,6 +321,7 @@ class WebUISettingsRouter:
         mcp_reload: Callable[[], Awaitable[dict[str, Any]]] | None = None,
         mcp_oauth_redirect_uri: Callable[[WsRequest], str] | None = None,
         memory_operations: MemorySettingsOperations | None = None,
+        identity_operations: IdentitySettingsOperations | None = None,
     ) -> None:
         self.settings = settings
         self.bus = bus
@@ -316,6 +347,11 @@ class WebUISettingsRouter:
         self._system = system_domain.SystemSettingsHandler(settings, logger)
         self._memory = memory_domain.MemorySettingsHandler(
             memory_operations if memory_operations is not None else _null_memory_operations()
+        )
+        self._identity = identity_domain.IdentitySettingsHandler(
+            identity_operations
+            if identity_operations is not None
+            else _null_identity_operations()
         )
 
     async def dispatch(
@@ -384,6 +420,12 @@ class WebUISettingsRouter:
             # transport-neutral handler with the injected operations.
             result = await asyncio.to_thread(
                 lambda: self._memory.handle(action, domain_request),
+            )
+        elif action in identity_domain.IDENTITY_ACTION_NAMES:
+            # Identity lives under the system route table too; like memory it
+            # gets its own transport-neutral handler with injected operations.
+            result = await asyncio.to_thread(
+                lambda: self._identity.handle(action, domain_request),
             )
         else:
             channel_connect = _channel_connect_route(path)
