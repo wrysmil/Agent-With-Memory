@@ -7,7 +7,6 @@ from nanobot.identity.catalog import (
     CORE_FILES,
     IDENTITY_DIR_NAME,
     PERSONAS_SUBDIR,
-    IdentityFileSpec,
     discover_personas,
     resolve_identity_dir,
 )
