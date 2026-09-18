@@ -21,8 +21,8 @@
 | WU-7 | Dream 工具白名单改 editable_files | coder | **done** | 2026-09-17 | chain B 根 |
 | WU-8 | dream.md 改写 | implementer | **done** | 2026-09-17 | 依赖 WU-7 |
 | WU-9 | cmd_dream 成功消息文案 | implementer | **done** | 2026-09-18 | — |
-| WU-10 | 集成测试 | test-engineer | pending | — | 依赖全部 |
-| WU-11 | i18n 全语种 | implementer | pending | — | 依赖 WU-8, WU-9 |
+| WU-10 | 集成测试 | test-engineer | **done** | 2026-09-18 | 依赖全部 |
+| WU-11 | i18n 全语种 | implementer | **done** | 2026-09-18 | 依赖 WU-8, WU-9 |
 
 ## 当前批次
 
@@ -334,6 +334,45 @@ uv run --no-sync pytest tests/webui/test_refresh_md_route.py -v
 uv run --no-sync pytest tests/memory/ tests/webui/ tests/agent/test_dream.py -v
 # 148 passed in 18.08s
 ```
+
+### WU-10（2026-09-18 完成）
+
+**范围**：端到端集成测试
+
+**变更文件**：
+- `tests/memory/test_lifecycle_integration.py` — 新建，5 个集成测试用例
+
+**测试覆盖**：
+| 用例 | 状态 |
+|---|---|
+| refresh 生成 MEMORY.md 文件 | PASS |
+| truncate 保持 ≤1500 字符 | PASS |
+| draft_file 路径正确 | PASS |
+| get_memory_md_content 返回两者内容 | PASS |
+| truncate 优先保留规则段落 | PASS |
+
+**验证命令**：
+```bash
+uv run --no-sync pytest tests/memory/test_lifecycle_integration.py -v
+# 5 passed in 1.18s
+```
+
+### WU-11（2026-09-18 完成）
+
+**范围**：i18n 全语种
+
+**变更文件**：
+- `webui/src/i18n/locales/ja/common.json` — 新增 memory.mdCard/mdStats/mdButton/mdModal 等 16 个 keys
+- `webui/src/i18n/locales/fr/common.json` — 新增
+- `webui/src/i18n/locales/ko/common.json` — 新增
+- `webui/src/i18n/locales/vi/common.json` — 新增
+- `webui/src/i18n/locales/id/common.json` — 新增
+- `webui/src/i18n/locales/pt-BR/common.json` — 新增
+- `webui/src/i18n/locales/zh-TW/common.json` — 新增
+- `webui/src/i18n/locales/es/common.json` — 新增
+- zh-CN 和 en 已在之前完成
+
+**验证**：i18n 文件 JSON 格式正确，无语法错误
 
 **（各 WU 完成时在此追加）**
 
