@@ -975,3 +975,8 @@
     outline-offset: 2px;
   }
 }
+
+/* Disable resize handle on the editor — keeps settings rows aligned */
+textarea.no-resize {
+  resize: none;
+}

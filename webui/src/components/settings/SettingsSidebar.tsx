@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  FileText,
   Globe2,
   ImageIcon,
   LogOut,
@@ -41,6 +42,7 @@ const SETTINGS_NAV_ITEMS: Array<{ key: SettingsSectionKey; icon: LucideIcon; fal
   { key: "browser", icon: Globe2, fallback: "Web" },
   { key: "channels", icon: MessageCircle, fallback: "Channels" },
   { key: "memory", icon: Brain, fallback: "Memory" },
+  { key: "identity", icon: FileText, fallback: "Identity" },
   { key: "runtime", icon: Server, fallback: "System" },
   { key: "advanced", icon: ShieldCheck, fallback: "Security" },
 ];
