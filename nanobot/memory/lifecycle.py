@@ -155,6 +155,31 @@ class MemoryLifecycle:
                 # No exception propagates: callers get the ok/skipped dict only.
                 return {"status": "error", "reason": "write_failed"}
 
+    def write_memory_md(self, content: str) -> None:
+        """写入用户手工编辑的 MEMORY.md，带 .bak 备份。
+
+        长度超 MEMORY_MD_MAX_CHARS 时抛 ValueError（由调用方转成 4xx）。
+        注意：下一次 refresh_memory_md_sync 会自动覆盖本方法写入的内容。
+
+        这是 MEMORY.md 除 Dream 派生之外的第二个（也是唯一一个）写入口：
+        ``IdentityStore.write_file`` 对 MEMORY.md 一律拒绝，手工编辑必须走这里，
+        才能保证「改前先备份」的语义不丢失。
+        """
+        with self._derive_lock:
+            if not isinstance(content, str):
+                raise ValueError("MEMORY.md 内容必须是字符串")
+            if len(content) > MEMORY_MD_MAX_CHARS:
+                raise ValueError(
+                    f"内容超过 {MEMORY_MD_MAX_CHARS} 字符上限（当前 {len(content)}）"
+                )
+            self.memory_file.parent.mkdir(parents=True, exist_ok=True)
+            self._safe_write_with_backup(self.memory_file, content)
+            logger.info(
+                "MEMORY.md manually written for workspace {} ({} chars)",
+                self.workspace_id,
+                len(content),
+            )
+
     # ------------------------------------------------------------------
     # Public async API
     # ------------------------------------------------------------------
