@@ -273,7 +273,7 @@ async def test_semantic_channel_alone_recovers_chinese_substring(tmp_path: Path)
 class _BrokenSemanticStore:
     """四路通道契约齐全，但 semantic 抛异常——复刻根因 1 的装配级故障。"""
 
-    def search_semantic_scored(self, query: str, *, limit: int = 30):
+    def search_semantic_scored(self, query, *, keywords=None, limit=None):
         raise AttributeError(
             "'MemoryDatabase' object has no attribute 'search_semantic_scored'"
         )

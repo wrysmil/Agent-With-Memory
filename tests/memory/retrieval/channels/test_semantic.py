@@ -13,7 +13,7 @@ class _FakeStore:
     def __init__(self, rows):
         self._rows = rows
 
-    def search_semantic_scored(self, query, limit):
+    def search_semantic_scored(self, query, *, keywords=None, limit=None):
         return self._rows
 
 

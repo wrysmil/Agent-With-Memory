@@ -23,6 +23,7 @@ from typing import Any, Callable
 
 from loguru import logger
 
+from nanobot.memory.retrieval import trace
 from nanobot.memory.retrieval.candidate import RetrievalCandidate
 from nanobot.memory.retrieval.channels.attachments import search_attachments
 from nanobot.memory.retrieval.channels.episodes import search_episodes
@@ -121,9 +122,16 @@ class RetrievalEngine:
         """
         prepared = MemoryQueryPreprocessor.prepare(query, recent_messages)
         if prepared.skip:
+            trace.skipped(query=query, reason="预处理器判定跳过（空/控制词/超短）")
             return "", []
 
         tokens = max_tokens if max_tokens is not None else self._default_max_tokens
+        trace.start(
+            raw_query=query,
+            cleaned_query=prepared.cleaned_query,
+            recent_count=len(recent_messages or []),
+            tokens=tokens,
+        )
 
         # 1) 拆解（关键词 + 意图）
         if precomputed_keywords is not None:
@@ -148,6 +156,7 @@ class RetrievalEngine:
                 search_semantic,
                 self.store,
                 query=prepared.cleaned_query,
+                keywords=keywords,
                 limit=_SEMANTIC_LIMIT,
                 compute_recency=recency,
             )
@@ -157,6 +166,7 @@ class RetrievalEngine:
                 search_episodes,
                 self.store,
                 query=prepared.cleaned_query,
+                keywords=keywords,
                 limit=_EPISODES_LIMIT,
                 compute_recency=recency,
             )
@@ -187,7 +197,8 @@ class RetrievalEngine:
             return_exceptions=True,
         )
 
-        candidates: list[RetrievalCandidate] = []
+        channel_items: dict[str, list[RetrievalCandidate]] = {}
+        channel_errors: dict[str, str] = {}
         for channel_name, chunk in zip(
             ("semantic", "episodes", "recent", "attachments"),
             (sem, eps, rec, att),
@@ -198,17 +209,29 @@ class RetrievalEngine:
                 # ``AttributeError: 'MemoryDatabase' object has no attribute
                 # 'search_semantic_scored'`` 这类装配级故障完全吞掉，导致
                 # 「四路召回全废」表现为「记忆里是空的」。定位信息必须留下。
+                # 该告警**不受** trace.ENABLED 影响（常驻信号，非调试噪音）。
                 logger.warning(
                     "retrieval channel {} failed: {}: {!r}",
                     channel_name,
                     type(chunk).__name__,
                     chunk,
                 )
+                channel_errors[channel_name] = f"{type(chunk).__name__}: {chunk}"
+                channel_items[channel_name] = []
                 continue
-            candidates.extend(chunk)
+            channel_items[channel_name] = list(chunk)
+
+        candidates = [c for items in channel_items.values() for c in items]
+        trace.recall(
+            query=prepared.cleaned_query,
+            keywords=keywords,
+            channel_items=channel_items,
+            channel_errors=channel_errors,
+        )
 
         # 3) 去重：按 memory_id 保留最高 relevance
-        unique = _dedupe_by_memory_id(candidates)
+        unique, dup_groups = _dedupe_by_memory_id_detailed(candidates)
+        trace.dedupe(before=len(candidates), unique=unique, dup_groups=dup_groups)
 
         # 4) rerank + format
         ranked = self._reranker.rerank(
@@ -219,20 +242,55 @@ class RetrievalEngine:
         )
         limit = max(1, tokens // _TOKENS_PER_CANDIDATE)
         items = RetrievalFormatter(limit=limit).format(ranked)
-        return _render_injection_block(items), [item["memory_id"] for item in items]
+
+        ranked_ids = {c.memory_id for c in ranked}
+        dropped = [c for c in unique if c.memory_id not in ranked_ids]
+        injected_ids = {it.get("memory_id", "") for it in items}
+        truncated = [c for c in ranked if c.memory_id not in injected_ids]
+        trace.rank(
+            unique=unique, ranked=ranked, dropped=dropped,
+            items=items, truncated=truncated, limit=limit, tokens=tokens,
+        )
+
+        # 最终产物：真正拼进 system prompt 的那段 markdown 原文
+        block = _render_injection_block(items)
+        trace.injection(block=block, ids=[it["memory_id"] for it in items])
+        return block, [it["memory_id"] for it in items]
+
+
+# ---- 检索过程日志 -----------------------------------------------------------
+# 全部格式化逻辑集中在 ``retrieval/trace.py``（切面模块）；此处只留一行调用。
+# 想关掉日志：改 ``trace.ENABLED = False``，或注释掉上面各 ``trace.*(...)`` 调用。
 
 
 def _dedupe_by_memory_id(
     candidates: list[RetrievalCandidate],
 ) -> list[RetrievalCandidate]:
     """按 ``memory_id`` 去重，同 id 保留最高 ``relevance``。"""
+    return _dedupe_by_memory_id_detailed(candidates)[0]
+
+
+def _dedupe_by_memory_id_detailed(
+    candidates: list[RetrievalCandidate],
+) -> tuple[list[RetrievalCandidate], dict[str, list[str]]]:
+    """按 ``memory_id`` 去重，同 id 保留最高 ``relevance``。
+
+    同时返回 ``{memory_id: [命中的通道名…]}``，**仅含被多路命中的 id**——
+    供日志展示"哪条记忆被哪几路同时召回"（排障时区分「单路弱命中」与
+    「多路共识」的关键信息）。
+    """
     bucket: dict[str, RetrievalCandidate] = {}
+    channels: dict[str, list[str]] = {}
     for c in candidates:
         prev = bucket.get(c.memory_id)
         # 桶空 或 当前候选 relevance 更高 → 替换
         if prev is None or c.relevance > prev.relevance:
             bucket[c.memory_id] = c
-    return list(bucket.values())
+        seen = channels.setdefault(c.memory_id, [])
+        if c.source_channel not in seen:
+            seen.append(c.source_channel)
+    dup_groups = {mid: chans for mid, chans in channels.items() if len(chans) > 1}
+    return list(bucket.values()), dup_groups
 
 
 def _build_recency_fn() -> Callable[[Any], float]:

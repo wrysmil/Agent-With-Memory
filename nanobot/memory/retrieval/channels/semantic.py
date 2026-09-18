@@ -16,15 +16,16 @@ def search_semantic(
     store,
     *,
     query: str,
+    keywords: list[str] | None = None,
     limit: int,
     compute_recency: Callable[[datetime], float],
 ) -> list[RetrievalCandidate]:
     """从 store 取语义召回结果并包装为 RetrievalCandidate。
 
-    store 需提供 ``search_semantic_scored(query, limit) -> list[(Memory, raw_score)]``，
+    store 需提供 ``search_semantic_scored(query, *, keywords, limit) -> list[(Memory, raw_score)]``，
     该接口由 RetrievalEngine 注入（真实实现在 T-12 落地）。
     """
-    scored = store.search_semantic_scored(query, limit=limit * 3)
+    scored = store.search_semantic_scored(query, keywords=keywords, limit=limit * 3)
     candidates: list[RetrievalCandidate] = []
     for mem, raw_score in scored[:limit]:
         candidates.append(

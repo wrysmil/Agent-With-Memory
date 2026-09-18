@@ -43,13 +43,13 @@ class _StubStore:
         # 控制 semantic 抛异常的开关（用于测试 4）
         self.semantic_should_raise: bool = False
 
-    def search_semantic_scored(self, q: str, limit: int) -> list[tuple[Any, float]]:
+    def search_semantic_scored(self, q, *, keywords=None, limit=None):
         self.search_semantic_scored_called += 1
         if self.semantic_should_raise:
             raise RuntimeError("semantic down")
         return self.semantic_payload
 
-    def search_episodes(self, entity: str, limit: int) -> list[Any]:
+    def search_episodes(self, *, entity, limit=None):
         self.search_episodes_called += 1
         return []
 
@@ -106,7 +106,7 @@ async def test_engine_full_path_with_keywords():
     assert "相关记忆" in out
     assert "Python 爬虫" in out
     assert store.search_semantic_scored_called == 1
-    assert store.search_episodes_called == 1
+    assert store.search_episodes_called >= 1  # keywords 兜底后可能有多个 entity
     assert store.query_semantic_called == 1
 
 
@@ -156,7 +156,7 @@ async def test_engine_one_channel_failure_isolated():
     assert isinstance(out, str)
     # semantic 已尝试；episodes/recent 仍被调用；attachments 被闸门拦截
     assert store.search_semantic_scored_called == 1
-    assert store.search_episodes_called == 1
+    assert store.search_episodes_called >= 1  # keywords 兜底后可能有多个 entity
     assert store.query_semantic_called == 1
     assert store.search_attachments_called == 0
 

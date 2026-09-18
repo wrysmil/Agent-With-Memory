@@ -1,5 +1,7 @@
-"""Adapter 并集：向量 ∪ FTS5 取最高分（V2/V6 + 分数符号契约）。"""
+"""Adapter 并集：向量 ∪ FTS5 按 RRF 融合（spec §3.4 v2）。"""
 from __future__ import annotations
+
+import pytest
 
 from nanobot.memory.database import MemoryDatabase
 from nanobot.memory.models import Memory, MemoryType
@@ -45,12 +47,16 @@ def test_without_vector_store_behavior_is_unchanged(tmp_path):
 
 
 def test_vector_only_hit_is_returned(tmp_path):
-    """同义召回：FTS5 零命中，向量命中（V3/V5 的代理判据）。"""
+    """同义召回：FTS5 零命中，向量命中（V3/V5 的代理判据）。
+
+    RRF 融合：单路第1名的归一化分为 0.5（两路皆第1的理论上界 RRF_MAX≈0.033，
+    单路第1的 RRF≈0.016，归一化后 = 0.016/0.033 ≈ 0.5）。
+    """
     db = _db(tmp_path, [("m1", "心情不好")])
     adapter = MemoryStoreAdapter(db, vector_store=_FakeVector([("m1", 0.88)]))
     scored = adapter.search_semantic_scored("情绪低落", limit=5)
     assert [m.id for m, _s in scored] == ["m1"]
-    assert scored[0][1] == 0.88
+    assert scored[0][1] == 0.5  # RRF 单路第1名归一化分
 
 
 def test_union_takes_max_score_per_id(tmp_path):
@@ -69,11 +75,11 @@ def test_union_takes_max_score_per_id(tmp_path):
 
 
 def test_vector_lifts_low_ranked_fts5_hit(tmp_path):
-    """向量占优方向：向量分抬高 FTS5 末名（页内归一化下末名恒 0.0）。
+    """向量占优方向：向量 + FTS5 双路共识时排名抬升。
 
-    这是「取 max」真正的判别性覆盖——若实现误写成「向量覆盖一切」或「FTS5
-    覆盖一切」，本用例必失败。两条 doc 长度刻意不同，保证 bm25 两行 rank
-    不相等（``span > 0``），末名才会被归一化为 0.0 而非塌成 1.0。
+    RRF 融合：m2 在两路都是 rank 1，m1 仅 FTS5 rank 1。
+    双路共识的 m2 归一化分 ≈ 0.992（接近 1.0），单路的 m1 = 0.5。
+    旧 max() 融合因为向量分 0.6 < FTS5 首名 1.0 而让 m1 排第一。
     """
     db = _db(
         tmp_path,
@@ -81,7 +87,11 @@ def test_vector_lifts_low_ranked_fts5_hit(tmp_path):
     )
     adapter = MemoryStoreAdapter(db, vector_store=_FakeVector([("m2", 0.6)]))
     scored = adapter.search_semantic_scored("creating", limit=5)
-    assert [(m.id, s) for m, s in scored] == [("m1", 1.0), ("m2", 0.6)]
+    # m2 双路共识排第一，m1 单路排第二
+    assert [(m.id, s) for m, s in scored] == [
+        ("m2", pytest.approx(0.992, rel=1e-2)),
+        ("m1", pytest.approx(0.500, rel=1e-2)),
+    ]
 
 
 def test_vector_stale_id_is_dropped(tmp_path):

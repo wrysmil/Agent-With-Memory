@@ -27,11 +27,18 @@ def search_episodes(
     store,  # 提供 search_episodes(entity, limit)
     *,
     query: str,
+    keywords: list[str] | None = None,
     limit: int,
     compute_recency: Callable[[datetime], float],
 ) -> list[RetrievalCandidate]:
     """按 query 中的实体名关联 Episode，命中固定给 0.6 相关性。"""
     entities = _extract_query_entities(query)[:3]
+    # 关键词兜底：keywords 由 QueryDecomposer 产出，普通中文对话也能命中 episode
+    if keywords:
+        for kw in keywords:
+            if kw and kw not in entities:
+                entities.append(kw)
+    entities = entities[:3]
     candidates: list[RetrievalCandidate] = []
     for entity in entities:
         eps = store.search_episodes(entity=entity, limit=3)

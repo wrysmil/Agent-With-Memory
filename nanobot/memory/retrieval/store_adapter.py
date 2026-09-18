@@ -25,6 +25,7 @@ from loguru import logger
 
 from nanobot.memory import repository
 from nanobot.memory.database import MemoryDatabase
+from nanobot.memory.retrieval import trace
 
 
 class MemoryStoreAdapter:
@@ -54,53 +55,76 @@ class MemoryStoreAdapter:
 
     # ----- 语义通道 -----
     def search_semantic_scored(
-        self, query: str, *, limit: int = 30
+        self, query: str, *, keywords: list[str] | None = None, limit: int = 30
     ) -> list[tuple[Any, float]]:
-        """语义召回：向量 ∪ FTS5，按 id 取**最高分**（spec §4.6）。
+        """语义召回：FTS5 ∪ 向量，按 RRF 融合（spec §3.4）。
 
-        融合策略 v1 = 取最高分并集（与 openakita 一致，便于对照排障）。
-        🔴 两侧分数都**已经**是「越大越相关」：FTS5 侧由 Task 9 的页内归一化
-        保证，向量侧由 ``VectorStore._distance_to_score`` 完成符号翻转。
-        本函数**不得**再引入任何 distance 语义。
+        融合策略 v2 = RRF（Elasticsearch 默认 k=60），替换 v1 的 max()。
+        RRF 只看名次不消费分数，因此 FTS5 侧页内 min-max 归一化与向量侧
+        距离翻转均为「内部实现细节」，融合结果与两路分数分布无关。
+        单条候选的 relevance < 1.0（绝对归一化）。
 
-        已知限制（v1，spec §8.1 R-4）：两路的分数分布不同源，直接比大小理论上
-        不可校准。实测见 V4；v2 备选 RRF。
+        关键词通过 keywords 参数下沉（FTS5/LIKE 逐词 OR）；不传时退化为
+        [query]（行为与改造前一致）。
         """
-        merged: dict[str, float] = {}
+        # RRF 融合（Elasticsearch 默认 k=60）
+        k = 60
+        rrf_max = 2.0 / (k + 1)  # 两路皆第 1 名的理论上界 ≈ 0.032787
 
+        rrf: dict[str, float] = {}
+
+        # FTS5 路
         fts5_hits: list[tuple[Any, float]] = []
         with self._database.connect() as conn:
-            fts5_hits = repository.search_semantic_scored(conn, query, limit=limit * 3)
-        for mem, score in fts5_hits:
-            merged[mem.id] = max(merged.get(mem.id, 0.0), float(score))
+            fts5_hits = repository.search_semantic_scored(
+                conn, query, keywords=keywords, limit=limit * 3
+            )
+        for rank, (mem, _score) in enumerate(fts5_hits, start=1):
+            rrf[mem.id] = rrf.get(mem.id, 0.0) + 1.0 / (k + rank)
 
         # 向量路：故障时静默降级为纯 FTS5（D4）。
-        # VectorStore.search 自身已有 try/except；此处再包一层是因为 Adapter 是
-        # 契约边界，不应假设任何实现的异常纪律。
+        vector_hits: list[tuple[Any, float]] = []
         if self._vector_store is not None:
             try:
                 vector_hits = self._vector_store.search(query, limit=limit * 3)
             except Exception as exc:  # noqa: BLE001 - 向量故障绝不上抛
                 logger.warning("vector channel failed, degrading to fts5: {}", exc)
                 vector_hits = []
-            for mid, score in vector_hits:
-                merged[str(mid)] = max(merged.get(str(mid), 0.0), float(score))
+            for rank, (mid, _score) in enumerate(vector_hits, start=1):
+                rrf[str(mid)] = rrf.get(str(mid), 0.0) + 1.0 / (k + rank)
 
-        ordered = sorted(merged.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+        # 按 RRF 归一化分排序
+        ordered = sorted(rrf.items(), key=lambda kv: kv[1], reverse=True)[:limit]
 
         out: list[tuple[Any, float]] = []
         fts5_by_id = {mem.id: mem for mem, _s in fts5_hits}
+        content_by_id = {mem.id: mem.content for mem, _ in fts5_hits}
+        # 向量独有 id 在活性过滤中被丢弃的（superseded / 已过期 / 行已删）
+        discarded_ids: list[str] = []
         with self._database.connect() as conn:
-            for mid, score in ordered:
+            for mid, rrf_score in ordered:
                 mem = fts5_by_id.get(mid)
                 if mem is None:
-                    # 向量独有 id：回查 SQLite 权威行并做活性过滤（修正 3）。
-                    # FTS5 侧的结果已来自 SQLite，不做重复校验，避免对既有
-                    # FTS5 行为引入回归。
+                    # 向量独有 id：回查 SQLite 权威行并做活性过滤
                     mem = repository.get_memory(conn, mid)
                     if mem is None or not _is_live(mem):
+                        discarded_ids.append(mid)
                         continue
-                out.append((mem, score))
+                    content_by_id[mid] = mem.content
+                # 绝对归一化：单条候选 relevance < 1.0
+                relevance = min(1.0, rrf_score / rrf_max)
+                out.append((mem, relevance))
+
+        trace.hybrid(
+            query=query,
+            fts5_hits=fts5_hits,
+            vector_hits=vector_hits,
+            merged=rrf,
+            out=out,
+            content_by_id=content_by_id,
+            discarded_ids=discarded_ids,
+            limit=limit,
+        )
         return out
 
     # ----- 情节通道 -----

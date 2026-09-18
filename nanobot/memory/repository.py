@@ -690,10 +690,28 @@ def reset_extraction_state(conn: sqlite3.Connection, session_key: str) -> None:
 from dataclasses import dataclass  # T-12: row dataclasses（追加于 T-12）  # noqa: E402
 
 
+def _search_terms(query: str, keywords: list[str] | None) -> list[str]:
+    """构造 FTS5/LIKE 逐词查询词表。
+
+    terms = [query] + keywords（去重、去空、保留 query 首位）。
+    query 恒在首位：即便关键词拆解质量差，原始查询仍有一条独立通路，
+    保证「新机制不会让任何现有查询变差」。
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+    for tok in [query] + (keywords or []):
+        tok = tok.strip()
+        if tok and tok not in seen:
+            seen.add(tok)
+            result.append(tok)
+    return result
+
+
 def search_semantic_scored(
     conn: sqlite3.Connection,
     query: str,
     *,
+    keywords: list[str] | None = None,
     limit: int = 30,
 ) -> list[tuple[Memory, float]]:
     """语义召回：FTS5 真实 ``bm25()`` 分（页内归一化）。
@@ -708,6 +726,12 @@ def search_semantic_scored(
     ``bm25()`` 取值是负的且无界（更相关 = 更负），min-max 只依赖**次序**，
     对符号约定免疫，且保证首名 = 1.0、末名 = 0.0，与向量的 [0,1] 同量纲。
     """
+    # 构造逐词查询词表
+    terms = _search_terms(query, keywords)
+
+    # FTS5 逐词 OR 短语查询：每个 term 用双引号包裹以中性化特殊字符
+    match_expr = " OR ".join(f'"{t}"' for t in terms)
+
     flat = ", ".join(f"m.{c.strip()}" for c in _SELECT_MEMORY_COLUMNS.split(","))
     sql = (
         f"SELECT {flat}, bm25(memories_fts) AS _rank "
@@ -716,7 +740,7 @@ def search_semantic_scored(
         f"ORDER BY _rank LIMIT ?"
     )
     try:
-        rows = conn.execute(sql, (query, int(limit))).fetchall()
+        rows = conn.execute(sql, (match_expr, int(limit))).fetchall()
     except sqlite3.OperationalError as exc:
         if _is_fts_syntax_error(exc):
             logger.debug("FTS5 MATCH syntax error in semantic scored: {}", exc)
@@ -735,12 +759,22 @@ def search_semantic_scored(
             out.append((_row_to_memory(row), score))
         return out
 
-    return [
-        (mem, _pseudo_bm25_score(float(idx)))
-        for idx, mem in enumerate(
-            _search_memories_like(conn, query, type=None, workspace_id=None, limit=limit)
-        )
-    ]
+    # 逐词 LIKE：每词单独 LIKE content，再按命中词数 + importance_score 排序
+    # terms 至少含 query，故恒有至少一个 LIKE 条件
+    hit_exprs, like_params = [], []
+    for tok in terms:
+        escaped = _escape_like(tok)
+        like_params.append(f"%{escaped}%")
+        hit_exprs.append("content LIKE ? ESCAPE '\\'")
+    flat = " ".join(_SELECT_MEMORY_COLUMNS.split())
+    _hits_clause = " + ".join(f"CASE WHEN {e} THEN 1 ELSE 0 END" for e in hit_exprs)
+    sql = (
+        f"SELECT {flat}, ({_hits_clause}) AS _hits "
+        f"FROM memories WHERE ({' OR '.join(hit_exprs)}) "
+        f"ORDER BY _hits DESC, importance_score DESC LIMIT {int(limit)}"
+    )
+    rows = conn.execute(sql, [*like_params, *like_params]).fetchall()
+    return [(_row_to_memory(r), _pseudo_bm25_score(float(idx))) for idx, r in enumerate(rows)]
 
 
 def search_episodes(
