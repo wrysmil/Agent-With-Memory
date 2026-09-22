@@ -213,6 +213,84 @@ def test_read_missing_file_is_404(store: IdentityStore) -> None:
     assert exc.value.status == 404
 
 
+# -- workspace 根回退（未迁移老工作区） --------------------------------------
+
+
+def test_read_falls_back_to_workspace_root(tmp_path: Path) -> None:
+    """identity/ 还没有、workspace 根有——读到根那份（与 context.py 注入一致）。"""
+    (tmp_path / "SOUL.md").write_text("# legacy root soul", encoding="utf-8")
+    store = IdentityStore(tmp_path)
+
+    assert store.read_file("SOUL.md") == "# legacy root soul"
+
+
+def test_identity_dir_wins_over_workspace_root(tmp_path: Path) -> None:
+    """两边都有时 identity/ 优先——与 context.py 的存在性判断同序。"""
+    (tmp_path / "SOUL.md").write_text("# root", encoding="utf-8")
+    identity_dir = tmp_path / IDENTITY_DIR_NAME
+    identity_dir.mkdir()
+    (identity_dir / "SOUL.md").write_text("# identity", encoding="utf-8")
+    store = IdentityStore(tmp_path)
+
+    assert store.read_file("SOUL.md") == "# identity"
+
+
+def test_write_falls_back_to_existing_workspace_root(tmp_path: Path) -> None:
+    """根上有老文件时写回根，避免 identity/ 新建一份与注入侧分裂。"""
+    (tmp_path / "SOUL.md").write_text("# root", encoding="utf-8")
+    store = IdentityStore(tmp_path)
+    store.write_file("SOUL.md", "# edited")
+
+    assert (tmp_path / "SOUL.md").read_text(encoding="utf-8") == "# edited"
+    assert not (tmp_path / IDENTITY_DIR_NAME / "SOUL.md").exists()
+
+
+def test_write_creates_identity_dir_when_no_legacy_root(tmp_path: Path) -> None:
+    """根上没有老文件时仍落 identity/——新工作区直接走新位置。"""
+    store = IdentityStore(tmp_path)
+    store.write_file("SOUL.md", "# fresh")
+
+    assert (tmp_path / IDENTITY_DIR_NAME / "SOUL.md").read_text(encoding="utf-8") == "# fresh"
+
+
+def test_list_files_marks_root_fallback_exists(tmp_path: Path) -> None:
+    (tmp_path / "SOUL.md").write_text("# root", encoding="utf-8")
+    store = IdentityStore(tmp_path)
+
+    by_name = {f["name"]: f for f in store.list_files()}
+    assert by_name["SOUL.md"]["exists"] is True
+
+
+def test_list_files_marks_memory_md_derived_exists(tmp_path: Path) -> None:
+    """MEMORY.md 真身在 memory/，exists 不能只查 identity/。"""
+    (tmp_path / "memory").mkdir()
+    (tmp_path / "memory" / "MEMORY.md").write_text("# derived", encoding="utf-8")
+    store = IdentityStore(tmp_path)
+
+    by_name = {f["name"]: f for f in store.list_files()}
+    assert by_name["MEMORY.md"]["exists"] is True
+
+
+def test_read_memory_md_from_derived_location(tmp_path: Path) -> None:
+    (tmp_path / "memory").mkdir()
+    (tmp_path / "memory" / "MEMORY.md").write_text("# derived", encoding="utf-8")
+    store = IdentityStore(tmp_path)
+
+    assert store.read_file("MEMORY.md") == "# derived"
+
+
+def test_read_memory_md_prefers_derived_over_identity_leftover(tmp_path: Path) -> None:
+    """memory/ 与 identity/ 都有残留时读 memory/——与 lifecycle 写落点一致。"""
+    (tmp_path / "memory").mkdir()
+    (tmp_path / "memory" / "MEMORY.md").write_text("# derived", encoding="utf-8")
+    identity_dir = tmp_path / IDENTITY_DIR_NAME
+    identity_dir.mkdir()
+    (identity_dir / "MEMORY.md").write_text("# stale leftover", encoding="utf-8")
+    store = IdentityStore(tmp_path)
+
+    assert store.read_file("MEMORY.md") == "# derived"
+
+
 def test_read_rejects_non_utf8_file(store: IdentityStore) -> None:
     (store.identity_dir / "USER.md").write_bytes(b"\xff\xfe\x00binary")
     with pytest.raises(IdentityStoreError):

@@ -65,7 +65,8 @@ def operations(workspace: Path, lifecycle: FakeLifecycle) -> IdentitySettingsOpe
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace, lifecycle=lifecycle),
         reload=partial(identity_api.identity_reload),
-        compile=partial(identity_api.identity_compile),
+        compile=partial(identity_api.identity_compile, workspace),
+        list_presets=identity_api.identity_list_presets,
     )
 
 
@@ -84,13 +85,14 @@ def _request(
 # ---- dispatch wiring --------------------------------------------------------
 
 
-def test_all_five_actions_are_registered():
+def test_all_six_actions_are_registered():
     assert IDENTITY_ACTION_NAMES == frozenset({
         "identity-list-files",
         "identity-read-file",
         "identity-write-file",
         "identity-reload",
         "identity-compile",
+        "identity-list-presets",
     })
 
 
@@ -105,6 +107,7 @@ def test_every_known_action_dispatches(handler: IdentitySettingsHandler, lifecyc
         ),
         handler.handle("identity-reload", _request()),
         handler.handle("identity-compile", _request(payload={"mode": "rules"})),
+        handler.handle("identity-list-presets", _request()),
     ]
     for result in results:
         assert isinstance(result, SettingsRouteResult)
@@ -149,7 +152,8 @@ def test_list_files_without_identity_dir(tmp_path: Path):
         read_file=partial(identity_api.identity_read_file, tmp_path),
         write_file=partial(identity_api.identity_write_file, tmp_path),
         reload=partial(identity_api.identity_reload),
-        compile=partial(identity_api.identity_compile),
+        compile=partial(identity_api.identity_compile, tmp_path),
+        list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle("identity-list-files", _request())
 
@@ -164,7 +168,12 @@ def test_read_file_returns_content(handler: IdentitySettingsHandler):
     result = handler.handle("identity-read-file", _request(query={"name": ["SOUL.md"]}))
 
     assert result.error is None
-    assert result.payload == {"name": "SOUL.md", "content": "# soul"}
+    assert result.payload == {
+        "name": "SOUL.md",
+        "content": "# soul",
+        "exists": True,
+        "fromTemplate": False,
+    }
 
 
 def test_read_file_accepts_nested_whitelisted_path(handler: IdentitySettingsHandler):
@@ -181,14 +190,46 @@ def test_read_file_missing_name_is_4xx(handler: IdentitySettingsHandler, query):
     assert result.error
 
 
-def test_read_missing_file_is_404(handler: IdentitySettingsHandler):
+def test_read_missing_file_returns_factory_template(handler: IdentitySettingsHandler):
+    """缺失不再 404：返回出厂模板 + fromTemplate，前端据此预填。"""
     result = handler.handle("identity-read-file", _request(query={"name": ["USER.md"]}))
-    assert result.status == 404
+
+    assert result.status == 200
+    assert result.error is None
+    assert result.payload["exists"] is False
+    assert result.payload["fromTemplate"] is True
+    assert "User Profile" in result.payload["content"]
+
+
+def test_read_missing_core_file_with_no_template_is_empty_not_404(
+    handler: IdentitySettingsHandler,
+):
+    # AGENT.md 有出厂模板；用一个白名单内但无模板的场景不可造（core 全有模板）。
+    # 非白名单仍 403，见下。
+    result = handler.handle("identity-read-file", _request(query={"name": ["AGENT.md"]}))
+    assert result.status == 200
+    assert result.payload["fromTemplate"] is True
 
 
 def test_read_non_whitelisted_is_403(handler: IdentitySettingsHandler):
     result = handler.handle("identity-read-file", _request(query={"name": ["id_rsa"]}))
     assert result.status == 403
+
+
+def test_list_presets_returns_five_with_content(handler: IdentitySettingsHandler):
+    result = handler.handle("identity-list-presets", _request())
+
+    assert result.error is None
+    presets = result.payload["presets"]
+    assert [p["name"] for p in presets] == [
+        "balanced",
+        "mentor",
+        "creative",
+        "companion",
+        "tech_expert",
+    ]
+    assert all(p["content"].startswith("# Soul") for p in presets)
+    assert all(p["labelKey"].startswith("settings.identity.preset.") for p in presets)
 
 
 # ---- write: MEMORY.md against the real MemoryLifecycle ----------------------
@@ -236,7 +277,8 @@ def test_memory_md_over_limit_through_real_lifecycle_is_4xx(workspace: Path, rea
             identity_api.identity_write_file, workspace, lifecycle=real_lifecycle
         ),
         reload=partial(identity_api.identity_reload),
-        compile=partial(identity_api.identity_compile),
+        compile=partial(identity_api.identity_compile, workspace),
+        list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle(
         "identity-write-file",
@@ -276,7 +318,8 @@ def test_write_memory_md_without_lifecycle_is_500(workspace: Path):
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace),  # lifecycle=None
         reload=partial(identity_api.identity_reload),
-        compile=partial(identity_api.identity_compile),
+        compile=partial(identity_api.identity_compile, workspace),
+        list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle(
         "identity-write-file",
@@ -368,8 +411,8 @@ def test_write_invalid_yaml_is_4xx(handler: IdentitySettingsHandler):
 
 
 def test_identity_store_status_is_preserved(monkeypatch: pytest.MonkeyPatch, workspace: Path):
-    """IdentityStoreError.status → WebUISettingsError.status，逐档保留。"""
-    for status in (400, 403, 404, 500):
+    """IdentityStoreError.status → WebUISettingsError.status（404 例外：读兜底见上）。"""
+    for status in (400, 403, 500):
         def _boom(self: IdentityStore, name: str, _status: int = status) -> str:
             raise IdentityStoreError(f"boom-{_status}", status=_status)
 
@@ -378,6 +421,21 @@ def test_identity_store_status_is_preserved(monkeypatch: pytest.MonkeyPatch, wor
             identity_api.identity_read_file(workspace, "SOUL.md")
         assert exc.value.status == status
         assert exc.value.message == f"boom-{status}"
+
+
+def test_identity_store_404_becomes_template_not_error(
+    monkeypatch: pytest.MonkeyPatch, workspace: Path
+):
+    """store 404 被 API 层吞掉换成出厂模板——错误横幅不该再出现。"""
+
+    def _missing(self: IdentityStore, name: str) -> str:
+        raise IdentityStoreError(f"文件不存在：{name}", status=404)
+
+    monkeypatch.setattr(IdentityStore, "read_file", _missing)
+    payload = identity_api.identity_read_file(workspace, "USER.md")
+    assert payload["exists"] is False
+    assert payload["fromTemplate"] is True
+    assert payload["content"]
 
 
 def test_identity_settings_error_is_a_value_error():
@@ -484,7 +542,8 @@ def test_reload_invokes_refresh_memory_md(workspace: Path):
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace),
         reload=partial(identity_api.identity_reload, refresh_memory_md=_refresh),
-        compile=partial(identity_api.identity_compile),
+        compile=partial(identity_api.identity_compile, workspace),
+        list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle("identity-reload", _request())
 
@@ -503,7 +562,8 @@ def test_reload_failure_is_reported_not_raised(workspace: Path):
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace),
         reload=partial(identity_api.identity_reload, refresh_memory_md=_boom),
-        compile=partial(identity_api.identity_compile),
+        compile=partial(identity_api.identity_compile, workspace),
+        list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle("identity-reload", _request())
 
@@ -514,14 +574,28 @@ def test_reload_failure_is_reported_not_raised(workspace: Path):
 # ---- compile ---------------------------------------------------------------
 
 
-def test_compile_is_not_enabled_placeholder(handler: IdentitySettingsHandler):
+def test_compile_writes_runtime_products(handler: IdentitySettingsHandler, workspace: Path):
+    """规则编译真写 identity/runtime/，并把每个目标的去留如实报回来。"""
     result = handler.handle("identity-compile", _request(payload={"mode": "rules"}))
 
     assert result.error is None
-    assert result.payload == {"status": "not_enabled", "mode": "rules"}
+    assert result.payload["status"] == "ok"
+    assert result.payload["modeUsed"] == "rules"
+    assert result.payload["compiledFiles"] == ["identity.core.md"]
+    product = workspace / IDENTITY_DIR_NAME / "runtime" / "identity.core.md"
+    assert product.read_text(encoding="utf-8").strip() == "# soul"
+    # fixture 里只有 SOUL.md；另两个目标缺源文件，必须报 skipped 而不是静默跳过。
+    assert {entry["target"] for entry in result.payload["skipped"]} == {
+        "agent_behavior",
+        "user_profile_core",
+    }
 
 
-def test_compile_defaults_mode_when_absent(handler: IdentitySettingsHandler):
-    for payload in ({}, {"mode": ""}, {"mode": 7}):
+def test_compile_reports_requested_mode_even_when_degraded(handler: IdentitySettingsHandler):
+    """LM 入口已从 UI 移除；仍有 mode=llm 的调用要如实标注「按 rules 执行」。"""
+    cases = (({}, "rules"), ({"mode": ""}, "rules"), ({"mode": "llm"}, "llm"))
+    for payload, expected in cases:
         result = handler.handle("identity-compile", _request(payload=payload))
-        assert result.payload == {"status": "not_enabled", "mode": "rules"}
+        assert result.error is None
+        assert result.payload["modeUsed"] == "rules"
+        assert result.payload["requestedMode"] == expected

@@ -1317,6 +1317,8 @@ export async function listIdentityFiles(
 export interface IdentityFileResponse {
   name: string;
   content: string;
+  exists?: boolean;
+  fromTemplate?: boolean;
 }
 
 export async function fetchIdentityFile(
@@ -1329,6 +1331,29 @@ export async function fetchIdentityFile(
   const query = `name=${encodeURIComponent(name)}`;
   return request<IdentityFileResponse>(
     `${base}${IDENTITY_BASE}/file?${query}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export interface IdentityPreset {
+  name: string;
+  labelKey: string;
+  descriptionKey: string;
+  content: string;
+}
+
+export interface IdentityPresetsResponse {
+  presets: IdentityPreset[];
+}
+
+export async function listIdentityPresets(
+  token: string,
+  base: string = "",
+): Promise<IdentityPresetsResponse> {
+  return request<IdentityPresetsResponse>(
+    `${base}${IDENTITY_BASE}/presets`,
     token,
     undefined,
     API_READ_TIMEOUT_MS,
@@ -1358,4 +1383,25 @@ export async function reloadIdentity(
   transport: WebUIMutationTransport,
 ): Promise<ReloadIdentityResponse> {
   return mutation<ReloadIdentityResponse>(transport, "identity.reload");
+}
+
+export interface CompileIdentityResponse {
+  status: string;
+  modeUsed: string;
+  requestedMode: string;
+  compiledFiles: string[];
+  skipped: { target: string; reason: string }[];
+}
+
+/**
+ * Rule-compile the identity sources into injectable `identity/runtime/`
+ * products. Only the rules mode exists in nanobot — the LM variant was removed
+ * from the UI — so the mode is always sent explicitly rather than implied.
+ */
+export async function compileIdentityRules(
+  transport: WebUIMutationTransport,
+): Promise<CompileIdentityResponse> {
+  return mutation<CompileIdentityResponse>(transport, "identity.compile", {
+    mode: "rules",
+  });
 }

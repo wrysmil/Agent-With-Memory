@@ -103,7 +103,8 @@
       "apps": "应用",
       "automations": "自动任务",
       "skills": "技能",
-      "memory": "记忆"
+      "memory": "记忆",
+      "identity": "身份"
     },
     "sections": {
       "interface": "界面",
@@ -1011,12 +1012,12 @@
       "badgeAutoRegen": "自动重生成",
       "badgeSystemSection": "系统段落",
       "reload": "重载",
-      "compileLlm": "LM 优化",
       "compileRules": "规则编译",
       "save": "保存",
       "saved": "已保存",
       "editorSubtitle": "工作区 · 可编辑身份文件",
       "editorPlaceholder": "请从左侧选择一个文件进行编辑",
+      "fileMissingPlaceholder": "文件不存在，输入内容并保存即可创建",
       "editorFooterFile": "文件",
       "editorFooterLines": "行数",
       "editorFooterHint": "Ctrl+S 保存",
@@ -1031,9 +1032,37 @@
       "backToList": "返回文件列表",
       "memoryMdHintTitle": "自动覆盖提示",
       "policiesHintTitle": "权限边界",
-      "compileNotEnabled": "编译能力尚未启用",
+      "compileDone": "规则编译完成",
+      "compileEmpty": "规则编译完成：没有可注入的内容",
+      "compileFailed": "规则编译失败",
       "loadFailed": "加载身份文件失败",
-      "saveFailed": "保存失败"
+      "saveFailed": "保存失败",
+      "fromTemplateHint": "出厂模板 · 尚未保存到工作区，编辑后点保存创建",
+      "personaPresets": "人格预设",
+      "personaLoadedHint": "已载入人格预设 · 确认后点保存",
+      "personaOverwriteConfirm": "将覆盖当前 SOUL 草稿，未保存的修改会丢失。继续？",
+      "preset": {
+        "balanced": {
+          "label": "平衡助手",
+          "description": "先做再说、短而准、不装懂（默认）"
+        },
+        "mentor": {
+          "label": "严谨导师",
+          "description": "先问你怎么想；结论带依据；错了直说"
+        },
+        "creative": {
+          "label": "创意搭档",
+          "description": "先给三个方向；保留你的原味"
+        },
+        "companion": {
+          "label": "轻松伙伴",
+          "description": "像朋友不像客服；先共情再方案"
+        },
+        "tech_expert": {
+          "label": "技术专家",
+          "description": "术语不稀释；结论带版本前提；以测试为准"
+        }
+      }
     },
     "memory": {
       "tabSemantic": "语义记忆",

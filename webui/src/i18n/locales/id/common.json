@@ -103,7 +103,8 @@
       "apps": "Aplikasi",
       "automations": "Otomasi",
       "skills": "Keterampilan",
-      "memory": "Memori"
+      "memory": "Memori",
+      "identity": "Identitas"
     },
     "sections": {
       "interface": "Antarmuka",
@@ -1100,7 +1101,73 @@
       "mdModalDiffDraft": "Draf Dream",
       "mdModalDiffPlaceholder": "（Memuat konten）",
       "mdModalDiffCurrent": "MEMORY.md saat ini",
-      "mdModalDiffCurrentPlaceholder": "（MEMORY.md tidak ada atau kosong）"
+      "mdModalDiffCurrentPlaceholder": "（MEMORY.md tidak ada atau kosong）",
+      "masterToggleTitle": "Ekstraksi & pencarian memori otomatis",
+      "masterToggleDescription": "Saat aktif, nanobot mengekstrak fakta dari obrolan dan mengambil memori terkait di giliran berikutnya. Berlaku seketika — tanpa restart.",
+      "masterToggleAria": "Alihkan ekstraksi memori",
+      "masterToggleOn": "Aktif",
+      "masterToggleOff": "Nonaktif"
+    },
+    "identity": {
+      "groupCore": "File inti",
+      "groupPersonas": "Persona",
+      "warningBanner": "File identitas menentukan kepribadian dan perilaku Agent. Perubahan yang tidak tepat dapat menyebabkan perilaku tidak normal atau respons tak terduga. Jika ragu, cadangkan dulu.",
+      "badgeFullTextInject": "Sisipkan penuh",
+      "badgeNeedsCompile": "Perlu kompilasi",
+      "badgeAutoRegen": "Regenerasi otomatis",
+      "badgeSystemSection": "Bagian sistem",
+      "reload": "Muat ulang",
+      "compileRules": "Kompilasi aturan",
+      "save": "Simpan",
+      "saved": "Tersimpan",
+      "editorSubtitle": "Ruang kerja · file identitas yang dapat diedit",
+      "editorPlaceholder": "Pilih file di kiri untuk mengedit",
+      "fileMissingPlaceholder": "File belum ada — ketik lalu simpan untuk membuat",
+      "editorFooterFile": "File",
+      "editorFooterLines": "Baris",
+      "editorFooterHint": "Ctrl+S untuk simpan",
+      "charCountExceeded": "Melebihi batas karakter",
+      "restrictedHint": "File dikelola sistem",
+      "systemManaged": "Dikelola sistem",
+      "memoryMdHint": "MEMORY.md dibuat ulang otomatis dari SQLite; editan manual akan ditimpa saat penyegaran berikutnya. Untuk aturan permanen, pakai tombol + memori semantik.",
+      "policiesHint": "POLICIES.yaml menetapkan izin dan batas eksekusi agent. Hati-hati mengubah kunci tingkat atas (tool_policies / scope_policy / auto_confirm).",
+      "editable": "Dapat diedit",
+      "loading": "Memuat file identitas…",
+      "empty": "File identitas tidak ditemukan",
+      "backToList": "Kembali ke daftar file",
+      "memoryMdHintTitle": "Pemberitahuan timpa otomatis",
+      "policiesHintTitle": "Batas izin",
+      "compileDone": "Kompilasi aturan selesai",
+      "compileEmpty": "Kompilasi aturan selesai: tidak ada yang bisa disuntikkan",
+      "compileFailed": "Kompilasi aturan gagal",
+      "loadFailed": "Gagal memuat file identitas",
+      "saveFailed": "Gagal menyimpan",
+      "fromTemplateHint": "Templat pabrik · belum disimpan ke ruang kerja — edit lalu simpan untuk membuat",
+      "personaPresets": "Prasetel persona",
+      "personaLoadedHint": "Prasetel persona dimuat · tinjau lalu simpan",
+      "personaOverwriteConfirm": "Ini akan menimpa draf SOUL saat ini. Perubahan yang belum disimpan akan hilang. Lanjutkan?",
+      "preset": {
+        "balanced": {
+          "label": "Asisten seimbang",
+          "description": "Kerja dulu, ringkas akurat, tidak mengada-ada (default)"
+        },
+        "mentor": {
+          "label": "Mentor ketat",
+          "description": "Tanya cara berpikir dulu; kesimpulan berbasis alasan; koreksi langsung"
+        },
+        "creative": {
+          "label": "Teman kreatif",
+          "description": "Tiga arah dulu; pertahankan suaramu"
+        },
+        "companion": {
+          "label": "Teman santai",
+          "description": "Teman, bukan dukungan; empati dulu baru solusi"
+        },
+        "tech_expert": {
+          "label": "Ahli teknis",
+          "description": "Istilah tidak dipermudah; sebut versi; bukti dari tes"
+        }
+      }
     }
   },
   "chat": {

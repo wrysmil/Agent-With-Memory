@@ -103,7 +103,8 @@
       "apps": "Ứng dụng",
       "automations": "Tự động hóa",
       "skills": "Kỹ năng",
-      "memory": "Bộ nhớ"
+      "memory": "Bộ nhớ",
+      "identity": "Danh tính"
     },
     "sections": {
       "interface": "Giao diện",
@@ -1100,7 +1101,73 @@
       "mdModalDiffDraft": "Bản nháp Dream",
       "mdModalDiffPlaceholder": "（Đang tải nội dung）",
       "mdModalDiffCurrent": "MEMORY.md hiện tại",
-      "mdModalDiffCurrentPlaceholder": "（MEMORY.md không tồn tại hoặc trống）"
+      "mdModalDiffCurrentPlaceholder": "（MEMORY.md không tồn tại hoặc trống）",
+      "masterToggleTitle": "Trích xuất & tìm kiếm trí nhớ tự động",
+      "masterToggleDescription": "Khi bật, nanobot trích xuất sự thật từ hội thoại và lấy trí nhớ liên quan ở lượt sau. Hiệu lực ngay — không cần khởi động lại.",
+      "masterToggleAria": "Bật/tắt trích xuất trí nhớ",
+      "masterToggleOn": "Bật",
+      "masterToggleOff": "Tắt"
+    },
+    "identity": {
+      "groupCore": "Tệp cốt lõi",
+      "groupPersonas": "Nhân cách",
+      "warningBanner": "Tệp danh tính định hình nhân cách và hành vi của Agent. Sửa sai có thể gây hành vi bất thường hoặc phản hồi không mong muốn. Nếu chưa chắc, hãy sao lưu trước.",
+      "badgeFullTextInject": "Chèn toàn văn",
+      "badgeNeedsCompile": "Cần biên dịch",
+      "badgeAutoRegen": "Tự sinh lại",
+      "badgeSystemSection": "Phần hệ thống",
+      "reload": "Tải lại",
+      "compileRules": "Biên dịch quy tắc",
+      "save": "Lưu",
+      "saved": "Đã lưu",
+      "editorSubtitle": "Không gian làm việc · tệp danh tính có thể sửa",
+      "editorPlaceholder": "Chọn tệp bên trái để sửa",
+      "fileMissingPlaceholder": "Tệp chưa tồn tại — nhập nội dung rồi lưu để tạo",
+      "editorFooterFile": "Tệp",
+      "editorFooterLines": "Dòng",
+      "editorFooterHint": "Ctrl+S để lưu",
+      "charCountExceeded": "Vượt giới hạn ký tự",
+      "restrictedHint": "Tệp do hệ thống quản lý",
+      "systemManaged": "Do hệ thống quản lý",
+      "memoryMdHint": "MEMORY.md được sinh lại tự động từ SQLite; sửa tay sẽ bị ghi đè ở lần làm mới sau. Muốn giữ quy tắc bền vững hãy dùng nút + của trí nhớ ngữ nghĩa.",
+      "policiesHint": "POLICIES.yaml đặt quyền và ranh giới thực thi của agent. Cẩn thận khi sửa khóa cấp cao nhất (tool_policies / scope_policy / auto_confirm).",
+      "editable": "Có thể sửa",
+      "loading": "Đang tải tệp danh tính…",
+      "empty": "Không tìm thấy tệp danh tính",
+      "backToList": "Quay lại danh sách",
+      "memoryMdHintTitle": "Thông báo ghi đè tự động",
+      "policiesHintTitle": "Ranh giới quyền",
+      "compileDone": "Biên dịch theo quy tắc hoàn tất",
+      "compileEmpty": "Biên dịch theo quy tắc hoàn tất: không có nội dung để chèn",
+      "compileFailed": "Biên dịch theo quy tắc thất bại",
+      "loadFailed": "Không tải được tệp danh tính",
+      "saveFailed": "Lưu thất bại",
+      "fromTemplateHint": "Mẫu nhà máy · chưa lưu vào không gian làm việc — sửa rồi lưu để tạo",
+      "personaPresets": "Cài đặt trước nhân cách",
+      "personaLoadedHint": "Đã tải cài đặt nhân cách · xem lại rồi lưu",
+      "personaOverwriteConfirm": "Thao tác này sẽ ghi đè bản nháp SOUL hiện tại. Thay đổi chưa lưu sẽ mất. Tiếp tục?",
+      "preset": {
+        "balanced": {
+          "label": "Trợ lý cân bằng",
+          "description": "Làm trước, ngắn gọn chính xác, không giả biết (mặc định)"
+        },
+        "mentor": {
+          "label": "Người hướng dẫn nghiêm khắc",
+          "description": "Hỏi cách bạn nghĩ trước; kết luận có căn cứ; sửa lỗi thẳng"
+        },
+        "creative": {
+          "label": "Đồng đội sáng tạo",
+          "description": "Ba hướng trước; giữ giọng của bạn"
+        },
+        "companion": {
+          "label": "Bạn đồng hành thoải mái",
+          "description": "Bạn bè, không phải tổng đài; đồng cảm trước giải pháp"
+        },
+        "tech_expert": {
+          "label": "Chuyên gia kỹ thuật",
+          "description": "Không làm loãng thuật ngữ; nêu phiên bản; chứng minh bằng test"
+        }
+      }
     }
   },
   "chat": {

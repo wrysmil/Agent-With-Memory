@@ -112,7 +112,8 @@ def build_identity_operations(
             identity_api.identity_reload,
             refresh_memory_md=partial(memory_api.refresh_memory_md, services),
         ),
-        compile=identity_api.identity_compile,
+        compile=partial(identity_api.identity_compile, workspace),
+        list_presets=identity_api.identity_list_presets,
     )
 
 

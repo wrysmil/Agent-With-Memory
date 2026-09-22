@@ -198,6 +198,7 @@ _WEBUI_MUTATION_PATHS = {
     "scratchpad.save": "/api/settings/memory/scratchpad/save",
     "identity.file.save": "/api/settings/identity/file/save",
     "identity.reload": "/api/settings/identity/reload",
+    "identity.compile": "/api/settings/identity/compile",
 }
 
 _WEBUI_CHANNEL_CONNECT_ACTIONS = {

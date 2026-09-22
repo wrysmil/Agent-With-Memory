@@ -103,7 +103,8 @@
       "apps": "アプリ",
       "automations": "自動タスク",
       "skills": "スキル",
-      "memory": "記憶"
+      "memory": "記憶",
+      "identity": "アイデンティティ"
     },
     "sections": {
       "interface": "インターフェース",
@@ -1100,7 +1101,73 @@
       "mdModalDiffDraft": "Dream草案",
       "mdModalDiffPlaceholder": "（コンテンツ読み込み中）",
       "mdModalDiffCurrent": "現在のMEMORY.md",
-      "mdModalDiffCurrentPlaceholder": "（MEMORY.mdが存在しないか空です）"
+      "mdModalDiffCurrentPlaceholder": "（MEMORY.mdが存在しないか空です）",
+      "masterToggleTitle": "記憶の自動抽出と検索",
+      "masterToggleDescription": "オンにすると、会話から事実を抽出し次のターンで関連記憶を検索します。ホット反映——再起動不要。",
+      "masterToggleAria": "記憶抽出の切り替え",
+      "masterToggleOn": "オン",
+      "masterToggleOff": "オフ"
+    },
+    "identity": {
+      "groupCore": "コアファイル",
+      "groupPersonas": "ペルソナ",
+      "warningBanner": "アイデンティティファイルはエージェントの中核人格と行動基盤です。不適切な編集は動作異常や能力喪失、予期しない応答を招く可能性があります。影響が不明な場合は先にバックアップしてください。",
+      "badgeFullTextInject": "全文注入",
+      "badgeNeedsCompile": "要コンパイル",
+      "badgeAutoRegen": "自動再生成",
+      "badgeSystemSection": "システムセクション",
+      "reload": "リロード",
+      "compileRules": "ルールコンパイル",
+      "save": "保存",
+      "saved": "保存済み",
+      "editorSubtitle": "ワークスペース · 編集可能なアイデンティティファイル",
+      "editorPlaceholder": "左からファイルを選択して編集",
+      "fileMissingPlaceholder": "ファイルがまだありません。内容を入力して保存すると作成されます",
+      "editorFooterFile": "ファイル",
+      "editorFooterLines": "行数",
+      "editorFooterHint": "Ctrl+S で保存",
+      "charCountExceeded": "文字数上限超過",
+      "restrictedHint": "システム管理ファイル",
+      "systemManaged": "システム管理",
+      "memoryMdHint": "MEMORY.md は SQLite から自動生成されます。手動編集は次回の自動更新で上書きされます。永続ルールは「意味記憶」の + ボタンを使ってください。",
+      "policiesHint": "POLICIES.yaml はエージェントの権限と実行境界です。トップレベルキー（tool_policies / scope_policy / auto_confirm）の編集には注意してください。",
+      "editable": "編集可",
+      "loading": "アイデンティティファイルを読み込み中…",
+      "empty": "アイデンティティファイルが見つかりません",
+      "backToList": "ファイル一覧へ戻る",
+      "memoryMdHintTitle": "自動上書きの注意",
+      "policiesHintTitle": "権限境界",
+      "compileDone": "ルールコンパイルが完了しました",
+      "compileEmpty": "ルールコンパイル完了：注入する内容がありません",
+      "compileFailed": "ルールコンパイルに失敗しました",
+      "loadFailed": "アイデンティティファイルの読み込みに失敗",
+      "saveFailed": "保存に失敗しました",
+      "fromTemplateHint": "出荷時テンプレート · ワークスペース未保存。編集して保存すると作成されます",
+      "personaPresets": "ペルソナプリセット",
+      "personaLoadedHint": "ペルソナプリセットを読み込みました · 確認して保存してください",
+      "personaOverwriteConfirm": "現在の SOUL 下書きを上書きします。未保存の変更は失われます。続行しますか？",
+      "preset": {
+        "balanced": {
+          "label": "バランス型アシスタント",
+          "description": "まず実行、簡潔正確、断定しない（デフォルト）"
+        },
+        "mentor": {
+          "label": "厳格なメンター",
+          "description": "まず思考を確認、根拠付きで、誤りは直截に"
+        },
+        "creative": {
+          "label": "クリエイティブパートナー",
+          "description": "まず3方向、あなたの声を残す"
+        },
+        "companion": {
+          "label": "カジュアルな相棒",
+          "description": "サポートではなく友人。共感が先、解決はあと"
+        },
+        "tech_expert": {
+          "label": "テックエキスパート",
+          "description": "用語は簡略化しない、バージョン前提、テストで証明"
+        }
+      }
     }
   },
   "chat": {

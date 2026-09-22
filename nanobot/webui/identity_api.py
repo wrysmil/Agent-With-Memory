@@ -20,7 +20,9 @@ from typing import Any
 
 from loguru import logger
 
+from nanobot.identity.bootstrap import PERSONA_PRESET_STEMS, load_identity_template
 from nanobot.identity.catalog import CHAR_LIMIT, LIFECYCLE_OWNED_FILES
+from nanobot.identity.compiler import compile_identity
 from nanobot.identity.store import IdentityStore, IdentityStoreError
 from nanobot.webui.settings_contracts import WebUISettingsError
 
@@ -39,12 +41,46 @@ def identity_list_files(workspace: Path) -> dict[str, Any]:
 
 
 def identity_read_file(workspace: Path, name: str) -> dict[str, Any]:
-    """Read one whitelisted identity file. Unknown/escaping names are 4xx."""
+    """Read one whitelisted identity file.
+
+    Unknown/escaping names stay 4xx. A *missing* file (store 404) no longer
+    surfaces as an error: the bundled factory template is returned with
+    ``exists=false`` / ``fromTemplate=true`` so the editor can prefill instead
+    of showing a red banner. No bundled template → empty content, both flags
+    false (create-on-save placeholder path).
+    """
     try:
         content = IdentityStore(workspace).read_file(name)
     except IdentityStoreError as exc:
-        raise WebUISettingsError(exc.message, status=exc.status) from exc
-    return {"name": name, "content": content}
+        if exc.status != 404:
+            raise WebUISettingsError(exc.message, status=exc.status) from exc
+        template = load_identity_template(name)
+        if template is None:
+            return {"name": name, "content": "", "exists": False, "fromTemplate": False}
+        return {"name": name, "content": template, "exists": False, "fromTemplate": True}
+    return {"name": name, "content": content, "exists": True, "fromTemplate": False}
+
+
+def identity_list_presets() -> dict[str, Any]:
+    """Factory persona presets for the SOUL editor dropdown.
+
+    Labels/descriptions are i18n keys — the backend only ships content and
+    stable ids so translations stay on the frontend.
+    """
+    from nanobot.utils.helpers import load_bundled_template  # local: avoid import cycle
+
+    presets: list[dict[str, Any]] = []
+    for stem in PERSONA_PRESET_STEMS:
+        content = load_bundled_template(f"personas/{stem}.md") or ""
+        presets.append(
+            {
+                "name": stem,
+                "labelKey": f"settings.identity.preset.{stem}.label",
+                "descriptionKey": f"settings.identity.preset.{stem}.description",
+                "content": content,
+            }
+        )
+    return {"presets": presets}
 
 
 def identity_write_file(
@@ -97,12 +133,17 @@ def identity_reload(*, refresh_memory_md: Any = None) -> dict[str, Any]:
         return {"status": "error"}
 
 
-def identity_compile(mode: str) -> dict[str, Any]:
-    """Placeholder for prompt compilation.
+def identity_compile(workspace: Path, mode: str = "") -> dict[str, Any]:
+    """Compile the identity sources into injectable ``identity/runtime/`` products.
 
-    nanobot has no PromptCompiler yet (staged rollout confirmed with the
-    user), so this reports ``not_enabled`` rather than pretending to compile.
-    The action name exists now so the frontend can wire the button and the
-    response shape stays stable when compilation lands.
+    Only the synchronous rule compiler exists in nanobot — there is no
+    ``PromptCompiler``/brain path (the LM button was removed from the UI), so a
+    request for any other mode degrades to rules and says so via
+    ``requestedMode`` rather than pretending the mode ran.
     """
-    return {"status": "not_enabled", "mode": mode or "rules"}
+    requested = mode or "rules"
+    if requested != "rules":
+        logger.info("identity_compile: mode=%s 未实现，按规则编译执行", requested)
+    result = compile_identity(workspace)
+    result["requestedMode"] = requested
+    return result

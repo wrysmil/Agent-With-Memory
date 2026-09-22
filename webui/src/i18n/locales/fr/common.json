@@ -103,7 +103,8 @@
       "apps": "Applications",
       "automations": "Automatisations",
       "skills": "Compétences",
-      "memory": "Mémoire"
+      "memory": "Mémoire",
+      "identity": "Identité"
     },
     "sections": {
       "interface": "Interface utilisateur",
@@ -1100,7 +1101,73 @@
       "mdModalDiffDraft": "Brouillon Dream",
       "mdModalDiffPlaceholder": "(Contenu en cours de chargement)",
       "mdModalDiffCurrent": "MEMORY.md actuel",
-      "mdModalDiffCurrentPlaceholder": "(MEMORY.md n'existe pas ou est vide)"
+      "mdModalDiffCurrentPlaceholder": "(MEMORY.md n'existe pas ou est vide)",
+      "masterToggleTitle": "Extraction et recherche automatiques de mémoire",
+      "masterToggleDescription": "Une fois activé, nanobot extrait les faits des conversations et retrouve les souvenirs au tour suivant. Effet immédiat — sans redémarrage.",
+      "masterToggleAria": "Activer l'extraction de mémoire",
+      "masterToggleOn": "Activé",
+      "masterToggleOff": "Désactivé"
+    },
+    "identity": {
+      "groupCore": "Fichiers principaux",
+      "groupPersonas": "Personas",
+      "warningBanner": "Les fichiers d'identité définissent la personnalité et le comportement de l'agent. Des modifications inappropriées peuvent provoquer des comportements anormaux ou des réponses inattendues. En cas de doute, sauvegardez d'abord.",
+      "badgeFullTextInject": "Injection intégrale",
+      "badgeNeedsCompile": "Compilation requise",
+      "badgeAutoRegen": "Régénération auto",
+      "badgeSystemSection": "Section système",
+      "reload": "Recharger",
+      "compileRules": "Compilation des règles",
+      "save": "Enregistrer",
+      "saved": "Enregistré",
+      "editorSubtitle": "Espace de travail · fichier d'identité modifiable",
+      "editorPlaceholder": "Sélectionnez un fichier à gauche pour l'éditer",
+      "fileMissingPlaceholder": "Fichier absent — saisissez du contenu et enregistrez pour le créer",
+      "editorFooterFile": "Fichier",
+      "editorFooterLines": "Lignes",
+      "editorFooterHint": "Ctrl+S pour enregistrer",
+      "charCountExceeded": "Limite de caractères dépassée",
+      "restrictedHint": "Fichier géré par le système",
+      "systemManaged": "Géré par le système",
+      "memoryMdHint": "MEMORY.md est régénéré automatiquement depuis SQLite ; les modifications manuelles seront écrasées au prochain rafraîchissement. Pour des règles persistantes, utilisez le bouton + de la mémoire sémantique.",
+      "policiesHint": "POLICIES.yaml définit les permissions et frontières d'exécution de l'agent. Modifiez les clés de premier niveau (tool_policies / scope_policy / auto_confirm) avec prudence.",
+      "editable": "Modifiable",
+      "loading": "Chargement des fichiers d'identité…",
+      "empty": "Aucun fichier d'identité trouvé",
+      "backToList": "Retour à la liste",
+      "memoryMdHintTitle": "Avertissement d'écrasement auto",
+      "policiesHintTitle": "Frontière de permissions",
+      "compileDone": "Compilation par règles terminée",
+      "compileEmpty": "Compilation par règles terminée : rien à injecter",
+      "compileFailed": "Échec de la compilation par règles",
+      "loadFailed": "Échec du chargement des fichiers d'identité",
+      "saveFailed": "Échec de l'enregistrement",
+      "fromTemplateHint": "Modèle d'usine · non enregistré dans l'espace de travail — éditez et enregistrez pour créer",
+      "personaPresets": "Préréglages de persona",
+      "personaLoadedHint": "Préréglage de persona chargé · vérifiez et enregistrez",
+      "personaOverwriteConfirm": "Cela remplacera le brouillon SOUL actuel. Les modifications non enregistrées seront perdues. Continuer ?",
+      "preset": {
+        "balanced": {
+          "label": "Assistant équilibré",
+          "description": "Agir d'abord, rester concis, ne jamais feindre (par défaut)"
+        },
+        "mentor": {
+          "label": "Mentor strict",
+          "description": "D'abord ton raisonnement ; conclusions justifiées ; erreurs corrigées directement"
+        },
+        "creative": {
+          "label": "Partenaire créatif",
+          "description": "Trois pistes d'abord ; garde ta voix propre"
+        },
+        "companion": {
+          "label": "Complice décontracté",
+          "description": "Un ami, pas un support ; empathie d'abord"
+        },
+        "tech_expert": {
+          "label": "Expert technique",
+          "description": "Jargon intact ; versions précisées ; preuves par les tests"
+        }
+      }
     }
   },
   "chat": {

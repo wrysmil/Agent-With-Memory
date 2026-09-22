@@ -103,7 +103,8 @@
       "apps": "Aplicativos",
       "automations": "Automações",
       "skills": "Habilidades",
-      "memory": "Memória"
+      "memory": "Memória",
+      "identity": "Identidade"
     },
     "sections": {
       "interface": "Interface do usuário",
@@ -1100,7 +1101,73 @@
       "mdModalDiffDraft": "Rascunho Dream",
       "mdModalDiffPlaceholder": "（Carregando conteúdo）",
       "mdModalDiffCurrent": "MEMORY.md atual",
-      "mdModalDiffCurrentPlaceholder": "（MEMORY.md não existe ou está vazio）"
+      "mdModalDiffCurrentPlaceholder": "（MEMORY.md não existe ou está vazio）",
+      "masterToggleTitle": "Extração e busca automáticas de memória",
+      "masterToggleDescription": "Quando ativo, nanobot extrai fatos das conversas e recupera memórias no próximo turno. Efeito imediato — sem reiniciar.",
+      "masterToggleAria": "Alternar extração de memória",
+      "masterToggleOn": "Ativado",
+      "masterToggleOff": "Desativado"
+    },
+    "identity": {
+      "groupCore": "Arquivos principais",
+      "groupPersonas": "Personas",
+      "warningBanner": "Os arquivos de identidade definem a personalidade e o comportamento do Agente. Edições inadequadas podem causar comportamentos anormais ou respostas inesperadas. Em caso de dúvida, faça backup primeiro.",
+      "badgeFullTextInject": "Injeção de texto integral",
+      "badgeNeedsCompile": "Requer compilação",
+      "badgeAutoRegen": "Regeneração automática",
+      "badgeSystemSection": "Seção do sistema",
+      "reload": "Recarregar",
+      "compileRules": "Compilação de regras",
+      "save": "Salvar",
+      "saved": "Salvo",
+      "editorSubtitle": "Espaço de trabalho · arquivo de identidade editável",
+      "editorPlaceholder": "Selecione um arquivo à esquerda para editar",
+      "fileMissingPlaceholder": "O arquivo ainda não existe — digite o conteúdo e salve para criar",
+      "editorFooterFile": "Arquivo",
+      "editorFooterLines": "Linhas",
+      "editorFooterHint": "Ctrl+S para salvar",
+      "charCountExceeded": "Limite de caracteres excedido",
+      "restrictedHint": "Arquivo gerenciado pelo sistema",
+      "systemManaged": "Gerenciado pelo sistema",
+      "memoryMdHint": "MEMORY.md é regenerado automaticamente a partir do SQLite; edições manuais serão sobrescritas na próxima atualização. Para regras persistentes, use o botão + da memória semântica.",
+      "policiesHint": "POLICIES.yaml define permissões e limites de execução do agente. Edite com cuidado as chaves de nível superior (tool_policies / scope_policy / auto_confirm).",
+      "editable": "Editável",
+      "loading": "Carregando arquivos de identidade…",
+      "empty": "Nenhum arquivo de identidade encontrado",
+      "backToList": "Voltar à lista",
+      "memoryMdHintTitle": "Aviso de sobrescrita automática",
+      "policiesHintTitle": "Limite de permissões",
+      "compileDone": "Compilação por regras concluída",
+      "compileEmpty": "Compilação por regras concluída: nada a injetar",
+      "compileFailed": "Falha na compilação por regras",
+      "loadFailed": "Falha ao carregar arquivos de identidade",
+      "saveFailed": "Falha ao salvar",
+      "fromTemplateHint": "Modelo de fábrica · ainda não salvo no espaço de trabalho — edite e salve para criar",
+      "personaPresets": "Predefinições de persona",
+      "personaLoadedHint": "Predefinição de persona carregada · revise e salve",
+      "personaOverwriteConfirm": "Isso substituirá o rascunho atual do SOUL. Alterações não salvas serão perdidas. Continuar?",
+      "preset": {
+        "balanced": {
+          "label": "Assistente equilibrado",
+          "description": "Aja primeiro, seja conciso, nunca finja (padrão)"
+        },
+        "mentor": {
+          "label": "Mentor rigoroso",
+          "description": "Pergunte como você pensa; conclusões justificadas; corrija erros"
+        },
+        "creative": {
+          "label": "Parceiro criativo",
+          "description": "Três direções primeiro; preserve sua voz"
+        },
+        "companion": {
+          "label": "Companheiro descontraído",
+          "description": "Um amigo, não suporte; empatia antes de soluções"
+        },
+        "tech_expert": {
+          "label": "Especialista técnico",
+          "description": "Sem diluir jargão; versões explícitas; evidência em testes"
+        }
+      }
     }
   },
   "chat": {

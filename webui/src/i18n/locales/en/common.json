@@ -103,7 +103,8 @@
       "apps": "Apps",
       "automations": "Automations",
       "skills": "Skills",
-      "memory": "Memory"
+      "memory": "Memory",
+      "identity": "Identity"
     },
     "sections": {
       "interface": "Interface",
@@ -1011,12 +1012,12 @@
       "badgeAutoRegen": "Auto-regen",
       "badgeSystemSection": "System section",
       "reload": "Reload",
-      "compileLlm": "LM compile",
       "compileRules": "Rules compile",
       "save": "Save",
       "saved": "Saved",
       "editorSubtitle": "Workspace · editable identity file",
       "editorPlaceholder": "Select a file from the left to start editing",
+      "fileMissingPlaceholder": "File does not exist yet — type content and save to create it",
       "editorFooterFile": "File",
       "editorFooterLines": "Lines",
       "editorFooterHint": "Ctrl+S to save",
@@ -1031,9 +1032,37 @@
       "backToList": "Back to file list",
       "memoryMdHintTitle": "Auto-overwrite notice",
       "policiesHintTitle": "Permission boundary",
-      "compileNotEnabled": "Compile is not available yet",
+      "compileDone": "Rule compile complete",
+      "compileEmpty": "Rule compile complete: nothing to inject",
+      "compileFailed": "Rule compile failed",
       "loadFailed": "Failed to load identity files",
-      "saveFailed": "Save failed"
+      "saveFailed": "Save failed",
+      "fromTemplateHint": "Factory template · not saved to the workspace yet — edit and save to create",
+      "personaPresets": "Persona presets",
+      "personaLoadedHint": "Persona preset loaded · review and save to apply",
+      "personaOverwriteConfirm": "This will replace the current SOUL draft. Unsaved changes will be lost. Continue?",
+      "preset": {
+        "balanced": {
+          "label": "Balanced assistant",
+          "description": "Act first, stay concise, never fake confidence (default)"
+        },
+        "mentor": {
+          "label": "Strict mentor",
+          "description": "Ask how you think first; justify conclusions; correct errors directly"
+        },
+        "creative": {
+          "label": "Creative partner",
+          "description": "Offer three directions first; keep your original voice"
+        },
+        "companion": {
+          "label": "Casual companion",
+          "description": "Friend, not support desk; empathize before solutions"
+        },
+        "tech_expert": {
+          "label": "Tech expert",
+          "description": "No diluted jargon; version-scoped claims; evidence over vibes"
+        }
+      }
     },
     "memory": {
       "tabSemantic": "Semantic memory",

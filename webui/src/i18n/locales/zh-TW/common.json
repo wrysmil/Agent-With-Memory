@@ -103,7 +103,8 @@
       "apps": "應用程式",
       "automations": "自動任務",
       "skills": "技能",
-      "memory": "記憶"
+      "memory": "記憶",
+      "identity": "身分"
     },
     "sections": {
       "interface": "介面",
@@ -1100,7 +1101,73 @@
       "mdModalDiffDraft": "Dream 草稿",
       "mdModalDiffPlaceholder": "（內容待後端支援讀取）",
       "mdModalDiffCurrent": "目前 MEMORY.md",
-      "mdModalDiffCurrentPlaceholder": "（MEMORY.md 不存在或為空）"
+      "mdModalDiffCurrentPlaceholder": "（MEMORY.md 不存在或為空）",
+      "masterToggleTitle": "自動抽取與檢索記憶",
+      "masterToggleDescription": "開啟後，nanobot 會在對話中抽取事實並在下一輪檢索相關記憶。熱生效——無需重新啟動。",
+      "masterToggleAria": "記憶抽取開關",
+      "masterToggleOn": "已開啟",
+      "masterToggleOff": "已關閉"
+    },
+    "identity": {
+      "groupCore": "核心檔案",
+      "groupPersonas": "人格範本",
+      "warningBanner": "身分檔案是 Agent 的核心人格與行為基礎。不當修改可能導致 Agent 行為異常、喪失關鍵能力或產生不可預期的回復。如果你不確定某項修改的影響，建議先備份原檔案。",
+      "badgeFullTextInject": "全文注入",
+      "badgeNeedsCompile": "需編譯",
+      "badgeAutoRegen": "自動重新生成",
+      "badgeSystemSection": "系統段落",
+      "reload": "重新載入",
+      "compileRules": "規則編譯",
+      "save": "儲存",
+      "saved": "已儲存",
+      "editorSubtitle": "工作區 · 可編輯身分檔案",
+      "editorPlaceholder": "請從左側選擇一個檔案進行編輯",
+      "fileMissingPlaceholder": "檔案不存在，輸入內容並儲存即可建立",
+      "editorFooterFile": "檔案",
+      "editorFooterLines": "行數",
+      "editorFooterHint": "Ctrl+S 儲存",
+      "charCountExceeded": "超出字元限制",
+      "restrictedHint": "系統管理檔案",
+      "systemManaged": "系統管理",
+      "memoryMdHint": "MEMORY.md 由系統從 SQLite 自動產生；手動編輯的內容會在下次自動重新整理時被覆蓋。如需持久化規則，請使用「語意記憶」+ 按鈕。",
+      "policiesHint": "POLICIES.yaml 是 agent 的權限與執行邊界。請謹慎修改頂層欄位（tool_policies / scope_policy / auto_confirm）。",
+      "editable": "可編輯",
+      "loading": "載入身分檔案…",
+      "empty": "未發現身分檔案",
+      "backToList": "返回檔案列表",
+      "memoryMdHintTitle": "自動覆蓋提示",
+      "policiesHintTitle": "權限邊界",
+      "compileDone": "規則編譯完成",
+      "compileEmpty": "規則編譯完成：沒有可注入的內容",
+      "compileFailed": "規則編譯失敗",
+      "loadFailed": "載入身分檔案失敗",
+      "saveFailed": "儲存失敗",
+      "fromTemplateHint": "出廠範本 · 尚未儲存到工作區，編輯後點儲存建立",
+      "personaPresets": "人格預設",
+      "personaLoadedHint": "已載入人格預設 · 確認後點儲存",
+      "personaOverwriteConfirm": "將覆蓋目前 SOUL 草稿，未儲存的修改會遺失。繼續？",
+      "preset": {
+        "balanced": {
+          "label": "平衡助手",
+          "description": "先做再說、短而準、不裝懂（預設）"
+        },
+        "mentor": {
+          "label": "嚴謹導師",
+          "description": "先問你怎麼想；結論帶依據；錯了直說"
+        },
+        "creative": {
+          "label": "創意搭檔",
+          "description": "先給三個方向；保留你的原味"
+        },
+        "companion": {
+          "label": "輕鬆夥伴",
+          "description": "像朋友不像客服；先共情再方案"
+        },
+        "tech_expert": {
+          "label": "技術專家",
+          "description": "術語不稀釋；結論帶版本前提；以測試為準"
+        }
+      }
     }
   },
   "chat": {

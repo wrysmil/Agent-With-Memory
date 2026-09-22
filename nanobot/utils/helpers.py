@@ -926,6 +926,14 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     _write(None, workspace / "memory" / "history.jsonl")
     (workspace / "skills").mkdir(exist_ok=True)
 
+    # identity/ seeds (AGENT.md, POLICIES.yaml, personas, …) — skip-if-exists.
+    try:
+        from nanobot.identity.bootstrap import ensure_identity_templates
+
+        added.extend(ensure_identity_templates(workspace))
+    except Exception:
+        logger.exception("Failed to seed identity templates for {}", workspace)
+
     if added and not silent:
         from rich.console import Console
 

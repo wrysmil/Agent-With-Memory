@@ -103,7 +103,8 @@
       "apps": "Aplicaciones",
       "automations": "Automatizaciones",
       "skills": "Habilidades",
-      "memory": "Memoria"
+      "memory": "Memoria",
+      "identity": "Identidad"
     },
     "sections": {
       "interface": "Interfaz",
@@ -1100,7 +1101,73 @@
       "mdModalDiffDraft": "Borrador Dream",
       "mdModalDiffPlaceholder": "（Cargando contenido）",
       "mdModalDiffCurrent": "MEMORY.md actual",
-      "mdModalDiffCurrentPlaceholder": "（MEMORY.md no existe o está vacío）"
+      "mdModalDiffCurrentPlaceholder": "（MEMORY.md no existe o está vacío）",
+      "masterToggleTitle": "Extracción y búsqueda automáticas de memoria",
+      "masterToggleDescription": "Al activarlo, nanobot extrae hechos de las conversaciones y recupera recuerdos en el siguiente turno. Efecto inmediato: sin reiniciar.",
+      "masterToggleAria": "Alternar extracción de memoria",
+      "masterToggleOn": "Activado",
+      "masterToggleOff": "Desactivado"
+    },
+    "identity": {
+      "groupCore": "Archivos principales",
+      "groupPersonas": "Personas",
+      "warningBanner": "Los archivos de identidad definen la personalidad y el comportamiento del agente. Ediciones inapropiadas pueden provocar comportamientos anormales o respuestas inesperadas. Si dudas, haz una copia de seguridad primero.",
+      "badgeFullTextInject": "Inyección de texto completo",
+      "badgeNeedsCompile": "Requiere compilación",
+      "badgeAutoRegen": "Regeneración automática",
+      "badgeSystemSection": "Sección del sistema",
+      "reload": "Recargar",
+      "compileRules": "Compilación de reglas",
+      "save": "Guardar",
+      "saved": "Guardado",
+      "editorSubtitle": "Espacio de trabajo · archivo de identidad editable",
+      "editorPlaceholder": "Selecciona un archivo a la izquierda para editar",
+      "fileMissingPlaceholder": "El archivo aún no existe: escribe contenido y guarda para crearlo",
+      "editorFooterFile": "Archivo",
+      "editorFooterLines": "Líneas",
+      "editorFooterHint": "Ctrl+S para guardar",
+      "charCountExceeded": "Límite de caracteres superado",
+      "restrictedHint": "Archivo gestionado por el sistema",
+      "systemManaged": "Gestionado por el sistema",
+      "memoryMdHint": "MEMORY.md se regenera automáticamente desde SQLite; las ediciones manuales se sobrescribirán en el próximo refresco. Para reglas persistentes usa el botón + de memoria semántica.",
+      "policiesHint": "POLICIES.yaml establece los permisos y límites de ejecución del agente. Edita con cuidado las claves de nivel superior (tool_policies / scope_policy / auto_confirm).",
+      "editable": "Editable",
+      "loading": "Cargando archivos de identidad…",
+      "empty": "No se encontraron archivos de identidad",
+      "backToList": "Volver a la lista",
+      "memoryMdHintTitle": "Aviso de sobrescritura automática",
+      "policiesHintTitle": "Límite de permisos",
+      "compileDone": "Compilación por reglas completada",
+      "compileEmpty": "Compilación por reglas completada: nada que inyectar",
+      "compileFailed": "Error en la compilación por reglas",
+      "loadFailed": "Error al cargar los archivos de identidad",
+      "saveFailed": "Error al guardar",
+      "fromTemplateHint": "Plantilla de fábrica · sin guardar en el espacio de trabajo: edita y guarda para crear",
+      "personaPresets": "Preajustes de persona",
+      "personaLoadedHint": "Preajuste de persona cargado: revisa y guarda",
+      "personaOverwriteConfirm": "Esto reemplazará el borrador actual de SOUL. Los cambios no guardados se perderán. ¿Continuar?",
+      "preset": {
+        "balanced": {
+          "label": "Asistente equilibrado",
+          "description": "Actúa primero, sé conciso, no finjas (por defecto)"
+        },
+        "mentor": {
+          "label": "Mentor estricto",
+          "description": "Primero pregunta cómo piensas; conclusiones justificadas; corrige errores"
+        },
+        "creative": {
+          "label": "Compañero creativo",
+          "description": "Tres direcciones primero; conserva tu voz"
+        },
+        "companion": {
+          "label": "Compañero relajado",
+          "description": "Un amigo, no soporte; empatía antes que soluciones"
+        },
+        "tech_expert": {
+          "label": "Experto técnico",
+          "description": "Sin diluir jerga; versiones explícitas; evidencia con tests"
+        }
+      }
     }
   },
   "chat": {

@@ -22,6 +22,7 @@ from nanobot.bus.events import (
     InboundMessage,
 )
 from nanobot.identity.catalog import resolve_identity_dir
+from nanobot.identity.compiler import read_compiled
 from nanobot.runtime_context import (
     RUNTIME_CONTEXT_MESSAGE_META,
     RuntimeContextBlock,
@@ -105,8 +106,8 @@ class TranscriptInput:
 class ContextBuilder:
     """Builds the context (system prompt + messages) for the agent."""
 
-    BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md"]
-    _SKIPPABLE_DEFAULTS = {"AGENTS.md", "USER.md"}
+    BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "AGENT.md", "USER.md"]
+    _SKIPPABLE_DEFAULTS = {"AGENTS.md", "AGENT.md", "USER.md"}
 
     def __init__(
         self,
@@ -307,18 +308,41 @@ class ContextBuilder:
         return _to_blocks(left) + _to_blocks(right)
 
     def _load_bootstrap_files(self, workspace: Path | None = None) -> str:
-        """Load project instructions plus the agent's global profile files."""
+        """Load project instructions plus the agent's global profile files.
+
+        Identity files resolve to their rule-compiled ``identity/runtime/``
+        products when that set is fresh, and fall back to the source file's
+        full text otherwise (never compiled, stale, or unreadable). The
+        fallback is the safe default: an edit that has not been recompiled
+        still takes effect, so compilation is a token optimization rather than
+        a switch that can silently silence a user's persona.
+        """
         parts: list[str] = []
         project_root = workspace or self.workspace
         identity_dir = resolve_identity_dir(self.workspace)
-        sources = [
-            ("AGENTS.md", project_root),  # project-level instructions: do not move
+        compiled = read_compiled(self.workspace)
+        sources: list[tuple[str, Path, str | None]] = [
+            ("AGENTS.md", project_root, None),  # project-level instructions: do not move
             # Identity files: prefer identity/ dir, fall back to workspace root for unmigrated old workspaces
-            ("SOUL.md", identity_dir if (identity_dir / "SOUL.md").exists() else self.workspace),
-            ("USER.md", identity_dir if (identity_dir / "USER.md").exists() else self.workspace),
+            (
+                "SOUL.md",
+                identity_dir if (identity_dir / "SOUL.md").exists() else self.workspace,
+                "identity_core",
+            ),
+            ("AGENT.md", identity_dir, "agent_behavior"),
+            (
+                "USER.md",
+                identity_dir if (identity_dir / "USER.md").exists() else self.workspace,
+                "user_profile_core",
+            ),
         ]
 
-        for filename, root in sources:
+        for filename, root, compiled_key in sources:
+            if compiled is not None and compiled_key is not None:
+                body = compiled.get(compiled_key, "")
+                if body.strip():
+                    parts.append(f"## {filename}\n\n{body}")
+                    continue
             file_path = root / filename
             if file_path.exists():
                 content = file_path.read_text(encoding="utf-8")

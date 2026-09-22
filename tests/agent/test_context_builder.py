@@ -1,11 +1,16 @@
 """Tests for ContextBuilder — system prompt and message assembly."""
 
+import os
+import time
 from pathlib import Path
 
 import pytest
 
 from nanobot.agent.context import ContextBuilder, TranscriptInput
+from nanobot.identity.catalog import IDENTITY_DIR_NAME
+from nanobot.identity.compiler import compile_identity
 from nanobot.runtime_context import RuntimeContextBlock
+from nanobot.utils.helpers import load_bundled_template
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -101,12 +106,18 @@ class TestLoadBootstrapFiles:
         assert "Soul." in result
 
     def test_all_bootstrap_files(self, tmp_path):
+        # AGENT.md is the odd one out: it lives under identity/, not the
+        # workspace root (SOUL/USER keep a root fallback for unmigrated
+        # workspaces, AGENT.md has no legacy location).
         for name in ContextBuilder.BOOTSTRAP_FILES:
-            (tmp_path / name).write_text(f"Content of {name}", encoding="utf-8")
+            root = tmp_path / IDENTITY_DIR_NAME if name == "AGENT.md" else tmp_path
+            root.mkdir(parents=True, exist_ok=True)
+            (root / name).write_text(f"Content of {name}", encoding="utf-8")
         builder = _builder(tmp_path)
         result = builder._load_bootstrap_files()
         for name in ContextBuilder.BOOTSTRAP_FILES:
             assert f"## {name}" in result
+            assert f"Content of {name}" in result
 
     def test_legacy_tools_md_is_not_bootstrapped(self, tmp_path):
         (tmp_path / "TOOLS.md").write_text("workspace tool notes", encoding="utf-8")
@@ -515,3 +526,79 @@ class TestBuildMessages:
         user_msg = messages[-1]["content"]
         assert isinstance(user_msg, list)
         assert any(b.get("type") == "image_url" for b in user_msg)
+
+
+# ---------------------------------------------------------------------------
+# identity layer: compiled products take over from full text
+# ---------------------------------------------------------------------------
+
+
+# Both sources carry a section the compiler drops, so "was the compiled
+# product injected, or the raw file?" is decidable from the prompt alone.
+_SOUL_SOURCE = "# Soul\n\n## 核心原则\n\n- 保留这句\n\n## 平台职责\n\n- 编译应剔除这句\n"
+_AGENT_SOURCE = "# Agent 行为准则\n\n## 任务执行\n\n- 保留行为\n\n## 平台职责\n\n- 编译应剔除这句\n"
+
+
+class TestCompiledIdentityInjection:
+    def _seed_sources(self, workspace: Path) -> None:
+        identity_dir = workspace / IDENTITY_DIR_NAME
+        identity_dir.mkdir(parents=True, exist_ok=True)
+        (identity_dir / "SOUL.md").write_text(_SOUL_SOURCE, encoding="utf-8")
+        (identity_dir / "AGENT.md").write_text(_AGENT_SOURCE, encoding="utf-8")
+
+    def test_fresh_products_replace_full_text(self, tmp_path):
+        self._seed_sources(tmp_path)
+        compile_identity(tmp_path)
+
+        result = _builder(tmp_path)._load_bootstrap_files()
+
+        assert "## SOUL.md" in result
+        assert "## AGENT.md" in result
+        assert "保留这句" in result
+        assert "编译应剔除这句" not in result
+
+    def test_full_text_fallback_before_any_compile(self, tmp_path):
+        """没编译过也要照常注入——编译是优化，不是开关。"""
+        self._seed_sources(tmp_path)
+
+        result = _builder(tmp_path)._load_bootstrap_files()
+
+        assert "保留这句" in result
+        assert "编译应剔除这句" in result
+
+    def test_stale_products_fall_back_to_full_text(self, tmp_path):
+        """改了源文件没重新编译：改动必须立刻生效，不能等编译。"""
+        self._seed_sources(tmp_path)
+        compile_identity(tmp_path)
+        future = time.time() + 5
+        soul = tmp_path / IDENTITY_DIR_NAME / "SOUL.md"
+        os.utime(soul, (future, future))
+
+        result = _builder(tmp_path)._load_bootstrap_files()
+
+        assert "编译应剔除这句" in result
+
+    def test_factory_agent_template_is_not_injected(self, tmp_path):
+        """出厂 AGENT.md 不该占用 system prompt；用户改过才进。"""
+        identity_dir = tmp_path / IDENTITY_DIR_NAME
+        identity_dir.mkdir(parents=True, exist_ok=True)
+        template = load_bundled_template("AGENT.md")
+        assert template is not None
+        (identity_dir / "AGENT.md").write_text(template, encoding="utf-8")
+
+        result = _builder(tmp_path)._load_bootstrap_files()
+
+        assert "## AGENT.md" not in result
+
+    def test_products_without_persona_content_do_not_hide_the_source(self, tmp_path):
+        """全部目标编译为空时产物集不可用，注入必须回到源文件。"""
+        identity_dir = tmp_path / IDENTITY_DIR_NAME
+        identity_dir.mkdir(parents=True, exist_ok=True)
+        (identity_dir / "USER.md").write_text(
+            "# User Profile\n\n- **称呼**：（待填）\n- **语气**：轻松\n", encoding="utf-8"
+        )
+        compile_identity(tmp_path)
+
+        result = _builder(tmp_path)._load_bootstrap_files()
+
+        assert "轻松" in result

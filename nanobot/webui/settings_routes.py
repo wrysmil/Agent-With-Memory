@@ -169,6 +169,7 @@ _SYSTEM_ROUTES = {
     "/api/settings/identity/file/save": "identity-write-file",
     "/api/settings/identity/reload": "identity-reload",
     "/api/settings/identity/compile": "identity-compile",
+    "/api/settings/identity/presets": "identity-list-presets",
     **{
         path: f"mcp-{action}"
         for path, action in _MCP_PRESET_ACTIONS_BY_PATH.items()
@@ -297,6 +298,7 @@ def _null_identity_operations() -> IdentitySettingsOperations:
         write_file=_unavailable,
         reload=_unavailable,
         compile=_unavailable,
+        list_presets=_unavailable,
     )
 
 

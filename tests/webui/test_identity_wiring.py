@@ -45,6 +45,7 @@ EXPECTED_SYSTEM_ROUTES = {
     "/api/settings/identity/file/save": "identity-write-file",
     "/api/settings/identity/reload": "identity-reload",
     "/api/settings/identity/compile": "identity-compile",
+    "/api/settings/identity/presets": "identity-list-presets",
 }
 
 EXPECTED_MUTATION_PATHS = frozenset({
@@ -56,6 +57,7 @@ EXPECTED_MUTATION_PATHS = frozenset({
 EXPECTED_WS_ACTIONS = {
     "identity.file.save": "/api/settings/identity/file/save",
     "identity.reload": "/api/settings/identity/reload",
+    "identity.compile": "/api/settings/identity/compile",
 }
 
 
@@ -67,7 +69,7 @@ def test_identity_paths_are_in_system_routes(path: str, action: str) -> None:
     assert _SYSTEM_ROUTES.get(path) == action
 
 
-def test_system_routes_has_exactly_five_identity_entries() -> None:
+def test_system_routes_has_exactly_six_identity_entries() -> None:
     assert {
         path for path in _SYSTEM_ROUTES if "/identity/" in path
     } == set(EXPECTED_SYSTEM_ROUTES)
@@ -88,7 +90,11 @@ def test_identity_mutation_set_matches_registered_writes() -> None:
 
 def test_identity_reads_are_not_mutations() -> None:
     """读路径走普通 GET；误登记会让整个 settings 页只能从 WS 调用。"""
-    for path in ("/api/settings/identity/files", "/api/settings/identity/file"):
+    for path in (
+        "/api/settings/identity/files",
+        "/api/settings/identity/file",
+        "/api/settings/identity/presets",
+    ):
         assert path not in _SETTINGS_MUTATION_PATHS
         assert not WebUISettingsRouter.is_mutation_path(path)
 
@@ -110,16 +116,16 @@ def test_ws_action_names_match_frontend_contract() -> None:
     )
 
 
-def test_compile_is_deliberately_not_a_ws_action() -> None:
-    """``identity.compile`` 不登记是有意为之，不是漏登记。
+def test_compile_is_a_registered_ws_action() -> None:
+    """``identity.compile`` 现在是可触达的真编译，不再是刻意不登记的占位。
 
-    ``IdentityView.handleCompile`` 在成功分支上没有任何反馈（只 await），失败
-    分支才用 `compileNotEnabled` 提示用户「编译能力尚未启用」。而
-    ``identity_compile`` 是返回 ``not_enabled`` 的占位实现——一旦登记，按钮就
-    变成点了没反应的静默 no-op。所以编译端点保持不可达，前端靠 404 走提示分支。
+    占位时代它不登记（登记了就变成点了没反应的静默 no-op），前端靠 404 走
+    「编译能力尚未启用」提示分支。现在 ``identity_compile`` 会真写
+    ``identity/runtime/`` 产物、前端也要用返回的 ``compiledFiles`` 计数做反馈，
+    所以漏登记的表现会退化成「按钮一点就 404」——正是这次要修的毛病。
     """
-    assert "identity.compile" not in _WEBUI_MUTATION_PATHS
-    # 但 HTTP 层的路径仍按写路径登记，避免将来可达时被匿名 GET 触发。
+    assert _WEBUI_MUTATION_PATHS["identity.compile"] == "/api/settings/identity/compile"
+    # HTTP 层的写路径登记同样在，避免匿名 GET 触发编译。
     assert "/api/settings/identity/compile" in _SETTINGS_MUTATION_PATHS
 
 
@@ -155,6 +161,7 @@ def test_null_identity_operations_returns_503_for_every_action() -> None:
         ),
         ("identity-reload", SettingsRequest(query={})),
         ("identity-compile", SettingsRequest(query={}, payload={"mode": "rules"})),
+        ("identity-list-presets", SettingsRequest(query={})),
     ]
     for action, request in cases:
         result = handler.handle(action, request)
@@ -199,7 +206,13 @@ def operations(workspace: Path, refresh_calls: list[int]) -> IdentitySettingsOpe
         return {"status": "ok", "chars": 7}
 
     def _compile(mode: str) -> dict[str, Any]:
-        return {"status": "not_enabled", "mode": mode or "rules"}
+        return {
+            "status": "ok",
+            "modeUsed": "rules",
+            "requestedMode": mode or "rules",
+            "compiledFiles": [],
+            "skipped": [],
+        }
 
     return IdentitySettingsOperations(
         list_files=partial(identity_api.identity_list_files, workspace),
@@ -207,6 +220,7 @@ def operations(workspace: Path, refresh_calls: list[int]) -> IdentitySettingsOpe
         write_file=partial(identity_api.identity_write_file, workspace),
         reload=partial(identity_api.identity_reload, refresh_memory_md=_refresh),
         compile=_compile,
+        list_presets=identity_api.identity_list_presets,
     )
 
 
@@ -270,7 +284,12 @@ async def test_router_dispatches_identity_read_over_get(
 
     assert response is not None
     assert response.status_code == 200
-    assert json.loads(response.body) == {"name": "SOUL.md", "content": "# soul"}
+    assert json.loads(response.body) == {
+        "name": "SOUL.md",
+        "content": "# soul",
+        "exists": True,
+        "fromTemplate": False,
+    }
 
 
 @pytest.mark.asyncio

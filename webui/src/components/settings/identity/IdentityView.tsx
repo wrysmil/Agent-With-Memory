@@ -12,15 +12,25 @@ import {
   ShieldCheck,
   Sparkles,
   SquareCheckBig,
-  Wand2,
+  Users,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  compileIdentityRules,
   fetchIdentityFile,
   listIdentityFiles,
+  listIdentityPresets,
   reloadIdentity,
   saveIdentityFile,
+  type IdentityPreset,
 } from "@/lib/api";
 import type { IdentityFileEntry } from "@/lib/types";
 import { useClient } from "@/providers/ClientProvider";
@@ -173,7 +183,11 @@ export function IdentityView() {
   const [draft, setDraft] = useState("");
   const [savingState, setSavingState] = useState<"idle" | "saving" | "saved">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [compileNotice, setCompileNotice] = useState<string | null>(null);
   const [compactDetailOpen, setCompactDetailOpen] = useState(false);
+  const [fromTemplate, setFromTemplate] = useState(false);
+  const [presetLoaded, setPresetLoaded] = useState(false);
+  const [presets, setPresets] = useState<IdentityPreset[]>([]);
 
   // Load the catalog once per token. `cancelled` makes the effect safe against
   // unmount and against a token change that races the in-flight request.
@@ -204,9 +218,33 @@ export function IdentityView() {
     };
   }, [token]);
 
-  // Load the body for the selected file. Clearing `draft` first avoids showing
-  // the previous file's text while the new request is in flight.
+  // Persona presets (SOUL editor toolbar). Loaded once; failure is non-fatal —
+  // the dropdown just stays empty.
   useEffect(() => {
+    let cancelled = false;
+    listIdentityPresets(token)
+      .then((payload) => {
+        if (!cancelled) setPresets(payload.presets);
+      })
+      .catch(() => {
+        /* presets are optional UX; ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const selectedMissing = useMemo(() => {
+    const entry = files.find((file) => file.name === selectedName);
+    return entry !== undefined && !entry.exists;
+  }, [files, selectedName]);
+
+  // Always fetch: the backend returns the factory template for missing files
+  // (fromTemplate) instead of 404, so the editor prefills rather than erroring.
+  // A network/5xx failure on a known-missing file stays silent (empty draft).
+  useEffect(() => {
+    setFromTemplate(false);
+    setPresetLoaded(false);
     if (!selectedName) {
       setDraft("");
       return;
@@ -216,15 +254,26 @@ export function IdentityView() {
     setLoadError(null);
     fetchIdentityFile(token, selectedName)
       .then((payload) => {
-        if (!cancelled) setDraft(payload.content);
+        if (cancelled) return;
+        setDraft(payload.content);
+        setFromTemplate(payload.fromTemplate === true);
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
+        // Missing file with no template payload → keep the create-on-save
+        // placeholder; only surface unexpected errors as a banner.
+        const entry = files.find((file) => file.name === selectedName);
+        if (entry !== undefined && !entry.exists) {
+          setDraft("");
+          setFromTemplate(false);
+          return;
+        }
         setLoadError(reason instanceof Error ? reason.message : String(reason));
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- files only used for missing fallback
   }, [token, selectedName]);
 
   const core = useMemo(() => files.filter((file) => file.group === "core"), [files]);
@@ -245,6 +294,23 @@ export function IdentityView() {
     if (!splitLayout) setCompactDetailOpen(true);
   }
 
+  function handleApplyPreset(preset: IdentityPreset) {
+    if (draft.trim() && draft !== preset.content) {
+      const ok = window.confirm(
+        tx(
+          "settings.identity.personaOverwriteConfirm",
+          "将覆盖当前 SOUL 草稿，未保存的修改会丢失。继续？",
+        ),
+      );
+      if (!ok) return;
+    }
+    setDraft(preset.content);
+    setPresetLoaded(true);
+    setFromTemplate(false);
+    setSavingState("idle");
+    setSaveError(null);
+  }
+
   function handleBack() {
     setCompactDetailOpen(false);
   }
@@ -256,6 +322,17 @@ export function IdentityView() {
     try {
       await saveIdentityFile(client, { name: selected.name, content: draft });
       setSavingState("saved");
+      setFromTemplate(false);
+      setPresetLoaded(false);
+      // A create-on-save flips the catalog entry to exists, so the load effect
+      // refetches the canonical body instead of keeping the stale skip.
+      if (!selected.exists) {
+        setFiles((prev) =>
+          prev.map((file) =>
+            file.name === selected.name ? { ...file, exists: true } : file,
+          ),
+        );
+      }
     } catch (reason) {
       setSaveError(
         `${tx("settings.identity.saveFailed", "保存失败")}: ${
@@ -273,22 +350,28 @@ export function IdentityView() {
       await reloadIdentity(client);
       const payload = await fetchIdentityFile(token, selected.name);
       setDraft(payload.content);
+      setFromTemplate(payload.fromTemplate === true);
+      setPresetLoaded(false);
       setSavingState("idle");
     } catch (reason) {
       setSaveError(reason instanceof Error ? reason.message : String(reason));
     }
   }
 
-  async function handleCompile(mode: "llm" | "rules") {
+  async function handleCompile() {
     setSaveError(null);
+    setCompileNotice(null);
     try {
-      await client.requestMutation("identity.compile", { mode });
+      const result = await compileIdentityRules(client);
+      setCompileNotice(
+        result.compiledFiles.length > 0
+          ? `${tx("settings.identity.compileDone", "规则编译完成")} (${result.compiledFiles.length})`
+          : tx("settings.identity.compileEmpty", "规则编译完成：没有可注入的内容"),
+      );
     } catch (reason) {
-      // The compile endpoint is not implemented yet. Surface the failure with
-      // the underlying detail instead of swallowing it silently.
       const detail =
         reason instanceof Error && reason.message ? ` (${reason.message})` : "";
-      setSaveError(`${tx("settings.identity.compileNotEnabled", "编译能力尚未启用")}${detail}`);
+      setSaveError(`${tx("settings.identity.compileFailed", "规则编译失败")}${detail}`);
     }
   }
 
@@ -422,6 +505,43 @@ export function IdentityView() {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
+                      {selected.name === "SOUL.md" && presets.length > 0 && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 rounded-full px-3 text-[12px] font-semibold"
+                              title={t("settings.identity.personaPresets", "人格预设")}
+                            >
+                              <Users className="h-3.5 w-3.5" />
+                              <span>
+                                {t("settings.identity.personaPresets", "人格预设")}
+                              </span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-64">
+                            <DropdownMenuLabel>
+                              {t("settings.identity.personaPresets", "人格预设")}
+                            </DropdownMenuLabel>
+                            {presets.map((preset) => (
+                              <DropdownMenuItem
+                                key={preset.name}
+                                onSelect={() => handleApplyPreset(preset)}
+                                className="flex flex-col items-start gap-0.5 py-2"
+                              >
+                                <span className="font-medium">
+                                  {t(preset.labelKey, preset.name)}
+                                </span>
+                                <span className="text-[11px] leading-4 text-muted-foreground">
+                                  {t(preset.descriptionKey, "")}
+                                </span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                       <Button
                         type="button"
                         variant="ghost"
@@ -440,22 +560,9 @@ export function IdentityView() {
                         variant="ghost"
                         size="sm"
                         className="h-8 rounded-full px-3 text-[12px] font-semibold"
-                        title={t("settings.identity.compileLlm", "LM 优化")}
-                        onClick={() => {
-                          void handleCompile("llm");
-                        }}
-                      >
-                        <Wand2 className="h-3.5 w-3.5" />
-                        <span>{t("settings.identity.compileLlm", "LM 优化")}</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 rounded-full px-3 text-[12px] font-semibold"
                         title={t("settings.identity.compileRules", "规则编译")}
                         onClick={() => {
-                          void handleCompile("rules");
+                          void handleCompile();
                         }}
                       >
                         <Sparkles className="h-3.5 w-3.5" />
@@ -463,6 +570,24 @@ export function IdentityView() {
                       </Button>
                     </div>
                   </div>
+
+                  {/* Factory-template / preset-loaded hint (not an error) */}
+                  {fromTemplate || presetLoaded ? (
+                    <div className="flex items-start gap-2 border-b border-border/45 bg-amber-50/60 px-4 py-2.5 text-[12px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 sm:px-5">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span className="min-w-0">
+                        {presetLoaded
+                          ? tx(
+                              "settings.identity.personaLoadedHint",
+                              "已载入人格预设 · 确认后点保存",
+                            )
+                          : tx(
+                              "settings.identity.fromTemplateHint",
+                              "出厂模板 · 尚未保存到工作区，编辑后点保存创建",
+                            )}
+                      </span>
+                    </div>
+                  ) : null}
 
                   {/* Per-file warning row */}
                   {selected.name === "MEMORY.md" && (
@@ -508,10 +633,17 @@ export function IdentityView() {
                       }}
                       spellCheck={false}
                       className="no-resize font-mono block h-full min-h-[24rem] w-full resize-none bg-transparent px-5 py-4 text-[13px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/50"
-                      placeholder={t(
-                        "settings.identity.editorPlaceholder",
-                        "请从左侧选择一个文件进行编辑",
-                      )}
+                      placeholder={
+                        selectedMissing && !fromTemplate && !presetLoaded
+                          ? tx(
+                              "settings.identity.fileMissingPlaceholder",
+                              "文件不存在，输入内容并保存即可创建",
+                            )
+                          : t(
+                              "settings.identity.editorPlaceholder",
+                              "请从左侧选择一个文件进行编辑",
+                            )
+                      }
                       aria-label={selected.name}
                     />
                   </div>
@@ -524,6 +656,17 @@ export function IdentityView() {
                     >
                       <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span className="min-w-0 break-words">{saveError}</span>
+                    </div>
+                  ) : null}
+
+                  {/* Rule-compile result row */}
+                  {compileNotice ? (
+                    <div
+                      role="status"
+                      className="flex items-start gap-2 border-b border-emerald-300/60 bg-emerald-50/70 px-4 py-2.5 text-[12px] text-emerald-900 dark:border-emerald-700/40 dark:bg-emerald-950/30 dark:text-emerald-200 sm:px-5"
+                    >
+                      <SquareCheckBig className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span className="min-w-0 break-words">{compileNotice}</span>
                     </div>
                   ) : null}
 

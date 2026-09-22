@@ -10,6 +10,12 @@ from nanobot.memory.lifecycle import MEMORY_MD_MAX_CHARS
 IDENTITY_DIR_NAME = "identity"
 PERSONAS_SUBDIR = "personas"
 PROMPTS_SUBDIR = "prompts"
+RUNTIME_SUBDIR = "runtime"
+
+# Rule-compiled injection artifacts live under identity/runtime/. Bumping this
+# string invalidates every existing compiled set (see compiler.compiled_status),
+# so it changes only when the compile pipeline's output shape changes.
+COMPILED_SCHEMA_VERSION = "1"
 
 # Frontend IdentityView charMax derives from here (via /api/settings/identity/files).
 # Shares the same constant with MEMORY.md truncation logic.

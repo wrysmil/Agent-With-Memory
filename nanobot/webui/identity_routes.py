@@ -41,6 +41,7 @@ class IdentitySettingsOperations:
     write_file: Callable[..., dict[str, Any]]
     reload: Callable[..., dict[str, Any]]
     compile: Callable[..., dict[str, Any]]
+    list_presets: Callable[..., dict[str, Any]]
 
 
 # Canonical set of actions this domain understands; the settings router uses
@@ -51,6 +52,7 @@ IDENTITY_ACTION_NAMES = frozenset({
     "identity-write-file",
     "identity-reload",
     "identity-compile",
+    "identity-list-presets",
 })
 
 
@@ -87,6 +89,9 @@ def dispatch(
 
     if action == "identity-list-files":
         return operations.list_files()
+
+    if action == "identity-list-presets":
+        return operations.list_presets()
 
     if action == "identity-read-file":
         # Read target comes from the query string (?name=SOUL.md).

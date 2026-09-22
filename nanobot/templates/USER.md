@@ -1,49 +1,25 @@
 # User Profile
 
-Information about the user to help personalize interactions.
+帮助 nanobot 了解你，以便用你舒服的方式协作。
 
-## Basic Information
+## 基本信息
 
-- **Name**: (your name)
-- **Timezone**: (your timezone, e.g., UTC+8)
-- **Language**: (preferred language)
+- **称呼**：（待填）
+- **时区**：（待填，如 UTC+8）
+- **偏好语言**：（待填，如 zh-CN）
 
-## Preferences
+## 协作偏好
 
-### Communication Style
+- **语气**：（轻松 / 专业 / 技术向，三选一或自定义）
+- **回复长度**：（简短 / 详细 / 视问题而定）
+- **技术水平**：（入门 / 熟练 / 专家）
 
-- [ ] Casual
-- [ ] Professional
-- [ ] Technical
+## 工作上下文
 
-### Response Length
+- **主要角色**：（待填）
+- **常做的项目**：（待填）
+- **常用工具**：（待填，如 VS Code、Python、Figma）
 
-- [ ] Brief and concise
-- [ ] Detailed explanations
-- [ ] Adaptive based on question
+## 特别说明
 
-### Technical Level
-
-- [ ] Beginner
-- [ ] Intermediate
-- [ ] Expert
-
-## Work Context
-
-- **Primary Role**: (your role, e.g., developer, researcher)
-- **Main Projects**: (what you're working on)
-- **Tools You Use**: (IDEs, languages, frameworks)
-
-## Topics of Interest
-
-- 
-- 
-- 
-
-## Special Instructions
-
-(Any specific instructions for how the assistant should behave)
-
----
-
-*Edit this file to customize nanobot's behavior for your needs.*
+（任何希望 AI 长期记住的禁忌、习惯或偏好）

@@ -12,6 +12,7 @@ from typing import Any
 
 import yaml
 
+from nanobot.identity.bootstrap import LEGACY_ROOT_FILES
 from nanobot.identity.catalog import (
     CHAR_LIMIT,
     CORE_FILES,
@@ -80,7 +81,50 @@ class IdentityStore:
             raise IdentityStoreError("路径越界：身份文件必须位于 identity/ 目录内", status=400)
         return candidate
 
+    def _target(self, name: str) -> Path:
+        """经 :meth:`_resolve` 完成安全校验后的实际读写落点。
+
+        两处回退与各自的真相源对齐（写路径不受影响：``MEMORY.md`` 在
+        :meth:`write_file` 已被拦去 lifecycle，legacy 两文件回退写根与
+        ``MemoryStore.soul_file`` / ``user_file`` 的落点一致）：
+
+        - ``MEMORY.md`` 真身在 ``memory/``（MemoryLifecycle 派生产物）；
+        - ``SOUL.md`` / ``USER.md`` 老位置在 workspace 根，与
+          ``ContextBuilder._load_bootstrap_files`` 的注入语义一致——保证
+          WebUI 显示、编辑的就是 Agent 实际注入的那一份。
+
+        其余文件（含越界候选、逃逸 symlink）仍由 ``_resolve`` 拦在 ``identity/`` 内。
+        """
+        candidate = self._resolve(name)
+        spec = self._spec_for(name)
+        if spec is not None and spec.name in LIFECYCLE_OWNED_FILES:
+            # 派生产物优先读 memory/——写路径（lifecycle）永远落那里，
+            # 若先命中 identity/ 残留文件会读到与写不一致的旧内容。
+            derived = self.workspace / "memory" / spec.path
+            if derived.is_file():
+                return derived
+            if candidate.is_file():
+                return candidate
+        if candidate.is_file():
+            return candidate
+        if spec is None:
+            return candidate
+        if spec.path == spec.name and spec.name in LEGACY_ROOT_FILES:
+            legacy = self.workspace / spec.name
+            if legacy.is_file():
+                return legacy
+        return candidate
+
     # -- 读 -------------------------------------------------------------------
+
+    def resolve_path(self, name: str) -> Path:
+        """经安全校验后的实际落点（可能尚不存在）。
+
+        公开只读入口：调用方需要按「文件真实位置」而非逻辑名来判断磁盘状态时
+        用它——例如编译器算源文件 mtime 决定产物是否过期，或任何想比对落点的
+        诊断代码。写入仍必须走 :meth:`write_file`。
+        """
+        return self._target(name)
 
     def list_files(self) -> list[dict[str, Any]]:
         """返回前端文件清单（含 exists / restricted / badge / charLimit）。"""
@@ -89,7 +133,7 @@ class IdentityStore:
             item: dict[str, Any] = {
                 "name": spec.name,
                 "group": spec.group,
-                "exists": (self.identity_dir / spec.path).is_file(),
+                "exists": self._exists(spec),
                 "restricted": spec.restricted,
                 "charLimit": CHAR_LIMIT,
             }
@@ -100,8 +144,24 @@ class IdentityStore:
             items.append(item)
         return items
 
+    def _exists(self, spec: IdentityFileSpec) -> bool:
+        """文件是否真实存在——按各自的实际落点判断，而非一律查 ``identity/``。
+
+        两处例外与读路径对齐，否则清单说 ``exists=true``、读却 404：
+
+        - ``MEMORY.md`` 真身在 ``memory/``（MemoryLifecycle 派生产物，写走 api 分流）；
+        - ``SOUL.md`` / ``USER.md`` 老位置在 workspace 根（见 :meth:`_target`）。
+        """
+        if (self.identity_dir / spec.path).is_file():
+            return True
+        if spec.name in LIFECYCLE_OWNED_FILES:
+            return (self.workspace / "memory" / spec.path).is_file()
+        if spec.path == spec.name and spec.name in LEGACY_ROOT_FILES:
+            return (self.workspace / spec.name).is_file()
+        return False
+
     def read_file(self, name: str) -> str:
-        path = self._resolve(name)
+        path = self._target(name)
         if not path.is_file():
             raise IdentityStoreError(f"文件不存在：{name}", status=404)
         try:
@@ -125,7 +185,7 @@ class IdentityStore:
                 status=500,
             )
 
-        path = self._resolve(name)
+        path = self._target(name)
 
         if not isinstance(content, str):
             raise IdentityStoreError("内容必须是字符串", status=400)
