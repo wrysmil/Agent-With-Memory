@@ -1,0 +1,491 @@
+<title>记忆系统架构图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F1F5F6; --surface:#FFFFFF; --surface-2:#E7EEF0; --surface-3:#F7FAFB;
+    --ink:#131C21; --ink-2:#33454C; --muted:#5C6E76; --line:#D0DADF; --line-2:#BCC9CF;
+    --write:#A94A16; --read:#0A6874; --dead:#879499;
+    --write-bg:#FBF0E8; --read-bg:#E6F3F4;
+    --ok:#1B6B45; --ok-bg:#E4F2EA;
+    --warn:#8A5A0C; --warn-bg:#FBF1DE;
+    --off:#5F6D73; --off-bg:#E9EEF0;
+    --shadow:0 1px 2px rgba(19,28,33,.06), 0 8px 24px -16px rgba(19,28,33,.28);
+    --sans:"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --disp:"Archivo", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0E1417; --surface:#161E22; --surface-2:#1E282D; --surface-3:#1A2327;
+      --ink:#E5EDEF; --ink-2:#C2D0D4; --muted:#8FA1A8; --line:#2B373C; --line-2:#3A484E;
+      --write:#DD8A55; --read:#48C0CA; --dead:#6E7C82;
+      --write-bg:#2A1C13; --read-bg:#0F2629;
+      --ok:#66C393; --ok-bg:#12291E;
+      --warn:#D9A94C; --warn-bg:#2A2110;
+      --off:#93A1A7; --off-bg:#212B30;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E1417; --surface:#161E22; --surface-2:#1E282D; --surface-3:#1A2327;
+    --ink:#E5EDEF; --ink-2:#C2D0D4; --muted:#8FA1A8; --line:#2B373C; --line-2:#3A484E;
+    --write:#DD8A55; --read:#48C0CA; --dead:#6E7C82;
+    --write-bg:#2A1C13; --read-bg:#0F2629;
+    --ok:#66C393; --ok-bg:#12291E;
+    --warn:#D9A94C; --warn-bg:#2A2110;
+    --off:#93A1A7; --off-bg:#212B30;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); font-size:15.5px; line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1140px; margin-inline:auto; padding-inline:20px; padding-block:34px 72px}
+  header.top{display:flex; flex-direction:column; gap:14px; margin-bottom:34px}
+  .eyebrow{
+    font-family:var(--mono); font-size:11.5px; font-weight:500; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted);
+  }
+  h1{
+    font-family:var(--disp); font-weight:600; font-size:clamp(30px,5vw,44px);
+    line-height:1.06; letter-spacing:-.022em; margin:0; text-wrap:balance;
+  }
+  .lede{margin:0; max-width:64ch; color:var(--ink-2); font-size:16.5px}
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:2px}
+  .chip{
+    font-family:var(--mono); font-size:11.5px; color:var(--muted);
+    background:var(--surface); border:1px solid var(--line); border-radius:5px;
+    padding:3.5px 8px; white-space:nowrap;
+  }
+  .chip b{color:var(--ink-2); font-weight:600}
+
+  .legend{
+    display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center;
+    margin:0 0 26px; padding:14px 16px;
+    background:var(--surface); border:1px solid var(--line); border-radius:8px;
+  }
+  .lg{display:flex; align-items:center; gap:9px; font-size:13.5px; color:var(--ink-2)}
+  .sw{width:30px; height:0; border-top:2.5px solid currentColor; flex:none}
+  .sw.w{color:var(--write)} .sw.r{color:var(--read)} .sw.d{color:var(--dead); border-top-style:dashed}
+  .sw.b{color:var(--line-2); border-top-width:7px; border-top-style:solid; border-radius:2px}
+
+  h2{
+    font-family:var(--disp); font-weight:600; font-size:22px; letter-spacing:-.012em;
+    margin:52px 0 6px; text-wrap:balance;
+  }
+  h2 .num{
+    font-family:var(--mono); font-size:12px; font-weight:500; color:var(--muted);
+    letter-spacing:.1em; margin-right:10px; vertical-align:2px;
+  }
+  .h2sub{margin:0 0 20px; color:var(--muted); font-size:14.5px; max-width:68ch}
+  p{margin:0 0 14px; max-width:68ch}
+  p.body{color:var(--ink-2)}
+
+  figure{margin:0 0 8px}
+  .fig-scroll{
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    padding:16px; box-shadow:var(--shadow);
+  }
+  .fig-scroll svg{display:block; width:1060px; height:auto}
+  figcaption{
+    margin-top:11px; font-size:13.5px; color:var(--muted); max-width:76ch;
+  }
+  figcaption b{color:var(--ink-2); font-weight:600}
+
+  /* ---- SVG 图元样式（主题 token 驱动，浅深色同时可读） ---- */
+  .box{fill:var(--surface); stroke:var(--line-2); stroke-width:1.4}
+  .box-soft{fill:var(--surface-2); stroke:var(--line-2); stroke-width:1.4}
+  .band{fill:var(--surface-2); stroke:var(--line-2); stroke-width:1.5}
+  .chipbox{fill:var(--surface); stroke:var(--line); stroke-width:1.2}
+  .box-w{fill:var(--write-bg); stroke:var(--write); stroke-width:1.5}
+  .box-r{fill:var(--read-bg); stroke:var(--read); stroke-width:1.5}
+  .box-x{fill:none; stroke:var(--dead); stroke-width:1.4; stroke-dasharray:5 4}
+  .t{fill:var(--ink); font-family:var(--sans); font-size:12.5px; font-weight:600}
+  .t-r{fill:var(--read); font-family:var(--sans); font-size:12.5px; font-weight:600}
+  .t-w{fill:var(--write); font-family:var(--sans); font-size:12.5px; font-weight:600}
+  .t-x{fill:var(--dead); font-family:var(--sans); font-size:12.5px; font-weight:600}
+  .s{fill:var(--muted); font-family:var(--mono); font-size:10.5px}
+  .s-x{fill:var(--dead); font-family:var(--mono); font-size:10.5px}
+  .stage{fill:var(--muted); font-family:var(--mono); font-size:10.5px; font-weight:500; letter-spacing:.09em}
+  .lane{font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.06em}
+  .lane-w{fill:var(--write)} .lane-r{fill:var(--read)}
+  .lb{fill:var(--muted); font-family:var(--mono); font-size:10.5px}
+  .a{fill:none; stroke-width:1.6}
+  .a-w{stroke:var(--write)} .a-r{stroke:var(--read)}
+  .a-p{stroke:var(--line-2)} .a-d{stroke:var(--dead); stroke-dasharray:5 4}
+  .mk-w{fill:var(--write)} .mk-r{fill:var(--read)} .mk-p{fill:var(--line-2)} .mk-d{fill:var(--dead)}
+
+  .tbl-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:6px}
+  table{border-collapse:collapse; width:100%; min-width:620px; font-size:14px}
+  caption{
+    text-align:left; font-size:13.5px; color:var(--muted);
+    padding-bottom:10px;
+  }
+  th{
+    text-align:left; font-family:var(--mono); font-size:11px; font-weight:500;
+    letter-spacing:.11em; text-transform:uppercase; color:var(--muted);
+    padding:0 14px 8px 0; border-bottom:1px solid var(--line-2); white-space:nowrap;
+  }
+  td{
+    padding:10px 14px 10px 0; border-bottom:1px solid var(--line);
+    vertical-align:top; color:var(--ink-2);
+  }
+  td:last-child, th:last-child{padding-right:0}
+  td.k{color:var(--ink); font-weight:500; white-space:nowrap}
+  td.n{font-family:var(--mono); font-size:13px; font-variant-numeric:tabular-nums; white-space:nowrap}
+  code{
+    font-family:var(--mono); font-size:.87em; color:var(--ink);
+    background:var(--surface-2); border-radius:4px; padding:1.5px 5px;
+  }
+  td code{background:var(--surface-2)}
+  .pill{
+    display:inline-block; font-family:var(--mono); font-size:11px; font-weight:500;
+    padding:2.5px 8px; border-radius:4px; white-space:nowrap; letter-spacing:.02em;
+  }
+  .pill.ok{color:var(--ok); background:var(--ok-bg)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg)}
+  .pill.off{color:var(--off); background:var(--off-bg)}
+  .note{
+    margin-top:26px; padding:15px 17px; border-left:2.5px solid var(--read);
+    background:var(--surface); border-radius:0 8px 8px 0; font-size:14.5px; color:var(--ink-2);
+  }
+  .note strong{color:var(--ink)}
+  footer{
+    margin-top:56px; padding-top:18px; border-top:1px solid var(--line);
+    font-family:var(--mono); font-size:11.5px; color:var(--muted);
+    display:flex; flex-wrap:wrap; gap:6px 18px;
+  }
+  a{color:var(--read)}
+  :focus-visible{outline:2px solid var(--read); outline-offset:2px; border-radius:3px}
+  @media (prefers-reduced-motion: reduce){*{animation:none !important; transition:none !important}}
+  @media (max-width:520px){
+    h1{font-size:28px}
+    body{font-size:15px}
+  }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">nanobot · feature/memory-system · 2026-09-22 · 依当前工作区代码核对</div>
+  <h1>记忆系统架构图</h1>
+  <p class="lede">会话结束后异步写入、每轮提问同步读取的两条链路，共用一套 SQLite + 向量 + 文件的存储层。图中标出了真实生效的路径与已实现但未接线的部分。</p>
+  <div class="chips">
+    <span class="chip">核心 <b>nanobot/memory/</b> · 21 模块</span>
+    <span class="chip">检索 <b>retrieval/</b> · 四路并行</span>
+    <span class="chip">默认 <b>memory_enabled = False</b></span>
+    <span class="chip">后端默认 <b>fts5</b></span>
+  </div>
+</header>
+
+<div class="legend">
+  <span class="lg"><span class="sw w"></span>写入链路</span>
+  <span class="lg"><span class="sw r"></span>读取链路</span>
+  <span class="lg"><span class="sw d"></span>已实现 · 未接线</span>
+  <span class="lg"><span class="sw b"></span>存储实体</span>
+</div>
+
+<h2><span class="num">图 1</span>全系统总览</h2>
+<p class="h2sub">上行为写入链路（会话空闲后异步触发），中间是三个存储实体，下行为读取链路（每轮提问同步触发）。两条链路在存储层交汇，彼此不直接调用。</p>
+
+<figure>
+  <div class="fig-scroll">
+    <svg viewBox="0 0 1060 470" role="img" aria-label="记忆系统总览：写入链路自上而下经 idle 定时器、抽取、过滤落库进入存储层；存储层含 SQLite、ChromaDB 与文件；读取链路自存储层经四路召回、去重合并、重排、格式化后注入 system prompt。SessionEndOrchestrator 与 attachments 通道为已实现未接线。">
+      <defs>
+        <marker id="mw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-w" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="mr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-r" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-p" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-d" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+
+      <!-- 阶段标号 -->
+      <text class="stage" x="20" y="34">① 触发</text>
+      <text class="stage" x="200" y="34">② 空闲放行</text>
+      <text class="stage" x="380" y="34">③ 抽取</text>
+      <text class="stage" x="560" y="34">④ 二次抽取</text>
+      <text class="stage" x="740" y="34">⑤ 过滤落库</text>
+
+      <!-- 写入链路 -->
+      <rect class="box" x="20" y="48" width="156" height="56" rx="8"/>
+      <text class="t" x="36" y="72">轮次结束</text>
+      <text class="s" x="36" y="89">after_run · on_finally</text>
+
+      <rect class="box" x="200" y="48" width="156" height="56" rx="8"/>
+      <text class="t" x="216" y="72">idle 定时器</text>
+      <text class="s" x="216" y="89">空闲 120s 后放行</text>
+
+      <rect class="box" x="380" y="48" width="156" height="56" rx="8"/>
+      <text class="t" x="396" y="72">MemoryExtractor</text>
+      <text class="s" x="396" y="89">信号门 · 增量切片</text>
+
+      <rect class="box" x="560" y="48" width="156" height="56" rx="8"/>
+      <text class="t" x="576" y="72">两路 LLM 抽取</text>
+      <text class="s" x="576" y="89">画像 · 引用评分</text>
+
+      <rect class="box" x="740" y="48" width="156" height="56" rx="8"/>
+      <text class="t" x="756" y="72">过滤并落库</text>
+      <text class="s" x="756" y="89">去重 · 合并 · _persist</text>
+
+      <line class="a a-w" x1="176" y1="76" x2="196" y2="76" marker-end="url(#mw)"/>
+      <line class="a a-w" x1="356" y1="76" x2="376" y2="76" marker-end="url(#mw)"/>
+      <line class="a a-w" x1="536" y1="76" x2="556" y2="76" marker-end="url(#mw)"/>
+      <line class="a a-w" x1="716" y1="76" x2="736" y2="76" marker-end="url(#mw)"/>
+
+      <!-- 写入下落 -->
+      <line class="a a-w" x1="818" y1="104" x2="818" y2="246" marker-end="url(#mw)"/>
+      <text class="lb" x="828" y="180">写入</text>
+
+      <!-- 并行路径：T0 即时焦点 / 未接线的编排器 -->
+      <text class="lane lane-w" x="20" y="132">写入链路 · 会话空闲后异步</text>
+
+      <rect class="box-w" x="20" y="150" width="300" height="48" rx="8"/>
+      <text class="t" x="36" y="172">T0 即时焦点</text>
+      <text class="s" x="36" y="189">每轮同步写 scratchpad 表</text>
+      <line class="a a-w" x1="170" y1="198" x2="170" y2="246" marker-end="url(#mw)"/>
+
+      <rect class="box-x" x="380" y="150" width="340" height="48" rx="8"/>
+      <text class="t-x" x="396" y="172">SessionEndOrchestrator</text>
+      <text class="s-x" x="396" y="189">已构造 · 无调用方（事件无订阅者）</text>
+      <line class="a a-d" x1="550" y1="198" x2="550" y2="246" marker-end="url(#md)"/>
+
+      <!-- 存储层 -->
+      <rect class="band" x="20" y="250" width="1020" height="96" rx="10"/>
+      <text class="stage" x="40" y="272">存储层 · 三个实体</text>
+
+      <rect class="chipbox" x="40" y="282" width="312" height="48" rx="6"/>
+      <text class="t" x="56" y="304">SQLite · memory/state.db</text>
+      <text class="s" x="56" y="321">memories · episodes · FTS5</text>
+
+      <rect class="chipbox" x="372" y="282" width="312" height="48" rx="6"/>
+      <text class="t" x="388" y="304">ChromaDB · memory/chromadb</text>
+      <text class="s" x="388" y="321">bge-small-zh-v1.5 · 512 维</text>
+
+      <rect class="chipbox" x="704" y="282" width="316" height="48" rx="6"/>
+      <text class="t" x="720" y="304">文件 · memory/</text>
+      <text class="s" x="720" y="321">MEMORY.md · history.jsonl · SOUL.md</text>
+
+      <!-- 读取链路 -->
+      <line class="a a-r" x1="818" y1="346" x2="818" y2="386" marker-end="url(#mr)"/>
+      <text class="lb" x="828" y="372">读取</text>
+      <text class="lane lane-r" x="20" y="376">读取链路 · 每轮提问同步</text>
+
+      <rect class="box-r" x="20" y="390" width="156" height="56" rx="8"/>
+      <text class="t-r" x="36" y="414">注入提示词</text>
+      <text class="s" x="36" y="431">build_system_prompt</text>
+
+      <rect class="box" x="200" y="390" width="156" height="56" rx="8"/>
+      <text class="t" x="216" y="414">按预算截断</text>
+      <text class="s" x="216" y="431">limit = tokens ÷ 70</text>
+
+      <rect class="box" x="380" y="390" width="156" height="56" rx="8"/>
+      <text class="t" x="396" y="414">Reranker</text>
+      <text class="s" x="396" y="431">综合分阈值 0.35</text>
+
+      <rect class="box" x="560" y="390" width="156" height="56" rx="8"/>
+      <text class="t" x="576" y="414">按 id 去重合并</text>
+      <text class="s" x="576" y="431">保留最高 relevance</text>
+
+      <rect class="box" x="740" y="390" width="156" height="56" rx="8"/>
+      <text class="t" x="756" y="414">四路并行召回</text>
+      <text class="s" x="756" y="431">任一失败即隔离</text>
+
+      <rect class="box" x="920" y="390" width="120" height="56" rx="8"/>
+      <text class="t" x="936" y="414">用户提问</text>
+      <text class="s" x="936" y="431">每轮一次</text>
+
+      <line class="a a-r" x1="920" y1="418" x2="900" y2="418" marker-end="url(#mr)"/>
+      <line class="a a-r" x1="740" y1="418" x2="360" y2="418" marker-end="url(#mr)"/>
+      <line class="a a-r" x1="200" y1="418" x2="180" y2="418" marker-end="url(#mr)"/>
+    </svg>
+  </div>
+  <figcaption><b>图 1 · 总览。</b>写入链路以 idle 定时器为闸门：轮次正常结束走 <code>after_run</code>，被打断或报错时由 <code>on_finally</code> 补装定时器，空闲满 120 秒才放行一次增量抽取。读写两条链路只在存储层交汇——写入不触发读取，读取也不驱动写入。</figcaption>
+</figure>
+
+<h2><span class="num">图 2</span>读取链路：四路召回与融合</h2>
+<p class="h2sub">读链路是整套系统里分支最多的一段：一次提问先过预筛门，再经 LLM 拆解，然后四路并行召回，汇入同一个候选池去重后统一重排。</p>
+
+<figure>
+  <div class="fig-scroll">
+    <svg viewBox="0 0 1060 400" role="img" aria-label="读取链路：用户提问经预筛门与查询拆解后扇出到 semantic、episodes、recent、attachments 四路并行召回，汇入候选池按 memory_id 去重，再经 Reranker 综合打分、Formatter 按预算截断、注入块清洗后写入 system prompt。attachments 因表未建恒返回空。">
+      <defs>
+        <marker id="mr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-r" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="mp2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-p" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="md2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-d" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+
+      <!-- 入口 -->
+      <rect class="box" x="20" y="16" width="210" height="48" rx="8"/>
+      <text class="t" x="36" y="38">用户提问</text>
+      <text class="s" x="36" y="55">AgentLoop 每轮同步调用</text>
+      <line class="a a-p" x1="125" y1="64" x2="125" y2="84" marker-end="url(#mp2)"/>
+
+      <!-- 预筛 + 拆解 -->
+      <rect class="box-r" x="20" y="88" width="210" height="52" rx="8"/>
+      <text class="t-r" x="36" y="110">MemoryQueryPreprocessor</text>
+      <text class="s" x="36" y="127">空 / 控制词 / 超短 → 返回空</text>
+      <line class="a a-r" x1="125" y1="140" x2="125" y2="164" marker-end="url(#mr2)"/>
+
+      <rect class="box" x="20" y="168" width="210" height="52" rx="8"/>
+      <text class="t" x="36" y="190">QueryDecomposer</text>
+      <text class="s" x="36" y="207">LLM 拆关键词 + 意图</text>
+
+      <!-- 扇出总线 -->
+      <line class="a a-r" x1="230" y1="194" x2="252" y2="194"/>
+      <line class="a a-r" x1="256" y1="66" x2="256" y2="264"/>
+      <line class="a a-r" x1="256" y1="66" x2="276" y2="66" marker-end="url(#mr2)"/>
+      <line class="a a-r" x1="256" y1="132" x2="276" y2="132" marker-end="url(#mr2)"/>
+      <line class="a a-r" x1="256" y1="198" x2="276" y2="198" marker-end="url(#mr2)"/>
+      <line class="a a-d" x1="256" y1="264" x2="276" y2="264" marker-end="url(#md2)"/>
+
+      <!-- 四路通道 -->
+      <rect class="box" x="280" y="40" width="210" height="52" rx="8"/>
+      <text class="t" x="296" y="62">semantic 通道</text>
+      <text class="s" x="296" y="79">FTS5 ∪ 向量 · RRF k=60</text>
+
+      <rect class="box" x="280" y="106" width="210" height="52" rx="8"/>
+      <text class="t" x="296" y="128">episodes 通道</text>
+      <text class="s" x="296" y="145">实体命中 · 上限 5</text>
+
+      <rect class="box" x="280" y="172" width="210" height="52" rx="8"/>
+      <text class="t" x="296" y="194">recent 通道</text>
+      <text class="s" x="296" y="211">近期高重要性 · 上限 5</text>
+
+      <rect class="box-x" x="280" y="238" width="210" height="52" rx="8"/>
+      <text class="t-x" x="296" y="260">attachments 通道</text>
+      <text class="s-x" x="296" y="277">表未建 → 恒返回空</text>
+
+      <!-- 汇入总线 -->
+      <line class="a a-r" x1="490" y1="66" x2="530" y2="66"/>
+      <line class="a a-r" x1="490" y1="132" x2="530" y2="132"/>
+      <line class="a a-r" x1="490" y1="198" x2="530" y2="198"/>
+      <line class="a a-r" x1="530" y1="66" x2="530" y2="198"/>
+      <line class="a a-r" x1="530" y1="154" x2="556" y2="154" marker-end="url(#mr2)"/>
+
+      <!-- 融合 -->
+      <rect class="box-r" x="560" y="126" width="190" height="56" rx="8"/>
+      <text class="t-r" x="576" y="150">候选池去重</text>
+      <text class="s" x="576" y="167">按 memory_id 取最高分</text>
+
+      <path class="a a-r" d="M750,148 L770,148 L770,88 L786,88" marker-end="url(#mr2)"/>
+
+      <!-- 重排与格式化 -->
+      <rect class="box" x="790" y="60" width="200" height="56" rx="8"/>
+      <text class="t" x="806" y="84">Reranker</text>
+      <text class="s" x="806" y="101">0.4Rel+0.2Rec+0.2Imp+0.2Acc</text>
+      <line class="a a-r" x1="890" y1="116" x2="890" y2="142" marker-end="url(#mr2)"/>
+
+      <rect class="box" x="790" y="146" width="200" height="56" rx="8"/>
+      <text class="t" x="806" y="170">RetrievalFormatter</text>
+      <text class="s" x="806" y="187">按 composite_score 截断</text>
+      <line class="a a-r" x1="890" y1="202" x2="890" y2="228" marker-end="url(#mr2)"/>
+
+      <rect class="box" x="790" y="232" width="200" height="56" rx="8"/>
+      <text class="t" x="806" y="256">注入块渲染</text>
+      <text class="s" x="806" y="273">清洗 · 不可信数据声明</text>
+      <line class="a a-r" x1="890" y1="288" x2="890" y2="314" marker-end="url(#mr2)"/>
+
+      <rect class="box-r" x="790" y="318" width="200" height="52" rx="8"/>
+      <text class="t-r" x="806" y="340">system prompt</text>
+      <text class="s" x="806" y="357">每轮追加一段</text>
+    </svg>
+  </div>
+  <figcaption><b>图 2 · 读链路。</b>四路通道各自独立失败——任一抛异常只记一条告警并留空，不拖垮整次检索。<code>attachments</code> 通道的 <code>attachments</code> 表未进 schema，因此恒定返回空；<code>semantic</code> 通道内部才做 RRF 融合（FTS5 与向量两路各按名次计 1/(60+rank)），四路之间则是简单拼接后按 <code>memory_id</code> 去重。</figcaption>
+</figure>
+
+<h2><span class="num">表 1</span>读取侧的评分公式</h2>
+<p class="h2sub">候选池去重后每一条走同一条加权公式，权重写在 <code>retrieval/reranker.py:15-24</code>。</p>
+<div class="tbl-scroll">
+  <table>
+    <thead>
+      <tr><th>项</th><th>权重 / 规则</th><th>来源</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="k">Rel 相关度</td><td>0.40 —— semantic 通道的 RRF 归一化分，绝对小于 1.0</td><td class="n">reranker.py:15</td></tr>
+      <tr><td class="k">Rec 时近性</td><td>0.20 —— <code>exp(-0.1 × 天数)</code></td><td class="n">reranker.py:16,45</td></tr>
+      <tr><td class="k">Imp 重要性</td><td>0.20 —— 落库时的 importance_score</td><td class="n">reranker.py:17</td></tr>
+      <tr><td class="k">Access 访问频次</td><td>0.20 —— access_count 归一化</td><td class="n">reranker.py:18</td></tr>
+      <tr><td class="k">焦点增强</td><td>×1.0~1.35：命中一个焦点词 +0.1，至多计 4 个</td><td class="n">reranker.py:20-21,73-76</td></tr>
+      <tr><td class="k">动作词惩罚</td><td>×0.30：type 为 fact 且以「打开 / run / install…」起头</td><td class="n">reranker.py:22,80-81</td></tr>
+      <tr><td class="k">阈值</td><td>综合分 ≥ 0.35；时近性 ≥ 0.99 的冷启动候选豁免阈值</td><td class="n">reranker.py:23-24,86</td></tr>
+      <tr><td class="k">通道召回上限</td><td>semantic 15 / episodes 5 / recent 5 / attachments 5</td><td class="n">engine.py:38-41</td></tr>
+      <tr><td class="k">注入预算</td><td>默认 700 token，每条候选按 70 token 折算条数上限</td><td class="n">engine.py:77,44</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2><span class="num">表 2</span>存储实体</h2>
+<p class="h2sub">SQLite schema 定义在 <code>memory/database.py:25-163</code>，六个表全部 <code>CREATE TABLE IF NOT EXISTS</code>，旧库可直接补建。</p>
+<div class="tbl-scroll">
+  <table>
+    <thead>
+      <tr><th>表 / 文件</th><th>关键字段</th><th>作用</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="k">memories</td><td class="n">id, content, type, importance_score, access_count, decay_rate, expires_at, superseded_by, scope, source_episode_id</td><td>记忆主表，23 字段</td></tr>
+      <tr><td class="k">memories_fts</td><td class="n">content, subject, predicate, tags</td><td>FTS5 虚表，unicode61 分词，3 个触发器同步</td></tr>
+      <tr><td class="k">episodes</td><td class="n">id, session_id, summary, action_nodes, entities, tools_used, linked_memory_ids</td><td>会话情节，19 字段</td></tr>
+      <tr><td class="k">scratchpad</td><td class="n">user_id + workspace_id (PK), content</td><td>T0 焦点即时写</td></tr>
+      <tr><td class="k">session_extraction_state</td><td class="n">session_key, last_count, last_source</td><td>idle 增量抽取的水位线</td></tr>
+      <tr><td class="k">vector_sync_state</td><td class="n">id = 1, cursor, indexed</td><td>向量索引游标</td></tr>
+      <tr><td class="k">memory/MEMORY.md</td><td class="n">MEMORY.md · MEMORY.md.draft</td><td>由 SQLite 派生；Dream 只写 .draft 副本</td></tr>
+      <tr><td class="k">memory/history.jsonl</td><td class="n">.cursor · .dream_cursor</td><td>轮次流水与 Dream 游标</td></tr>
+      <tr><td class="k">memory/chromadb/</td><td class="n">PersistentClient · cosine</td><td>向量库，bge-small-zh-v1.5 / 512 维</td></tr>
+      <tr><td class="k">memory/_memory_fallback/</td><td class="n">*.json</td><td>写库失败时的兜底落盘</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2><span class="num">表 3</span>接线状态</h2>
+<p class="h2sub">这一栏比架构本身更容易踩坑：仓库里存在一套完整的会话结束编排器，但它当前不在任何执行路径上。</p>
+<div class="tbl-scroll">
+  <table>
+    <thead>
+      <tr><th>路径</th><th>状态</th><th>证据</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="k">T0 每轮即时焦点</td><td><span class="pill ok">生效</span></td><td>CHAT 意图跳过，其余写 scratchpad · <code>memory_extraction.py:434-444</code></td></tr>
+      <tr><td class="k">idle 定时器增量抽取</td><td><span class="pill ok">生效</span></td><td>每轮重置、空闲 120s 放行 · <code>memory_extraction.py:540-582</code></td></tr>
+      <tr><td class="k">被打断轮次补装定时器</td><td><span class="pill ok">生效</span></td><td>仅 <code>on_finally</code> 的 cancelled / error 出口 · <code>memory_extraction.py:393-398</code></td></tr>
+      <tr><td class="k">Dream 整合</td><td><span class="pill ok">生效</span></td><td>cron 每 2 小时或 <code>/dream</code>，只写 <code>MEMORY.md.draft</code></td></tr>
+      <tr><td class="k">SessionEndOrchestrator</td><td><span class="pill warn">已构造 · 无调用方</span></td><td><code>POST /api/sessions/{key}/end</code> 会把 SessionEndEvent 发布到 event_bus，但仓库内没有任何订阅者；hook 只在 <code>:261</code> 构造它</td></tr>
+      <tr><td class="k">T5 话题切换检测</td><td><span class="pill off">已禁用</span></td><td><code>_detect_topic_change</code> 首行直接 return；<code>TopicChangeGate(60s)</code> 构造后未被读取 · <code>memory_extraction.py:451-454</code></td></tr>
+      <tr><td class="k">attachments 召回通道</td><td><span class="pill off">恒空</span></td><td><code>attachments</code> 表未进 schema，通道返回 <code>[]</code> · <code>store_adapter.py:155</code></td></tr>
+      <tr><td class="k">create_search_backend</td><td><span class="pill off">恒回退</span></td><td>chromadb / api_embedding 两个分支都回退到 FTS5 · <code>search_backend.py:109-125</code></td></tr>
+      <tr><td class="k">schedule_refresh_md</td><td><span class="pill off">无调用方</span></td><td>60 秒去抖刷新未启用；MEMORY.md 仅在 WebUI 写入后同步刷新 · <code>lifecycle.py:187</code></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2><span class="num">表 4</span>开关与默认值</h2>
+<div class="tbl-scroll">
+  <table>
+    <thead>
+      <tr><th>配置项</th><th>默认值</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="k">memory_enabled</td><td class="n">False</td><td>总开关关闭时 hook 根本不注册，整套链路静默</td></tr>
+      <tr><td class="k">memory_idle_seconds</td><td class="n">120</td><td>idle 放行阈值；注释里标注的典型值是 600</td></tr>
+      <tr><td class="k">memory_search_backend</td><td class="n">"fts5"</td><td>仅取 <code>"chromadb"</code> 时才装配向量层</td></tr>
+      <tr><td class="k">memory_vector.embedding_model</td><td class="n">BAAI/bge-small-zh-v1.5</td><td>512 维，本地 sentence-transformers 加载</td></tr>
+      <tr><td class="k">dream.enabled / interval_h</td><td class="n">2 小时</td><td>可被 <code>/dream</code> 命令即时触发</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="note">
+  <strong>看图时最容易误判的一处：</strong>写入与读取并不是两条互相驱动的链路。写入端只在「空闲」这一个条件下放行，读取端每轮都跑；两者之间没有回写反馈，唯一的信息回流是引用评分——注入进 prompt 的 memory_id 会被记下，等下一次 idle 抽取时用于给这些记忆加访问计数。
+</div>
+
+<footer>
+  <span>依据：当前工作区源码逐一核对，非文档转述</span>
+  <span>分支：feature/memory-system</span>
+  <span>核对于 2026-09-22</span>
+</footer>
+
+</div>

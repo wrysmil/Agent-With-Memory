@@ -4,9 +4,6 @@ import { useTranslation } from "react-i18next";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useClient } from "@/providers/ClientProvider";
 import { EpisodeListView } from "./EpisodeListView";
-import { MemoryMdCard } from "./MemoryMdCard";
-import { MemoryMdViewerModal } from "./MemoryMdViewerModal";
-import { MemoryDraftDiffModal } from "./MemoryDraftDiffModal";
 import { MemoryListView } from "./MemoryListView";
 import type { SettingsPayload } from "@/lib/types";
 
@@ -32,10 +29,6 @@ export function MemorySection({
   const [enabled, setEnabled] = useState<boolean>(initialEnabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // WU-6: Modal state
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [diffOpen, setDiffOpen] = useState(false);
 
   const persist = async (next: boolean) => {
     setSaving(true);
@@ -112,10 +105,6 @@ export function MemorySection({
       <p className="text-xs text-muted-foreground">
         {enabled ? onLabel : offLabel}
       </p>
-      <MemoryMdCard
-        onViewMemoryMd={() => setViewerOpen(true)}
-        onViewDraftDiff={() => setDiffOpen(true)}
-      />
       <SegmentedControl
         mode="tabs"
         ariaLabel={tx("settings.memory.tabsLabel", "Memory sections")}
@@ -129,16 +118,6 @@ export function MemorySection({
       />
       {tab === "semantic" && <MemoryListView />}
       {tab === "episode" && <EpisodeListView />}
-
-      {/* WU-6: Modal dialogs */}
-      <MemoryMdViewerModal
-        open={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-      />
-      <MemoryDraftDiffModal
-        open={diffOpen}
-        onClose={() => setDiffOpen(false)}
-      />
     </div>
   );
 }
