@@ -10,8 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from nanobot.identity.bootstrap import LEGACY_ROOT_FILES
 from nanobot.identity.catalog import (
     CHAR_LIMIT,
@@ -196,21 +194,5 @@ class IdentityStore:
                 status=400,
             )
 
-        if path.suffix == ".yaml":
-            self._validate_yaml(content, name)
-
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-
-    @staticmethod
-    def _validate_yaml(content: str, name: str) -> None:
-        """落盘前校验 YAML 语法，避免把坏掉的策略文件写进去。"""
-        try:
-            parsed = yaml.safe_load(content)
-        except yaml.YAMLError as exc:
-            raise IdentityStoreError(f"{name} 不是合法 YAML：{exc}", status=400) from exc
-        if not isinstance(parsed, dict):
-            raise IdentityStoreError(
-                f"{name} 顶层必须是映射（实际解析为 {type(parsed).__name__}）",
-                status=400,
-            )

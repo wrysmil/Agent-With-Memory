@@ -399,14 +399,6 @@ def test_write_over_char_limit_is_4xx(handler: IdentitySettingsHandler, workspac
     assert (workspace / IDENTITY_DIR_NAME / "SOUL.md").read_text(encoding="utf-8") == "# soul"
 
 
-def test_write_invalid_yaml_is_4xx(handler: IdentitySettingsHandler):
-    result = handler.handle(
-        "identity-write-file",
-        _request(payload={"name": "POLICIES.yaml", "content": "- not\n- a\n- mapping\n"}),
-    )
-    assert result.status == 400
-
-
 # ---- error translation ------------------------------------------------------
 
 

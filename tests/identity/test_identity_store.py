@@ -163,29 +163,8 @@ def test_write_rejects_non_string_content(store: IdentityStore) -> None:
 # -- YAML 校验 --------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "bad_yaml",
-    [
-        "tool_policies: [this is: not valid",
-        "- just\n- a list\n",
-        "scalar string",
-        "42",
-        "",
-    ],
-)
-def test_write_rejects_invalid_yaml(store: IdentityStore, bad_yaml: str) -> None:
-    with pytest.raises(IdentityStoreError):
-        store.write_file("POLICIES.yaml", bad_yaml)
-    assert not (store.identity_dir / "POLICIES.yaml").exists()
-
-
-def test_write_accepts_valid_yaml(store: IdentityStore) -> None:
-    store.write_file("POLICIES.yaml", "tool_policies:\n  shell: allow\n")
-    assert "shell: allow" in store.read_file("POLICIES.yaml")
-
-
 def test_markdown_is_not_yaml_validated(store: IdentityStore) -> None:
-    """只有 .yaml 才做语法校验，Markdown 里写冒号不该被拦。"""
+    """POLICIES.yaml 已移出白名单，无任何 .yaml 校验；Markdown 里写冒号不该被拦。"""
     store.write_file("SOUL.md", "title: not yaml at all")
     assert store.read_file("SOUL.md") == "title: not yaml at all"
 
@@ -318,7 +297,6 @@ def test_list_files_groups_core_and_personas(store: IdentityStore) -> None:
         "AGENT.md",
         "USER.md",
         "MEMORY.md",
-        "POLICIES.yaml",
         "prompts/policies.md",
     ]
     assert [f["name"] for f in files if f["group"] == "personas"] == ["default.md"]
@@ -331,7 +309,6 @@ def test_list_files_marks_exists(store: IdentityStore) -> None:
     assert by_name["prompts/policies.md"]["exists"] is True
     assert by_name["default.md"]["exists"] is True
     assert by_name["AGENT.md"]["exists"] is False
-    assert by_name["POLICIES.yaml"]["exists"] is False
 
 
 def test_list_files_marks_restricted_and_badges(store: IdentityStore) -> None:
@@ -340,6 +317,7 @@ def test_list_files_marks_restricted_and_badges(store: IdentityStore) -> None:
     assert by_name["AGENT.md"]["restricted"] is True
     assert by_name["SOUL.md"]["restricted"] is False
     assert "badge" not in by_name["SOUL.md"]
+    assert "badge" not in by_name["AGENT.md"]
     assert by_name["MEMORY.md"]["badge"] == {
         "tone": "amber",
         "labelKey": "settings.identity.badgeAutoRegen",
@@ -353,6 +331,19 @@ def test_list_files_exposes_logical_path_for_personas(store: IdentityStore) -> N
 
 def test_list_files_exposes_char_limit(store: IdentityStore) -> None:
     assert all(f["charLimit"] == CHAR_LIMIT for f in store.list_files())
+
+
+def test_policies_yaml_is_not_editable(store: IdentityStore) -> None:
+    """POLICIES.yaml 移出可编辑白名单：读写均 403，且不在清单里。"""
+    with pytest.raises(IdentityStoreError) as read_exc:
+        store.read_file("POLICIES.yaml")
+    assert read_exc.value.status == 403
+
+    with pytest.raises(IdentityStoreError) as write_exc:
+        store.write_file("POLICIES.yaml", "tool_policies:\n  shell: allow\n")
+    assert write_exc.value.status == 403
+
+    assert "POLICIES.yaml" not in {f["name"] for f in store.list_files()}
 
 
 def test_list_files_without_personas_dir(tmp_path: Path) -> None:

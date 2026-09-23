@@ -26,13 +26,9 @@ COMPILED_SCHEMA_VERSION = "1"
 CHAR_LIMIT = MEMORY_MD_MAX_CHARS
 
 # Badge labelKey directly reuses frontend i18n keys; backend only passes them through.
-BADGE_NEEDS_COMPILE = "settings.identity.badgeNeedsCompile"
 BADGE_AUTO_REGEN = "settings.identity.badgeAutoRegen"
 BADGE_SYSTEM_SECTION = "settings.identity.badgeSystemSection"
 BADGE_FULL_TEXT_INJECT = "settings.identity.badgeFullTextInject"
-# 已播种但尚无消费者的文件：进 system prompt 的链路还没接，UI 必须如实说明，
-# 否则「能编辑」会被读成「改了就生效」。
-BADGE_NOT_WIRED = "settings.identity.badgeNotWired"
 
 
 @dataclass(frozen=True)
@@ -55,13 +51,7 @@ class IdentityFileSpec:
 
 CORE_FILES: tuple[IdentityFileSpec, ...] = (
     IdentityFileSpec(name="SOUL.md", group="core"),
-    IdentityFileSpec(
-        name="AGENT.md",
-        group="core",
-        restricted=True,
-        badge_tone="clay",
-        badge_label_key=BADGE_NEEDS_COMPILE,
-    ),
+    IdentityFileSpec(name="AGENT.md", group="core", restricted=True),
     IdentityFileSpec(name="USER.md", group="core"),
     IdentityFileSpec(
         name="MEMORY.md",
@@ -69,13 +59,6 @@ CORE_FILES: tuple[IdentityFileSpec, ...] = (
         restricted=True,
         badge_tone="amber",
         badge_label_key=BADGE_AUTO_REGEN,
-    ),
-    IdentityFileSpec(
-        name="POLICIES.yaml",
-        group="core",
-        restricted=True,
-        badge_tone="clay",
-        badge_label_key=BADGE_NOT_WIRED,
     ),
     IdentityFileSpec(
         name=POLICIES_MD_NAME,

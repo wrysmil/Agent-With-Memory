@@ -26,14 +26,13 @@ def test_core_files_match_frontend_contract():
         "AGENT.md",
         "USER.md",
         "MEMORY.md",
-        "POLICIES.yaml",
         "prompts/policies.md",
     ]
 
 
 def test_restricted_set_matches_frontend_contract():
     restricted = {spec.name for spec in CORE_FILES if spec.restricted}
-    assert restricted == {"AGENT.md", "MEMORY.md", "POLICIES.yaml", "prompts/policies.md"}
+    assert restricted == {"AGENT.md", "MEMORY.md", "prompts/policies.md"}
 
 
 def test_resolve_identity_dir_is_under_workspace(tmp_path: Path):
