@@ -1116,6 +1116,7 @@
       "badgeNeedsCompile": "컴파일 필요",
       "badgeAutoRegen": "자동 재생성",
       "badgeSystemSection": "시스템 섹션",
+      "badgeNotWired": "미적용",
       "reload": "새로고침",
       "compileRules": "규칙 컴파일",
       "save": "저장",

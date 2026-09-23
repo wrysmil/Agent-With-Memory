@@ -10,6 +10,7 @@ import os
 import time
 from pathlib import Path
 
+from nanobot.identity.bootstrap import load_identity_template
 from nanobot.identity.catalog import COMPILED_SCHEMA_VERSION, IDENTITY_DIR_NAME
 from nanobot.identity.compiler import (
     COMPILE_TARGETS,
@@ -205,3 +206,49 @@ def test_recompile_clears_source_newer_state(tmp_path: Path):
     compile_identity(tmp_path)
 
     assert compiled_status(tmp_path)["fresh"] is True
+
+
+# ---- 出厂模板 ---------------------------------------------------------------
+
+
+def test_factory_agent_and_user_templates_produce_no_products(tmp_path: Path):
+    """出厂模板不落产物——否则点一次「规则编译」就把模板灌进 system prompt。
+
+    注入侧对出厂模板的跳过只在回退分支成立，产物分支够不到那个判断；出厂
+    AGENT.md / USER.md 又含实质句子（编译得出非空产物），所以必须在源头拦住。
+    """
+    for name in ("AGENT.md", "USER.md"):
+        template = load_identity_template(name)
+        assert template is not None
+        _seed(tmp_path, name, template)
+
+    result = compile_identity(tmp_path)
+
+    assert result["compiledFiles"] == []
+    reasons = {entry["target"]: entry["reason"] for entry in result["skipped"]}
+    assert reasons["agent_behavior"] == "factory_template"
+    assert reasons["user_profile_core"] == "factory_template"
+    assert not (runtime_dir(tmp_path) / "agent.behavior.md").exists()
+    assert not (runtime_dir(tmp_path) / "user.profile.core.md").exists()
+
+
+def test_factory_soul_template_is_still_compiled(tmp_path: Path):
+    """SOUL.md 正相反：出厂人格本来就该进 prompt，跳过它等于让人格消失。"""
+    template = load_identity_template("SOUL.md")
+    assert template is not None
+    _seed(tmp_path, "SOUL.md", template)
+
+    result = compile_identity(tmp_path)
+
+    assert result["compiledFiles"] == ["identity.core.md"]
+
+
+def test_edited_agent_file_is_compiled_even_if_close_to_template(tmp_path: Path):
+    """改过就不再是模板，必须照常出产物——这是「用户改了就生效」的保证。"""
+    _seed(tmp_path, "AGENT.md", "# Agent 行为准则\n\n## 任务执行\n\n- 我自己写的规则\n")
+
+    result = compile_identity(tmp_path)
+
+    assert result["compiledFiles"] == ["agent.behavior.md"]
+    body = (runtime_dir(tmp_path) / "agent.behavior.md").read_text(encoding="utf-8")
+    assert "我自己写的规则" in body

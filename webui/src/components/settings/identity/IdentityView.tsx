@@ -54,6 +54,18 @@ function badgeTone(tone: string): BadgeTone {
   return tone === "amber" || tone === "sage" || tone === "clay" ? tone : "sage";
 }
 
+/**
+ * Fallback copy per badge key, for locales that have not translated the key yet.
+ * Keys come from the backend catalog (`BADGE_*`); unknown keys fall through to "".
+ */
+const BADGE_DEFAULTS: Record<string, string> = {
+  "settings.identity.badgeFullTextInject": "全文注入",
+  "settings.identity.badgeNeedsCompile": "需编译",
+  "settings.identity.badgeAutoRegen": "自动重生成",
+  "settings.identity.badgeSystemSection": "系统段落",
+  "settings.identity.badgeNotWired": "尚未生效",
+};
+
 function FileBadge({ tone, fallback }: { tone: BadgeTone; fallback: string }) {
   return (
     <span
@@ -85,16 +97,7 @@ function IdentityFileRow({
   const display = file.logicalPath ?? file.name;
   const badgeFallback = file.badge
     ? t(file.badge.labelKey, {
-        defaultValue:
-          file.badge.labelKey === "settings.identity.badgeFullTextInject"
-            ? "全文注入"
-            : file.badge.labelKey === "settings.identity.badgeNeedsCompile"
-              ? "需编译"
-              : file.badge.labelKey === "settings.identity.badgeAutoRegen"
-                ? "自动重生成"
-                : file.badge.labelKey === "settings.identity.badgeSystemSection"
-                  ? "系统段落"
-                  : "",
+        defaultValue: BADGE_DEFAULTS[file.badge.labelKey] ?? "",
       })
     : null;
   const subtitle = file.badge

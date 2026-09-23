@@ -23,6 +23,7 @@ from typing import Any
 
 from loguru import logger
 
+from nanobot.identity.bootstrap import load_identity_template
 from nanobot.identity.catalog import (
     COMPILED_SCHEMA_VERSION,
     RUNTIME_SUBDIR,
@@ -66,9 +67,13 @@ class CompileTarget:
     # 命任一项（大小写不敏感）的标题即该目标「拥有的章节」；空 = 不收窄，取全文。
     owned_markers: tuple[str, ...] = ()
     excluded_markers: tuple[str, ...] = _PLACEHOLDER_MARKERS
+    # 源文件仍是出厂模板原文时不出产物。见 _is_factory_template 的说明。
+    skip_factory_template: bool = False
 
 
 COMPILE_TARGETS: tuple[CompileTarget, ...] = (
+    # SOUL.md 刻意不设 skip_factory_template：出厂人格本来就该进 system prompt
+    # （注入侧 _SKIPPABLE_DEFAULTS 也没有 SOUL.md），跳过它会让人格消失。
     CompileTarget(
         key="identity_core",
         source="SOUL.md",
@@ -100,12 +105,14 @@ COMPILE_TARGETS: tuple[CompileTarget, ...] = (
             "成长循环",
             "自我修复",
         ),
+        skip_factory_template=True,
     ),
     CompileTarget(
         key="user_profile_core",
         source="USER.md",
         output="user.profile.core.md",
         max_chars=600,
+        skip_factory_template=True,
     ),
 )
 
@@ -199,6 +206,21 @@ def compile_content(content: str, target: CompileTarget) -> str:
     return _enforce_char_budget(kept, target.max_chars)
 
 
+def _is_factory_template(logical_name: str, content: str) -> bool:
+    """源文件是否仍是出厂模板原文（用户一个字没改）。
+
+    为什么必须在编译侧拦：注入侧对「出厂模板」的跳过只在**回退分支**生效
+    （``_load_bootstrap_files`` 里 ``_SKIPPABLE_DEFAULTS`` 那一层）。产物分支拿到
+    非空正文就直接注入，够不到那个判断。而出厂 AGENT.md / USER.md 模板并不是纯
+    占位符——它们有实质句子（行为准则、字段选项提示），编译得出非空产物。于是
+    「用户点一次规则编译」就会把出厂模板灌进 system prompt，且与未编译时行为不一致。
+
+    在源头不产出，两边就一致了：未编译 → 回退分支跳过；编译过 → 无产物 → 回退分支跳过。
+    """
+    template = load_identity_template(logical_name)
+    return template is not None and content.strip() == template.strip()
+
+
 def _atomic_write(path: Path, content: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(content, encoding="utf-8")
@@ -268,6 +290,8 @@ def compile_identity(workspace: Path) -> dict[str, Any]:
     空产物的目标不落盘（计入 ``skipped``）——伪造一段兜底文案会让「编译过」
     与「有内容」混为一谈，注入侧的空回退反而更诚实。产物全部为空的 workspace
     仍然会写时间戳：它表示「这批源文件编译过了，结果就是没有可注入的规则」。
+
+    出厂模板原文同样不落盘（``factory_template``）——见 :func:`_is_factory_template`。
     """
     store = IdentityStore(workspace)
     rdir = runtime_dir(workspace)
@@ -287,6 +311,10 @@ def compile_identity(workspace: Path) -> dict[str, Any]:
 
         if source_path.is_file():
             newest_source_ns = max(newest_source_ns, source_path.stat().st_mtime_ns)
+
+        if target.skip_factory_template and _is_factory_template(target.source, content):
+            skipped.append({"target": target.key, "reason": "factory_template"})
+            continue
 
         body = compile_content(content, target)
         if not body.strip():

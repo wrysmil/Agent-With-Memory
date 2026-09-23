@@ -1116,6 +1116,7 @@
       "badgeNeedsCompile": "Perlu kompilasi",
       "badgeAutoRegen": "Regenerasi otomatis",
       "badgeSystemSection": "Bagian sistem",
+      "badgeNotWired": "Belum berlaku",
       "reload": "Muat ulang",
       "compileRules": "Kompilasi aturan",
       "save": "Simpan",

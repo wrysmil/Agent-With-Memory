@@ -1116,6 +1116,7 @@
       "badgeNeedsCompile": "Requiere compilación",
       "badgeAutoRegen": "Regeneración automática",
       "badgeSystemSection": "Sección del sistema",
+      "badgeNotWired": "Sin efecto aún",
       "reload": "Recargar",
       "compileRules": "Compilación de reglas",
       "save": "Guardar",

@@ -1116,6 +1116,7 @@
       "badgeNeedsCompile": "需編譯",
       "badgeAutoRegen": "自動重新生成",
       "badgeSystemSection": "系統段落",
+      "badgeNotWired": "尚未生效",
       "reload": "重新載入",
       "compileRules": "規則編譯",
       "save": "儲存",

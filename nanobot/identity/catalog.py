@@ -12,6 +12,10 @@ PERSONAS_SUBDIR = "personas"
 PROMPTS_SUBDIR = "prompts"
 RUNTIME_SUBDIR = "runtime"
 
+# 策略段落文件：内容作为 system prompt 的 Policy 段追加（见 context.py）。
+# 出厂模板是空壳（只有「在下方书写…」的引导语），所以模板态一律不注入。
+POLICIES_MD_NAME = f"{PROMPTS_SUBDIR}/policies.md"
+
 # Rule-compiled injection artifacts live under identity/runtime/. Bumping this
 # string invalidates every existing compiled set (see compiler.compiled_status),
 # so it changes only when the compile pipeline's output shape changes.
@@ -26,6 +30,9 @@ BADGE_NEEDS_COMPILE = "settings.identity.badgeNeedsCompile"
 BADGE_AUTO_REGEN = "settings.identity.badgeAutoRegen"
 BADGE_SYSTEM_SECTION = "settings.identity.badgeSystemSection"
 BADGE_FULL_TEXT_INJECT = "settings.identity.badgeFullTextInject"
+# 已播种但尚无消费者的文件：进 system prompt 的链路还没接，UI 必须如实说明，
+# 否则「能编辑」会被读成「改了就生效」。
+BADGE_NOT_WIRED = "settings.identity.badgeNotWired"
 
 
 @dataclass(frozen=True)
@@ -63,9 +70,15 @@ CORE_FILES: tuple[IdentityFileSpec, ...] = (
         badge_tone="amber",
         badge_label_key=BADGE_AUTO_REGEN,
     ),
-    IdentityFileSpec(name="POLICIES.yaml", group="core", restricted=True),
     IdentityFileSpec(
-        name="prompts/policies.md",
+        name="POLICIES.yaml",
+        group="core",
+        restricted=True,
+        badge_tone="clay",
+        badge_label_key=BADGE_NOT_WIRED,
+    ),
+    IdentityFileSpec(
+        name=POLICIES_MD_NAME,
         group="core",
         restricted=True,
         badge_tone="amber",

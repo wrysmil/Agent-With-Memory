@@ -21,8 +21,9 @@ from nanobot.bus.events import (
     RUNTIME_CONTROL_SESSION_DISCARD,
     InboundMessage,
 )
-from nanobot.identity.catalog import resolve_identity_dir
+from nanobot.identity.catalog import POLICIES_MD_NAME, resolve_identity_dir
 from nanobot.identity.compiler import read_compiled
+from nanobot.identity.store import IdentityStore, IdentityStoreError
 from nanobot.runtime_context import (
     RUNTIME_CONTEXT_MESSAGE_META,
     RuntimeContextBlock,
@@ -220,6 +221,10 @@ class ContextBuilder:
         if bootstrap:
             parts.append(bootstrap)
 
+        policies = self._load_policies_section()
+        if policies:
+            parts.append(policies)
+
         parts.append(render_template("agent/tool_contract.md"))
 
         project_path = root.expanduser().resolve()
@@ -360,6 +365,23 @@ class ContextBuilder:
                 parts.append(f"## {filename}\n\n{content}")
 
         return "\n\n".join(parts) if parts else ""
+
+    def _load_policies_section(self) -> str:
+        """注入 ``identity/prompts/policies.md`` 作为策略段落。
+
+        出厂模板是空壳（只有引导语），按模板跳过——所以未定制过的 workspace 零成本。
+        只做追加，不实现文件自称的「覆写内置默认」：nanobot 没有可被覆写的内置默认
+        节，建一套没有对手的覆盖机制是空转。语义写清楚比假装支持更诚实。
+        """
+        try:
+            content = IdentityStore(self.workspace).read_file(POLICIES_MD_NAME)
+        except IdentityStoreError:
+            return ""
+        if not content.strip():
+            return ""
+        if self._is_template_content(content, POLICIES_MD_NAME):
+            return ""
+        return f"## Policies\n\n{content}"
 
     @staticmethod
     def _is_template_content(content: str, template_path: str) -> bool:

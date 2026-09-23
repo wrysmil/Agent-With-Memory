@@ -1116,6 +1116,7 @@
       "badgeNeedsCompile": "Cần biên dịch",
       "badgeAutoRegen": "Tự sinh lại",
       "badgeSystemSection": "Phần hệ thống",
+      "badgeNotWired": "Chưa có hiệu lực",
       "reload": "Tải lại",
       "compileRules": "Biên dịch quy tắc",
       "save": "Lưu",

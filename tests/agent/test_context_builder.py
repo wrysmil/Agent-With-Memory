@@ -590,6 +590,23 @@ class TestCompiledIdentityInjection:
 
         assert "## AGENT.md" not in result
 
+    def test_factory_agent_template_stays_out_after_compile(self, tmp_path):
+        """出厂 AGENT.md 编译过也不进 prompt。
+
+        上面那条只覆盖未编译的回退分支；产物分支拿非空正文就直接注入，够不到
+        _SKIPPABLE_DEFAULTS。编译侧不产出才让两条路径的行为一致。
+        """
+        identity_dir = tmp_path / IDENTITY_DIR_NAME
+        identity_dir.mkdir(parents=True, exist_ok=True)
+        template = load_bundled_template("AGENT.md")
+        assert template is not None
+        (identity_dir / "AGENT.md").write_text(template, encoding="utf-8")
+
+        compile_identity(tmp_path)
+        result = _builder(tmp_path)._load_bootstrap_files()
+
+        assert "## AGENT.md" not in result
+
     def test_products_without_persona_content_do_not_hide_the_source(self, tmp_path):
         """全部目标编译为空时产物集不可用，注入必须回到源文件。"""
         identity_dir = tmp_path / IDENTITY_DIR_NAME
@@ -602,3 +619,46 @@ class TestCompiledIdentityInjection:
         result = _builder(tmp_path)._load_bootstrap_files()
 
         assert "轻松" in result
+
+
+class TestPoliciesSectionInjection:
+    """``identity/prompts/policies.md`` 的注入：定制过才进，模板态与缺文件都不进。"""
+
+    def _write_policies(self, workspace: Path, content: str) -> None:
+        target = workspace / IDENTITY_DIR_NAME / "prompts"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "policies.md").write_text(content, encoding="utf-8")
+
+    def test_custom_policies_are_injected(self, tmp_path):
+        self._write_policies(
+            tmp_path, "# 系统策略段落（覆写）\n\n- 涉及医疗的建议必须提示非专业意见。\n"
+        )
+
+        result = _builder(tmp_path).build_system_prompt()
+
+        assert "## Policies" in result
+        assert "涉及医疗的建议必须提示非专业意见" in result
+
+    def test_factory_policies_template_is_not_injected(self, tmp_path):
+        """出厂策略文件只有「在下方书写…」的引导语，不该占 prompt。"""
+        template = load_bundled_template("prompts/policies.md")
+        assert template is not None
+        self._write_policies(tmp_path, template)
+
+        result = _builder(tmp_path).build_system_prompt()
+
+        assert "## Policies" not in result
+
+    def test_blank_policies_file_is_not_injected(self, tmp_path):
+        self._write_policies(tmp_path, "   \n\n")
+
+        result = _builder(tmp_path).build_system_prompt()
+
+        assert "## Policies" not in result
+
+    def test_missing_policies_file_is_not_an_error(self, tmp_path):
+        """老 workspace 没有 identity/prompts/：不该抛，也不该注入空段。"""
+        result = _builder(tmp_path).build_system_prompt()
+
+        assert "## Policies" not in result
+

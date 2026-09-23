@@ -1011,6 +1011,7 @@
       "badgeNeedsCompile": "需编译",
       "badgeAutoRegen": "自动重生成",
       "badgeSystemSection": "系统段落",
+      "badgeNotWired": "尚未生效",
       "reload": "重载",
       "compileRules": "规则编译",
       "save": "保存",

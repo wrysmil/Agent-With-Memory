@@ -1116,6 +1116,7 @@
       "badgeNeedsCompile": "要コンパイル",
       "badgeAutoRegen": "自動再生成",
       "badgeSystemSection": "システムセクション",
+      "badgeNotWired": "未反映",
       "reload": "リロード",
       "compileRules": "ルールコンパイル",
       "save": "保存",

@@ -1011,6 +1011,7 @@
       "badgeNeedsCompile": "Needs compile",
       "badgeAutoRegen": "Auto-regen",
       "badgeSystemSection": "System section",
+      "badgeNotWired": "Not active yet",
       "reload": "Reload",
       "compileRules": "Rules compile",
       "save": "Save",
