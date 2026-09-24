@@ -22,7 +22,6 @@ from loguru import logger
 
 from nanobot.identity.bootstrap import PERSONA_PRESET_STEMS, load_identity_template
 from nanobot.identity.catalog import CHAR_LIMIT, LIFECYCLE_OWNED_FILES
-from nanobot.identity.compiler import compile_identity
 from nanobot.identity.store import IdentityStore, IdentityStoreError
 from nanobot.webui.settings_contracts import WebUISettingsError
 
@@ -131,19 +130,3 @@ def identity_reload(*, refresh_memory_md: Any = None) -> dict[str, Any]:
     except Exception:
         logger.exception("identity_reload: MEMORY.md refresh failed")
         return {"status": "error"}
-
-
-def identity_compile(workspace: Path, mode: str = "") -> dict[str, Any]:
-    """Compile the identity sources into injectable ``identity/runtime/`` products.
-
-    Only the synchronous rule compiler exists in nanobot — there is no
-    ``PromptCompiler``/brain path (the LM button was removed from the UI), so a
-    request for any other mode degrades to rules and says so via
-    ``requestedMode`` rather than pretending the mode ran.
-    """
-    requested = mode or "rules"
-    if requested != "rules":
-        logger.info("identity_compile: mode=%s 未实现，按规则编译执行", requested)
-    result = compile_identity(workspace)
-    result["requestedMode"] = requested
-    return result

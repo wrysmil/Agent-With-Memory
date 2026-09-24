@@ -44,20 +44,17 @@ EXPECTED_SYSTEM_ROUTES = {
     "/api/settings/identity/file": "identity-read-file",
     "/api/settings/identity/file/save": "identity-write-file",
     "/api/settings/identity/reload": "identity-reload",
-    "/api/settings/identity/compile": "identity-compile",
     "/api/settings/identity/presets": "identity-list-presets",
 }
 
 EXPECTED_MUTATION_PATHS = frozenset({
     "/api/settings/identity/file/save",
     "/api/settings/identity/reload",
-    "/api/settings/identity/compile",
 })
 
 EXPECTED_WS_ACTIONS = {
     "identity.file.save": "/api/settings/identity/file/save",
     "identity.reload": "/api/settings/identity/reload",
-    "identity.compile": "/api/settings/identity/compile",
 }
 
 
@@ -116,19 +113,6 @@ def test_ws_action_names_match_frontend_contract() -> None:
     )
 
 
-def test_compile_is_a_registered_ws_action() -> None:
-    """``identity.compile`` 现在是可触达的真编译，不再是刻意不登记的占位。
-
-    占位时代它不登记（登记了就变成点了没反应的静默 no-op），前端靠 404 走
-    「编译能力尚未启用」提示分支。现在 ``identity_compile`` 会真写
-    ``identity/runtime/`` 产物、前端也要用返回的 ``compiledFiles`` 计数做反馈，
-    所以漏登记的表现会退化成「按钮一点就 404」——正是这次要修的毛病。
-    """
-    assert _WEBUI_MUTATION_PATHS["identity.compile"] == "/api/settings/identity/compile"
-    # HTTP 层的写路径登记同样在，避免匿名 GET 触发编译。
-    assert "/api/settings/identity/compile" in _SETTINGS_MUTATION_PATHS
-
-
 def test_unregistered_ws_action_is_404() -> None:
     result = GatewayHTTPHandler._webui_mutation_path("identity.frobnicate", {})
     assert isinstance(result, Response)
@@ -160,7 +144,6 @@ def test_null_identity_operations_returns_503_for_every_action() -> None:
             ),
         ),
         ("identity-reload", SettingsRequest(query={})),
-        ("identity-compile", SettingsRequest(query={}, payload={"mode": "rules"})),
         ("identity-list-presets", SettingsRequest(query={})),
     ]
     for action, request in cases:
@@ -205,21 +188,11 @@ def operations(workspace: Path, refresh_calls: list[int]) -> IdentitySettingsOpe
         refresh_calls.append(1)
         return {"status": "ok", "chars": 7}
 
-    def _compile(mode: str) -> dict[str, Any]:
-        return {
-            "status": "ok",
-            "modeUsed": "rules",
-            "requestedMode": mode or "rules",
-            "compiledFiles": [],
-            "skipped": [],
-        }
-
     return IdentitySettingsOperations(
         list_files=partial(identity_api.identity_list_files, workspace),
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace),
         reload=partial(identity_api.identity_reload, refresh_memory_md=_refresh),
-        compile=_compile,
         list_presets=identity_api.identity_list_presets,
     )
 

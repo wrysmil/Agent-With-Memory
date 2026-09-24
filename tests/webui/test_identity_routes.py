@@ -65,7 +65,6 @@ def operations(workspace: Path, lifecycle: FakeLifecycle) -> IdentitySettingsOpe
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace, lifecycle=lifecycle),
         reload=partial(identity_api.identity_reload),
-        compile=partial(identity_api.identity_compile, workspace),
         list_presets=identity_api.identity_list_presets,
     )
 
@@ -85,13 +84,13 @@ def _request(
 # ---- dispatch wiring --------------------------------------------------------
 
 
-def test_all_six_actions_are_registered():
+def test_all_five_actions_are_registered():
+    """编译接口已下架：保存即编译，没有手动 compile action。"""
     assert IDENTITY_ACTION_NAMES == frozenset({
         "identity-list-files",
         "identity-read-file",
         "identity-write-file",
         "identity-reload",
-        "identity-compile",
         "identity-list-presets",
     })
 
@@ -106,7 +105,6 @@ def test_every_known_action_dispatches(handler: IdentitySettingsHandler, lifecyc
             _request(payload={"name": "SOUL.md", "content": "# new"}),
         ),
         handler.handle("identity-reload", _request()),
-        handler.handle("identity-compile", _request(payload={"mode": "rules"})),
         handler.handle("identity-list-presets", _request()),
     ]
     for result in results:
@@ -152,7 +150,6 @@ def test_list_files_without_identity_dir(tmp_path: Path):
         read_file=partial(identity_api.identity_read_file, tmp_path),
         write_file=partial(identity_api.identity_write_file, tmp_path),
         reload=partial(identity_api.identity_reload),
-        compile=partial(identity_api.identity_compile, tmp_path),
         list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle("identity-list-files", _request())
@@ -277,7 +274,6 @@ def test_memory_md_over_limit_through_real_lifecycle_is_4xx(workspace: Path, rea
             identity_api.identity_write_file, workspace, lifecycle=real_lifecycle
         ),
         reload=partial(identity_api.identity_reload),
-        compile=partial(identity_api.identity_compile, workspace),
         list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle(
@@ -318,7 +314,6 @@ def test_write_memory_md_without_lifecycle_is_500(workspace: Path):
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace),  # lifecycle=None
         reload=partial(identity_api.identity_reload),
-        compile=partial(identity_api.identity_compile, workspace),
         list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle(
@@ -534,7 +529,6 @@ def test_reload_invokes_refresh_memory_md(workspace: Path):
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace),
         reload=partial(identity_api.identity_reload, refresh_memory_md=_refresh),
-        compile=partial(identity_api.identity_compile, workspace),
         list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle("identity-reload", _request())
@@ -554,40 +548,9 @@ def test_reload_failure_is_reported_not_raised(workspace: Path):
         read_file=partial(identity_api.identity_read_file, workspace),
         write_file=partial(identity_api.identity_write_file, workspace),
         reload=partial(identity_api.identity_reload, refresh_memory_md=_boom),
-        compile=partial(identity_api.identity_compile, workspace),
         list_presets=identity_api.identity_list_presets,
     )
     result = IdentitySettingsHandler(operations).handle("identity-reload", _request())
 
     assert result.error is None
     assert result.payload == {"status": "error"}
-
-
-# ---- compile ---------------------------------------------------------------
-
-
-def test_compile_writes_runtime_products(handler: IdentitySettingsHandler, workspace: Path):
-    """规则编译真写 identity/runtime/，并把每个目标的去留如实报回来。"""
-    result = handler.handle("identity-compile", _request(payload={"mode": "rules"}))
-
-    assert result.error is None
-    assert result.payload["status"] == "ok"
-    assert result.payload["modeUsed"] == "rules"
-    assert result.payload["compiledFiles"] == ["identity.core.md"]
-    product = workspace / IDENTITY_DIR_NAME / "runtime" / "identity.core.md"
-    assert product.read_text(encoding="utf-8").strip() == "# soul"
-    # fixture 里只有 SOUL.md；另两个目标缺源文件，必须报 skipped 而不是静默跳过。
-    assert {entry["target"] for entry in result.payload["skipped"]} == {
-        "agent_behavior",
-        "user_profile_core",
-    }
-
-
-def test_compile_reports_requested_mode_even_when_degraded(handler: IdentitySettingsHandler):
-    """LM 入口已从 UI 移除；仍有 mode=llm 的调用要如实标注「按 rules 执行」。"""
-    cases = (({}, "rules"), ({"mode": ""}, "rules"), ({"mode": "llm"}, "llm"))
-    for payload, expected in cases:
-        result = handler.handle("identity-compile", _request(payload=payload))
-        assert result.error is None
-        assert result.payload["modeUsed"] == "rules"
-        assert result.payload["requestedMode"] == expected

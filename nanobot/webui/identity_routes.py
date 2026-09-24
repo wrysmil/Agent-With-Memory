@@ -5,8 +5,8 @@ Mirrors ``memory_routes.py``: a transport-neutral handler whose
 a ``SettingsRouteResult``. The router (``settings_routes.py``, WU-04) owns
 path → action mapping, WebSocket vs HTTP gating and the transport layer.
 
-Read actions (list/read) are safe over plain HTTP GET; write/reload/compile
-mutate or re-derive state and go through the authenticated WebSocket
+Read actions (list/read) are safe over plain HTTP GET; write/reload mutate or
+re-derive state and go through the authenticated WebSocket
 ``requestMutation`` allowlist upstream. This module knows neither about the
 transport nor about the concrete file implementation — only about the
 ``IdentitySettingsOperations`` protocol, whose callables arrive with their
@@ -40,7 +40,6 @@ class IdentitySettingsOperations:
     read_file: Callable[..., dict[str, Any]]
     write_file: Callable[..., dict[str, Any]]
     reload: Callable[..., dict[str, Any]]
-    compile: Callable[..., dict[str, Any]]
     list_presets: Callable[..., dict[str, Any]]
 
 
@@ -51,7 +50,6 @@ IDENTITY_ACTION_NAMES = frozenset({
     "identity-read-file",
     "identity-write-file",
     "identity-reload",
-    "identity-compile",
     "identity-list-presets",
 })
 
@@ -114,10 +112,6 @@ def dispatch(
 
     if action == "identity-reload":
         return operations.reload()
-
-    if action == "identity-compile":
-        mode = payload.get("mode")
-        return operations.compile(mode if isinstance(mode, str) else "")
 
     # Unreachable for known actions; kept as a guard against future additions.
     raise WebUISettingsError(f"unsupported identity action: {action}")

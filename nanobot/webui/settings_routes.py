@@ -12,12 +12,12 @@ from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
 from nanobot.agent.tools.image_generation import request_image_generation_reload
-from nanobot.memory.reload import request_memory_reload
 from nanobot.agent.tools.mcp_oauth import MCP_OAUTH_CALLBACK_PATH
 from nanobot.api.runtime import ApiRuntime, api_runtime_paths
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.registry import load_channel_plugin
 from nanobot.channels.validation import validate_channel_config
+from nanobot.memory.reload import request_memory_reload
 from nanobot.pairing import approve_code, deny_code, list_pending
 from nanobot.webui import identity_routes as identity_domain
 from nanobot.webui import memory_routes as memory_domain
@@ -168,7 +168,6 @@ _SYSTEM_ROUTES = {
     "/api/settings/identity/file": "identity-read-file",
     "/api/settings/identity/file/save": "identity-write-file",
     "/api/settings/identity/reload": "identity-reload",
-    "/api/settings/identity/compile": "identity-compile",
     "/api/settings/identity/presets": "identity-list-presets",
     **{
         path: f"mcp-{action}"
@@ -191,7 +190,6 @@ _MEMORY_MUTATION_PATHS = frozenset({
 _IDENTITY_MUTATION_PATHS = frozenset({
     "/api/settings/identity/file/save",
     "/api/settings/identity/reload",
-    "/api/settings/identity/compile",
 })
 
 _SETTINGS_MUTATION_PATHS = frozenset({
@@ -297,7 +295,6 @@ def _null_identity_operations() -> IdentitySettingsOperations:
         read_file=_unavailable,
         write_file=_unavailable,
         reload=_unavailable,
-        compile=_unavailable,
         list_presets=_unavailable,
     )
 
