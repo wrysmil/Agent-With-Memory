@@ -10,7 +10,6 @@ import {
   Loader2,
   RefreshCcw,
   ShieldCheck,
-  Sparkles,
   SquareCheckBig,
   Users,
 } from "lucide-react";
@@ -24,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  compileIdentityRules,
   fetchIdentityFile,
   listIdentityFiles,
   listIdentityPresets,
@@ -186,7 +184,6 @@ export function IdentityView() {
   const [draft, setDraft] = useState("");
   const [savingState, setSavingState] = useState<"idle" | "saving" | "saved">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [compileNotice, setCompileNotice] = useState<string | null>(null);
   const [compactDetailOpen, setCompactDetailOpen] = useState(false);
   const [fromTemplate, setFromTemplate] = useState(false);
   const [presetLoaded, setPresetLoaded] = useState(false);
@@ -358,23 +355,6 @@ export function IdentityView() {
       setSavingState("idle");
     } catch (reason) {
       setSaveError(reason instanceof Error ? reason.message : String(reason));
-    }
-  }
-
-  async function handleCompile() {
-    setSaveError(null);
-    setCompileNotice(null);
-    try {
-      const result = await compileIdentityRules(client);
-      setCompileNotice(
-        result.compiledFiles.length > 0
-          ? `${tx("settings.identity.compileDone", "规则编译完成")} (${result.compiledFiles.length})`
-          : tx("settings.identity.compileEmpty", "规则编译完成：没有可注入的内容"),
-      );
-    } catch (reason) {
-      const detail =
-        reason instanceof Error && reason.message ? ` (${reason.message})` : "";
-      setSaveError(`${tx("settings.identity.compileFailed", "规则编译失败")}${detail}`);
     }
   }
 
@@ -558,19 +538,6 @@ export function IdentityView() {
                         <RefreshCcw className="h-3.5 w-3.5" />
                         <span>{t("settings.identity.reload", "重载")}</span>
                       </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 rounded-full px-3 text-[12px] font-semibold"
-                        title={t("settings.identity.compileRules", "规则编译")}
-                        onClick={() => {
-                          void handleCompile();
-                        }}
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        <span>{t("settings.identity.compileRules", "规则编译")}</span>
-                      </Button>
                     </div>
                   </div>
 
@@ -609,23 +576,6 @@ export function IdentityView() {
                       </div>
                     </div>
                   )}
-                  {selected.name === "POLICIES.yaml" && (
-                    <div className="flex items-start gap-3 border-b border-border/45 px-4 py-3 sm:px-5">
-                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium leading-5 text-foreground">
-                          {t("settings.identity.policiesHintTitle", "权限边界")}
-                        </p>
-                        <p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">
-                          {t(
-                            "settings.identity.policiesHint",
-                            "POLICIES.yaml 是 agent 的权限与执行边界。请谨慎修改顶层字段（tool_policies / scope_policy / auto_confirm）。",
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Editor body */}
                   <div className="flex min-h-0 flex-1 border-b border-border/45 bg-background">
                     <textarea
@@ -659,17 +609,6 @@ export function IdentityView() {
                     >
                       <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span className="min-w-0 break-words">{saveError}</span>
-                    </div>
-                  ) : null}
-
-                  {/* Rule-compile result row */}
-                  {compileNotice ? (
-                    <div
-                      role="status"
-                      className="flex items-start gap-2 border-b border-emerald-300/60 bg-emerald-50/70 px-4 py-2.5 text-[12px] text-emerald-900 dark:border-emerald-700/40 dark:bg-emerald-950/30 dark:text-emerald-200 sm:px-5"
-                    >
-                      <SquareCheckBig className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <span className="min-w-0 break-words">{compileNotice}</span>
                     </div>
                   ) : null}
 

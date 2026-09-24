@@ -1384,24 +1384,3 @@ export async function reloadIdentity(
 ): Promise<ReloadIdentityResponse> {
   return mutation<ReloadIdentityResponse>(transport, "identity.reload");
 }
-
-export interface CompileIdentityResponse {
-  status: string;
-  modeUsed: string;
-  requestedMode: string;
-  compiledFiles: string[];
-  skipped: { target: string; reason: string }[];
-}
-
-/**
- * Rule-compile the identity sources into injectable `identity/runtime/`
- * products. Only the rules mode exists in nanobot — the LM variant was removed
- * from the UI — so the mode is always sent explicitly rather than implied.
- */
-export async function compileIdentityRules(
-  transport: WebUIMutationTransport,
-): Promise<CompileIdentityResponse> {
-  return mutation<CompileIdentityResponse>(transport, "identity.compile", {
-    mode: "rules",
-  });
-}
