@@ -366,6 +366,37 @@ def test_write_creates_missing_whitelisted_file(
     ).read_text(encoding="utf-8") == "# new policies"
 
 
+# ---- write: 保存即编译 ------------------------------------------------------
+
+
+def test_write_soul_triggers_auto_compile(handler: IdentitySettingsHandler, workspace: Path):
+    """保存编译源文件后，runtime 产物应新鲜，无需任何手动编译动作。"""
+    from nanobot.identity.compiler import compiled_status
+
+    assert compiled_status(workspace)["compiled"] is False  # 前置：从未编译
+
+    result = handler.handle(
+        "identity-write-file",
+        _request(payload={"name": "SOUL.md", "content": "# soul\n\n核心原则：诚实。"}),
+    )
+    assert result.status == 200
+
+    status = compiled_status(workspace)
+    assert status["compiled"] is True
+    assert status["fresh"] is True
+
+
+def test_write_memory_does_not_compile(handler: IdentitySettingsHandler, workspace: Path):
+    """MEMORY.md 走 lifecycle 分支，不是编译源，保存不该触发编译。"""
+    from nanobot.identity.compiler import compiled_status
+
+    handler.handle(
+        "identity-write-file",
+        _request(payload={"name": "MEMORY.md", "content": "derived"}),
+    )
+    assert compiled_status(workspace)["compiled"] is False
+
+
 @pytest.mark.parametrize(
     "payload",
     [

@@ -22,6 +22,7 @@ from loguru import logger
 
 from nanobot.identity.bootstrap import PERSONA_PRESET_STEMS, load_identity_template
 from nanobot.identity.catalog import CHAR_LIMIT, LIFECYCLE_OWNED_FILES
+from nanobot.identity.compiler import COMPILE_TARGETS, compile_identity
 from nanobot.identity.store import IdentityStore, IdentityStoreError
 from nanobot.webui.settings_contracts import WebUISettingsError
 
@@ -112,6 +113,15 @@ def identity_write_file(
         IdentityStore(workspace).write_file(name, content)
     except IdentityStoreError as exc:
         raise WebUISettingsError(exc.message, status=exc.status) from exc
+
+    # 保存即编译：写的是编译源文件时刷新 runtime 产物。编译是纯本地毫秒级
+    # 操作；失败不得让「保存」判失败——写盘已成功，产物下次启动补齐即可。
+    if name in {target.source for target in COMPILE_TARGETS}:
+        try:
+            compile_identity(workspace)
+        except Exception:
+            logger.warning("identity: 保存后自动编译失败 %s，下次启动补齐", name)
+
     return {"name": name, "saved": True}
 
 
