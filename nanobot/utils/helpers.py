@@ -934,6 +934,16 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     except Exception:
         logger.exception("Failed to seed identity templates for {}", workspace)
 
+    # 启动即编译：产物缺失 / 过期（首次播种、外部改文件、升级）时补齐。
+    # compiled_status 已新鲜时不触发，无稳态写盘开销。局部 import 避免循环依赖。
+    try:
+        from nanobot.identity.compiler import compile_identity, compiled_status
+
+        if not compiled_status(workspace)["fresh"]:
+            compile_identity(workspace)
+    except Exception:
+        logger.exception("Failed to auto-compile identity for {}", workspace)
+
     if added and not silent:
         from rich.console import Console
 
