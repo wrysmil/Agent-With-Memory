@@ -335,7 +335,7 @@ def compile_identity(workspace: Path) -> dict[str, Any]:
     os.utime(stamp, ns=(bump_ns, bump_ns))
 
     logger.info(
-        "identity: 规则编译完成，产物 %s，跳过 %s",
+        "identity: 规则编译完成，产物 {}，跳过 {}",
         compiled_files or "无",
         [entry["target"] for entry in skipped] or "无",
     )

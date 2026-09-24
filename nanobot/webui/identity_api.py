@@ -120,7 +120,7 @@ def identity_write_file(
         try:
             compile_identity(workspace)
         except Exception:
-            logger.warning("identity: 保存后自动编译失败 %s，下次启动补齐", name)
+            logger.warning("identity: 保存后自动编译失败 {}，下次启动补齐", name)
 
     return {"name": name, "saved": True}
 
