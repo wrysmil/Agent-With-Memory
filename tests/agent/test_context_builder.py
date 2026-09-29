@@ -662,3 +662,67 @@ class TestPoliciesSectionInjection:
 
         assert "## Policies" not in result
 
+
+class TestWorkingMemoryInjection:
+    """``working_memory_section`` 的注入位置与空值语义。
+
+    位置是刻意的：工作记忆排在长期记忆**之前**——「我现在在做什么」是
+    「我平时知道什么」的语境，反过来会让长期记忆抢掉当前任务的前景。
+    """
+
+    _SECTION = "# Working Memory\n\n## 当前任务\n重写注入链路"
+
+    def _seed_long_term_memory(self, builder: ContextBuilder) -> None:
+        builder.memory.write_memory("长期记忆正文")
+
+    def test_injected_before_long_term_memory(self, tmp_path):
+        builder = _builder(tmp_path)
+        self._seed_long_term_memory(builder)
+
+        result = builder.build_system_prompt(working_memory_section=self._SECTION)
+
+        working = result.index("# Working Memory")
+        long_term = result.index("长期记忆正文")
+        assert working < long_term
+
+    def test_default_none_does_not_append(self, tmp_path):
+        result = _builder(tmp_path).build_system_prompt()
+
+        assert "# Working Memory" not in result
+
+    def test_empty_string_does_not_append_shell(self, tmp_path):
+        """空串不能变成一个只剩分隔线的空壳段落。"""
+        builder = _builder(tmp_path)
+        baseline = builder.build_system_prompt()
+
+        result = builder.build_system_prompt(working_memory_section="")
+
+        assert "# Working Memory" not in result
+        assert result == baseline
+
+    def test_build_transcript_forwards_section(self, tmp_path):
+        transcript = TranscriptInput(history=[], current_message="hi")
+
+        messages = _builder(tmp_path).build_transcript(
+            transcript,
+            working_memory_section=self._SECTION,
+        )
+
+        assert "# Working Memory" in messages[0]["content"]
+
+    def test_build_messages_forwards_section(self, tmp_path):
+        messages = _builder(tmp_path).build_messages(
+            history=[],
+            current_message="hi",
+            working_memory_section=self._SECTION,
+        )
+
+        assert "# Working Memory" in messages[0]["content"]
+
+    def test_build_transcript_empty_section_no_shell(self, tmp_path):
+        transcript = TranscriptInput(history=[], current_message="hi")
+
+        messages = _builder(tmp_path).build_transcript(transcript, working_memory_section="")
+
+        assert "# Working Memory" not in messages[0]["content"]
+

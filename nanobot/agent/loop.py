@@ -170,6 +170,10 @@ class TurnContext:
     # 的引用评分（cited_memories）使用。空列表 = 无注入或链路未启用。
     pending_cited_memory_ids: list[str] = field(default_factory=list)
 
+    # Working Memory: ``_build_turn`` 里门控求值后的注入块，逐层透传给
+    # ``build_system_prompt``。门控在 loop 侧做完，builder 侧只判空。
+    pending_working_memory_section: str = ""
+
     input_persisted_early: bool = False
     save_skip: int = 0
 
@@ -461,6 +465,13 @@ class AgentLoop:
         self._concurrency_gate: asyncio.Semaphore | None = (
             asyncio.Semaphore(_max) if _max > 0 else None
         )
+        # Memory 装配态。读侧（工作记忆注入）与写侧（Phase 2 抽取）共用同一组
+        # 判据；存放在 Consolidator 之前，因为它以 bound method 形式引用
+        # ``_compute_working_memory_section``。
+        self._memory_extraction_enabled = memory_extraction_enabled
+        self._memory_services = memory_services
+        self._memory_enabled_provider = memory_enabled_provider
+        self._fallback_memory_services: MemoryServices | None = None
         self.consolidator = Consolidator(
             store=self.context.memory,
             sessions=self.sessions,
@@ -470,6 +481,7 @@ class AgentLoop:
                 workspace_scopes=self.workspace_scopes,
                 unified_session=unified_session,
             ),
+            working_memory_section_for_key=self._compute_working_memory_section,
         )
         # Phase 2 memory extraction is opt-in (plan §12): with the flag off, no
         # hook factory is registered, no deletion observer is installed and
@@ -495,6 +507,102 @@ class AgentLoop:
         self.commands = CommandRouter()
         register_builtin_commands(self.commands)
 
+    def _resolve_memory_services(
+        self,
+        memory_services: MemoryServices | None,
+    ) -> MemoryServices:
+        """解析记忆服务：未显式传入时按工作区回退装配。
+
+        写侧（``_wire_memory_extraction``）与读侧（``_compute_working_memory_section``）
+        必须走同一个表达式，否则两边连的不是同一个库 / 同一 ``workspace_id``，
+        读出来的工作记忆恒为空。
+
+        回退实例**惰性建一次并缓存**：``for_workspace`` 会 mkdir、建锁、跑一遍
+        ``replay_fallback()`` 再全量执行建表 DDL。读侧每轮调一次的话，等于每轮
+        重放一遍 schema。缓存同时保证读写共用同一个 database 实例。
+
+        只能从门控已放行的路径调用——懒建本身仍是一次建库，放在关态路径上就破坏
+        了「总开关关 ⇒ 零副作用」的装配约定。
+        """
+        if memory_services is not None:
+            return memory_services
+        if self._fallback_memory_services is None:
+            from nanobot.webui.memory_services import MemoryServices
+
+            self._fallback_memory_services = MemoryServices.for_workspace(
+                _MEMORY_WORKSPACE_ID,
+                self.workspace,
+            )
+        return self._fallback_memory_services
+
+    def _compute_working_memory_section(
+        self,
+        session_key: str,
+        *,
+        is_subagent: bool = False,
+    ) -> str:
+        """门控后取出本会话的工作记忆 markdown；不满足门控或出错时返回空串。
+
+        门控全部在 loop 侧求值，只把最终字符串传给 ``build_system_prompt``：
+        builder 是同步纯函数，读侧若把门控闭包留到那里求值，provider 抛异常
+        会击穿 prompt 构建——而写侧是有 try/except 兜底的，读侧没有。
+
+        短路顺序：
+        1. 抽取总开关。注意判据是布尔标志而非 ``memory_services is not None``：
+           缺 services 时 ``_wire_memory_extraction`` 会回退装配，抽取照跑，
+           用后者当门会漏判。
+        2. 用户记忆总开关（热切换，provider 为 None 时保持旧的常开语义）。
+        3. subagent：子代理复用父 session_key，会拿到父任务焦点——独立委派的
+           子任务带父任务语境是错的。
+        4. dream：固化任务不该被工作记忆干扰。其 key 格式恰好查不到行是巧合
+           不是设计，故显式跳过。
+
+        同步是刻意的：``Consolidator.estimate_session_prompt_tokens`` 是同步方法，
+        D5 需要同步 callable。
+
+        Args:
+            session_key: 本轮会话 key（``channel:chat_id``）。
+            is_subagent: 本轮是否为 subagent turn（复用 ``_build_turn`` 的判据）。
+
+        Returns:
+            可直接注入 system prompt 的 markdown 片段；不注入时为空串。
+        """
+        try:
+            if not self._memory_extraction_enabled:
+                return ""
+            if self._memory_enabled_provider is not None:
+                if not self._memory_enabled_provider():
+                    return ""
+            if is_subagent:
+                return ""
+            if session_key.startswith("dream:"):
+                return ""
+
+            from nanobot.memory.repository import get_scratchpad
+            from nanobot.memory.scratchpad_writer import (
+                ScratchpadWriter,
+                render_working_memory_markdown,
+            )
+
+            services = self._resolve_memory_services(self._memory_services)
+            with services.database.connect() as conn:
+                entry = get_scratchpad(
+                    conn,
+                    # 与写入侧同一个派生函数，保证查的是同一行。
+                    ScratchpadWriter.user_id_for_key(session_key),
+                    services.workspace_id,
+                )
+            if entry is None:
+                return ""
+            return render_working_memory_markdown(entry)
+        except Exception:
+            logger.warning(
+                "Working memory read failed for session {}; "
+                "system prompt will omit the Working Memory block",
+                session_key,
+            )
+            return ""
+
     def _wire_memory_extraction(
         self,
         memory_services: MemoryServices | None,
@@ -519,10 +627,7 @@ class AgentLoop:
         from nanobot.memory.extractor import MemoryExtractor
         from nanobot.memory.scratchpad_writer import ScratchpadWriter
 
-        services = memory_services or MemoryServices.for_workspace(
-            _MEMORY_WORKSPACE_ID,
-            self.workspace,
-        )
+        services = self._resolve_memory_services(memory_services)
         # FIX-1 Sec-C-α：ScratchpadWriter 改为 per-session_key 闭包工厂，
         # 从 session_key（格式 ``channel:chat_id``）派生 user_id，避免跨用户串数据。
         # ``_scratchpad_writer_for_key`` 接受 ``session_key`` 返回 ``ScratchpadWriter``。
@@ -533,11 +638,14 @@ class AgentLoop:
                 workspace_id=services.workspace_id,
             )
 
-        def _build_extractor(runtime: LLMRuntime) -> MemoryExtractor:
+        def _build_extractor(runtime: LLMRuntime, session_key: str) -> MemoryExtractor:
+            # ``user_id`` 必须与 ``ScratchpadWriter`` 写入时同源（从 session_key
+            # 派生），否则读取的是另一行，工作记忆快照恒为空。
             return MemoryExtractor(
                 services.database,
                 runtime,
                 workspace_id=services.workspace_id,
+                user_id=ScratchpadWriter.user_id_for_key(session_key),
             )
 
         def _runtime_for_key(session_key: str) -> LLMRuntime | None:
@@ -555,7 +663,10 @@ class AgentLoop:
 
         def _extractor_provider(session_key: str) -> MemoryExtractor:
             runtime = _runtime_for_key(session_key)
-            return _build_extractor(runtime if runtime is not None else self.llm_runtime())
+            return _build_extractor(
+                runtime if runtime is not None else self.llm_runtime(),
+                session_key,
+            )
 
         def _session_label_for_key(session_key: str) -> str:
             """日志用的会话摘要：WebUI 侧边栏那一行（标题优先，空则首条用户消息）。"""
@@ -594,7 +705,9 @@ class AgentLoop:
             except Exception:
                 runtime = self.llm_runtime()
             try:
-                await _build_extractor(runtime).extract_session(session, source="deletion")
+                await _build_extractor(runtime, session.key).extract_session(
+                    session, source="deletion"
+                )
             except Exception:
                 logger.warning(
                     "memory extraction failed for session {} source=deletion",
@@ -630,7 +743,13 @@ class AgentLoop:
 
         self.sessions.set_delete_session_observer(_on_session_deleted)
 
-        return _build_extractor(self.llm_runtime()).extract_quick_facts
+        def _extract_quick_facts(session: Session) -> int:
+            """Quick Facts 回调：Session 在调用时才可得，据其 key 派生 user_id。"""
+            return _build_extractor(self.llm_runtime(), session.key).extract_quick_facts(
+                session
+            )
+
+        return _extract_quick_facts
 
     @classmethod
     def from_config(
@@ -1133,6 +1252,7 @@ class AgentLoop:
         request_context: RequestContext | None = None,
         provider_state: ProviderConversationState | None = None,
         retrieved_memory_section: str = "",
+        working_memory_section: str = "",
         cited_memory_ids: list[str] | None = None,
     ) -> AgentRunResult:
         """Run the agent iteration loop.
@@ -1304,6 +1424,7 @@ class AgentLoop:
             workspace=effective_scope.project_path,
             include_memory=session.policy.persist if session is not None else True,
             retrieved_memory_section=retrieved_memory_section,
+            working_memory_section=working_memory_section,
         )
         if request_context is None:
             request_ctx = dataclasses.replace(
@@ -2170,6 +2291,12 @@ class AgentLoop:
                 recent_messages=list(ctx.history),
             )
         )
+        # Working Memory: 同样在 BUILD 阶段预计算并门控完毕，只把最终字符串
+        # 交给同步的 transcript_builder 透传。失败隔离在方法内部。
+        ctx.pending_working_memory_section = self._compute_working_memory_section(
+            ctx.session_key,
+            is_subagent=is_subagent,
+        )
 
     async def _compute_retrieval_section(
         self,
@@ -2219,6 +2346,7 @@ class AgentLoop:
                 request_context=ctx.request_context,
                 provider_state=ctx.provider_state,
                 retrieved_memory_section=ctx.pending_retrieved_memory_section,
+                working_memory_section=ctx.pending_working_memory_section,
                 cited_memory_ids=ctx.pending_cited_memory_ids,
                 events=ctx.events,
             )

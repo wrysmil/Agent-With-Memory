@@ -27,6 +27,7 @@ from nanobot.agent.hooks.memory_extraction import MemoryExtractionHook
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
+from nanobot.memory.scratchpad_writer import ScratchpadWriter
 from nanobot.session.manager import Session, SessionManager
 from nanobot.webui.memory_services import MemoryServices
 
@@ -247,6 +248,96 @@ async def test_deletion_dispatches_background_extraction(
     assert _RecordingExtractor.calls == [
         (key, "deletion", [{"role": "user", "content": "remember: prefer ruff over flake8"}]),
     ]
+
+
+# ---------------------------------------------------------------------------
+# AgentLoop：MemoryExtractor 的 user_id 必须由 session_key 派生
+# ---------------------------------------------------------------------------
+
+
+class _UserIdCapturingExtractor(_RecordingExtractor):
+    """记录每次构造的 ``user_id``/``workspace_id``，用于校验装配侧传参。"""
+
+    built: ClassVar[list[tuple[str, str]]] = []
+
+    def __init__(
+        self,
+        database: Any,
+        runtime: Any,
+        workspace_id: str = "default",
+        user_id: str = "default",
+    ) -> None:
+        super().__init__(database, runtime, workspace_id=workspace_id, user_id=user_id)
+        type(self).built.append((user_id, workspace_id))
+
+
+def _make_wired_loop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> AgentLoop:
+    """装配一个 opt-in 记忆提取的 loop，MemoryExtractor 替换为记录型替身。"""
+    _UserIdCapturingExtractor.built = []
+    _UserIdCapturingExtractor.calls = []
+    monkeypatch.setattr(
+        "nanobot.memory.extractor.MemoryExtractor",
+        _UserIdCapturingExtractor,
+    )
+    services = MemoryServices.for_workspace("default", tmp_path)
+    return _make_loop(
+        tmp_path,
+        memory_extraction_enabled=True,
+        memory_services=services,
+    )
+
+
+def test_hook_extractor_user_id_derived_from_session_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """调用点 1：hook 主路径的 extractor 按 session_key 派生 user_id。"""
+    loop = _make_wired_loop(tmp_path, monkeypatch)
+
+    hook = loop._hook_factories[0](AgentTurnHookContext(session_key="webui:12345"))
+    assert isinstance(hook, MemoryExtractionHook)
+
+    assert hook._extractor.user_id == ScratchpadWriter.user_id_for_key("webui:12345")
+    assert hook._extractor.user_id == "12345"
+    assert hook._extractor.user_id != "default"
+
+
+async def test_deletion_extractor_user_id_derived_from_session_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """调用点 2：删除会话路径的 extractor 用 ``session.key`` 派生 user_id。"""
+    loop = _make_wired_loop(tmp_path, monkeypatch)
+    key = "webui:777"
+    _seed_session(loop.sessions, key)
+
+    assert loop.sessions.delete_session(key) is True
+    await asyncio.gather(*loop._memory_extraction_tasks)
+
+    expected = ScratchpadWriter.user_id_for_key(key)
+    assert expected == "777"
+    assert _UserIdCapturingExtractor.built[-1] == (expected, "default")
+
+
+def test_quick_facts_hook_extractor_user_id_derived_from_session_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """调用点 3：Quick Facts 回调在收到 Session 后才建 extractor，user_id 取自其 key。"""
+    loop = _make_wired_loop(tmp_path, monkeypatch)
+    key = "webui:24680"
+    session = _seed_session(loop.sessions, key)
+
+    hook = loop.auto_compact._quick_facts_hook
+    assert hook is not None
+    assert hook(session) == 0
+
+    expected = ScratchpadWriter.user_id_for_key(key)
+    assert expected == "24680"
+    assert _UserIdCapturingExtractor.built[-1] == (expected, "default")
 
 
 async def test_deletion_extraction_failure_is_contained(
