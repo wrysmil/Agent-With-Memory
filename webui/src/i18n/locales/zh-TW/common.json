@@ -1112,7 +1112,6 @@
       "groupCore": "核心檔案",
       "groupPersonas": "人格範本",
       "warningBanner": "身分檔案是 Agent 的核心人格與行為基礎。不當修改可能導致 Agent 行為異常、喪失關鍵能力或產生不可預期的回復。如果你不確定某項修改的影響，建議先備份原檔案。",
-      "badgeFullTextInject": "全文注入",
       "badgeNeedsCompile": "需編譯",
       "badgeAutoRegen": "自動重新生成",
       "badgeSystemSection": "系統段落",
@@ -1168,7 +1167,10 @@
           "label": "技術專家",
           "description": "術語不稀釋；結論帶版本前提；以測試為準"
         }
-      }
+      },
+      "activePersona": "使用人格",
+      "noPersona": "不使用",
+      "personaSwitchFailed": "切換人格失敗"
     }
   },
   "chat": {

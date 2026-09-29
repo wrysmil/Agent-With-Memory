@@ -1112,7 +1112,6 @@
       "groupCore": "Arquivos principais",
       "groupPersonas": "Personas",
       "warningBanner": "Os arquivos de identidade definem a personalidade e o comportamento do Agente. Edições inadequadas podem causar comportamentos anormais ou respostas inesperadas. Em caso de dúvida, faça backup primeiro.",
-      "badgeFullTextInject": "Injeção de texto integral",
       "badgeNeedsCompile": "Requer compilação",
       "badgeAutoRegen": "Regeneração automática",
       "badgeSystemSection": "Seção do sistema",
@@ -1168,7 +1167,10 @@
           "label": "Especialista técnico",
           "description": "Sem diluir jargão; versões explícitas; evidência em testes"
         }
-      }
+      },
+      "activePersona": "Persona ativa",
+      "noPersona": "Nenhuma",
+      "personaSwitchFailed": "Falha ao trocar a persona"
     }
   },
   "chat": {

@@ -1112,7 +1112,6 @@
       "groupCore": "File inti",
       "groupPersonas": "Persona",
       "warningBanner": "File identitas menentukan kepribadian dan perilaku Agent. Perubahan yang tidak tepat dapat menyebabkan perilaku tidak normal atau respons tak terduga. Jika ragu, cadangkan dulu.",
-      "badgeFullTextInject": "Sisipkan penuh",
       "badgeNeedsCompile": "Perlu kompilasi",
       "badgeAutoRegen": "Regenerasi otomatis",
       "badgeSystemSection": "Bagian sistem",
@@ -1168,7 +1167,10 @@
           "label": "Ahli teknis",
           "description": "Istilah tidak dipermudah; sebut versi; bukti dari tes"
         }
-      }
+      },
+      "activePersona": "Persona aktif",
+      "noPersona": "Tidak ada",
+      "personaSwitchFailed": "Gagal mengganti persona"
     }
   },
   "chat": {

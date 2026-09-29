@@ -21,7 +21,13 @@ from nanobot.bus.events import (
     RUNTIME_CONTROL_SESSION_DISCARD,
     InboundMessage,
 )
-from nanobot.identity.catalog import POLICIES_MD_NAME, resolve_identity_dir
+from nanobot.identity.catalog import (
+    PERSONA_STATE_FILE,
+    PERSONAS_SUBDIR,
+    POLICIES_MD_NAME,
+    is_safe_persona_stem,
+    resolve_identity_dir,
+)
 from nanobot.identity.compiler import read_compiled
 from nanobot.identity.store import IdentityStore, IdentityStoreError
 from nanobot.runtime_context import (
@@ -42,6 +48,17 @@ if TYPE_CHECKING:
 else:
     RetrievalEngine = Any  # type: ignore[misc,assignment]
     MemoryQueryPreprocessor = Any  # type: ignore[misc,assignment]
+
+
+def _strip_leading_h1(content: str) -> str:
+    """剥掉正文首个一级标题——persona 文件用标题行承载展示名，注入时不需要。"""
+    lines = content.splitlines()
+    if lines and lines[0].lstrip().startswith("# "):
+        return "\n".join(lines[1:])
+    return content
+
+
+PERSONA_HEADING = "## 当前人格"
 
 
 def session_extra(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -343,28 +360,67 @@ class ContextBuilder:
         ]
 
         for filename, root, compiled_key in sources:
-            if compiled is not None and compiled_key is not None:
-                body = compiled.get(compiled_key, "")
-                if body.strip():
-                    parts.append(f"## {filename}\n\n{body}")
-                    continue
-            file_path = root / filename
-            if file_path.exists():
-                content = file_path.read_text(encoding="utf-8")
-                if filename == "SOUL.md" and self._is_template_content(
-                    content,
-                    "legacy/SOUL.md",
-                ):
-                    content = load_bundled_template("SOUL.md") or content
-                if not content.strip():
-                    continue
-                if filename in self._SKIPPABLE_DEFAULTS and self._is_template_content(
-                    content, filename
-                ):
-                    continue
-                parts.append(f"## {filename}\n\n{content}")
+            section = self._render_bootstrap_file(filename, root, compiled, compiled_key)
+            if section:
+                parts.append(section)
+            if filename == "SOUL.md":
+                persona = self._load_persona_section()
+                if persona:
+                    parts.append(persona)
 
         return "\n\n".join(parts) if parts else ""
+
+    def _render_bootstrap_file(
+        self,
+        filename: str,
+        root: Path,
+        compiled: dict[str, str] | None,
+        compiled_key: str | None,
+    ) -> str:
+        """渲染单个 bootstrap 段；出厂未定制或缺失时返回空串。"""
+        if compiled is not None and compiled_key is not None:
+            body = compiled.get(compiled_key, "")
+            if body.strip():
+                return f"## {filename}\n\n{body}"
+        file_path = root / filename
+        if not file_path.exists():
+            return ""
+        content = file_path.read_text(encoding="utf-8")
+        if filename == "SOUL.md" and self._is_template_content(content, "legacy/SOUL.md"):
+            content = load_bundled_template("SOUL.md") or content
+        if not content.strip():
+            return ""
+        if filename in self._SKIPPABLE_DEFAULTS and self._is_template_content(content, filename):
+            return ""
+        return f"## {filename}\n\n{content}"
+
+    def _load_persona_section(self) -> str:
+        """把激活的 persona 渲染成表现层段落。
+
+        persona 是可切换的表现层，SOUL 是不可切换的本体，两者分段注入让
+        「改本体」与「切表现」互不干扰。文件内容原样注入、只剥一级标题，
+        不解析字段——用户改标题不会让 persona 静默失效。未激活 / 目标缺失 /
+        空文件 / 仍是出厂模板时静默跳过，不报错。
+        """
+        identity_dir = resolve_identity_dir(self.workspace)
+        try:
+            stem = (identity_dir / PERSONA_STATE_FILE).read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+        # 状态文件是用户可写的，不能当路径用：谓词挡住分隔符/NUL/点号名，
+        # 随后的 read 失败再兜住其余越界形态。
+        if not is_safe_persona_stem(stem):
+            return ""
+        try:
+            content = (identity_dir / PERSONAS_SUBDIR / f"{stem}.md").read_text(encoding="utf-8")
+        except OSError:
+            return ""
+        if not content.strip() or self._is_template_content(content, f"personas/{stem}.md"):
+            return ""
+        body = _strip_leading_h1(content).strip()
+        if not body:
+            return ""
+        return f"{PERSONA_HEADING}：{stem}\n\n{body}"
 
     def _load_policies_section(self) -> str:
         """注入 ``identity/prompts/policies.md`` 作为策略段落。

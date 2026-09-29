@@ -1661,4 +1661,6 @@ export interface IdentityFileEntry {
   exists: boolean;
   restricted: boolean;
   badge?: IdentityBadge;
+  /** Backend-estimated token cost of the file's system-prompt section. */
+  tokens?: number;
 }

@@ -169,6 +169,8 @@ _SYSTEM_ROUTES = {
     "/api/settings/identity/file/save": "identity-write-file",
     "/api/settings/identity/reload": "identity-reload",
     "/api/settings/identity/presets": "identity-list-presets",
+    "/api/settings/identity/persona": "identity-get-active-persona",
+    "/api/settings/identity/persona/set": "identity-set-active-persona",
     **{
         path: f"mcp-{action}"
         for path, action in _MCP_PRESET_ACTIONS_BY_PATH.items()
@@ -190,6 +192,7 @@ _MEMORY_MUTATION_PATHS = frozenset({
 _IDENTITY_MUTATION_PATHS = frozenset({
     "/api/settings/identity/file/save",
     "/api/settings/identity/reload",
+    "/api/settings/identity/persona/set",
 })
 
 _SETTINGS_MUTATION_PATHS = frozenset({
@@ -296,6 +299,8 @@ def _null_identity_operations() -> IdentitySettingsOperations:
         write_file=_unavailable,
         reload=_unavailable,
         list_presets=_unavailable,
+        get_active_persona=_unavailable,
+        set_active_persona=_unavailable,
     )
 
 

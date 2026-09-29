@@ -1112,7 +1112,6 @@
       "groupCore": "コアファイル",
       "groupPersonas": "ペルソナ",
       "warningBanner": "アイデンティティファイルはエージェントの中核人格と行動基盤です。不適切な編集は動作異常や能力喪失、予期しない応答を招く可能性があります。影響が不明な場合は先にバックアップしてください。",
-      "badgeFullTextInject": "全文注入",
       "badgeNeedsCompile": "要コンパイル",
       "badgeAutoRegen": "自動再生成",
       "badgeSystemSection": "システムセクション",
@@ -1168,7 +1167,10 @@
           "label": "テックエキスパート",
           "description": "用語は簡略化しない、バージョン前提、テストで証明"
         }
-      }
+      },
+      "activePersona": "使用中のペルソナ",
+      "noPersona": "なし",
+      "personaSwitchFailed": "ペルソナの変更に失敗しました"
     }
   },
   "chat": {

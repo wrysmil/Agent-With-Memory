@@ -84,7 +84,7 @@ def _request(
 # ---- dispatch wiring --------------------------------------------------------
 
 
-def test_all_five_actions_are_registered():
+def test_all_actions_are_registered():
     """编译接口已下架：保存即编译，没有手动 compile action。"""
     assert IDENTITY_ACTION_NAMES == frozenset({
         "identity-list-files",
@@ -92,6 +92,8 @@ def test_all_five_actions_are_registered():
         "identity-write-file",
         "identity-reload",
         "identity-list-presets",
+        "identity-get-active-persona",
+        "identity-set-active-persona",
     })
 
 
@@ -225,7 +227,8 @@ def test_list_presets_returns_five_with_content(handler: IdentitySettingsHandler
         "companion",
         "tech_expert",
     ]
-    assert all(p["content"].startswith("# Soul") for p in presets)
+    # 标题是用户可编辑的：钉具体文字（当年的 "# Soul"）是把可编辑内容当常量断言。
+    assert all(p["content"].startswith("# ") for p in presets)
     assert all(p["labelKey"].startswith("settings.identity.preset.") for p in presets)
 
 

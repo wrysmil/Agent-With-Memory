@@ -21,10 +21,88 @@ from typing import Any
 from loguru import logger
 
 from nanobot.identity.bootstrap import PERSONA_PRESET_STEMS, load_identity_template
-from nanobot.identity.catalog import CHAR_LIMIT, LIFECYCLE_OWNED_FILES
+from nanobot.identity.catalog import (
+    CHAR_LIMIT,
+    LIFECYCLE_OWNED_FILES,
+    PERSONA_STATE_FILE,
+    PERSONAS_SUBDIR,
+    is_safe_persona_stem,
+    resolve_identity_dir,
+)
 from nanobot.identity.compiler import COMPILE_TARGETS, compile_identity
 from nanobot.identity.store import IdentityStore, IdentityStoreError
 from nanobot.webui.settings_contracts import WebUISettingsError
+
+
+def _estimate_tokens(text: str) -> int:
+    """粗估 token 数：CJK 按 1.5 字/token，其余按 4 字符/token。
+
+    纯展示用途，不参与任何截断决策——身份段实测占比不到上下文的 0.04%，
+    自动截断只会在制造「用户规则被静默砍掉」的风险。
+    """
+    cjk = sum(1 for ch in text if "一" <= ch <= "鿿")
+    return round(cjk / 1.5 + (len(text) - cjk) / 4)
+
+
+def _active_persona_path(workspace: Path) -> Path:
+    return resolve_identity_dir(workspace) / PERSONA_STATE_FILE
+
+
+def _persona_stems(workspace: Path) -> list[str]:
+    personas_dir = resolve_identity_dir(workspace) / PERSONAS_SUBDIR
+    if not personas_dir.is_dir():
+        return []
+    return sorted(p.stem for p in personas_dir.glob("*.md"))
+
+
+def identity_get_active_persona(workspace: Path) -> dict[str, Any]:
+    """返回当前激活的 persona stem 与可选列表。
+
+    激活态落在 ``identity/active_persona`` 而非 config：ContextBuilder 不持有
+    config 对象，走 workspace 文件与既有的 policies 读取路径同构，无需新增
+    参数穿透。指向已删除 persona 的陈旧激活态按未激活处理。
+    """
+    options = _persona_stems(workspace)
+    try:
+        stem = _active_persona_path(workspace).read_text(encoding="utf-8").strip()
+    except OSError:
+        stem = ""
+    if stem not in options:
+        stem = ""
+    return {"active": stem, "options": options}
+
+
+def identity_set_active_persona(workspace: Path, stem: str) -> dict[str, Any]:
+    """写入激活态。空串表示关闭。状态文件是用户可写的，落盘前必须校验。"""
+    stem = (stem or "").strip()
+    if stem and not is_safe_persona_stem(stem):
+        raise WebUISettingsError("persona 名称非法", status=400)
+    if stem and stem not in _persona_stems(workspace):
+        raise WebUISettingsError(f"persona 不存在：{stem}", status=404)
+    path = _active_persona_path(workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(stem, encoding="utf-8")
+    return {"active": stem}
+
+
+def _file_tokens(store: IdentityStore, name: str, exists: bool) -> int:
+    """Best-effort token count for one listed identity file.
+
+    A missing file is priced against its bundled factory template so the editor
+    can show the cost of a persona the user has not customized yet. Any read
+    failure degrades to 0 rather than failing the listing — an estimate must
+    never make the manifest unusable. ``UnicodeDecodeError`` is a ``ValueError``,
+    not an ``OSError``, so a persona saved in a non-UTF-8 encoding would
+    otherwise 500 the whole manifest; name it explicitly.
+    """
+    try:
+        if exists:
+            text = store.resolve_path(name).read_text(encoding="utf-8")
+        else:
+            text = load_identity_template(name) or ""
+    except (OSError, UnicodeDecodeError, IdentityStoreError):
+        return 0
+    return _estimate_tokens(text)
 
 
 def identity_list_files(workspace: Path) -> dict[str, Any]:
@@ -32,11 +110,16 @@ def identity_list_files(workspace: Path) -> dict[str, Any]:
 
     ``charLimit`` is read from ``CHAR_LIMIT`` rather than restated here so the
     frontend's identity editor and MEMORY.md truncation can never drift apart.
+    Each entry also carries a ``tokens`` estimate — display only, see
+    :func:`_estimate_tokens`.
     """
+    store = IdentityStore(workspace)
     try:
-        files = IdentityStore(workspace).list_files()
+        files = store.list_files()
     except IdentityStoreError as exc:
         raise WebUISettingsError(exc.message, status=exc.status) from exc
+    for item in files:
+        item["tokens"] = _file_tokens(store, item["name"], bool(item.get("exists")))
     return {"files": files, "charLimit": CHAR_LIMIT}
 
 

@@ -113,6 +113,8 @@ def build_identity_operations(
             refresh_memory_md=partial(memory_api.refresh_memory_md, services),
         ),
         list_presets=identity_api.identity_list_presets,
+        get_active_persona=partial(identity_api.identity_get_active_persona, workspace),
+        set_active_persona=partial(identity_api.identity_set_active_persona, workspace),
     )
 
 
