@@ -229,6 +229,7 @@ class ContextBuilder:
         workspace: Path | None = None,
         include_memory: bool = True,
         retrieved_memory_section: str | None = None,
+        working_memory_section: str | None = None,
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
         root = workspace or self.workspace
@@ -251,6 +252,13 @@ class ContextBuilder:
                 f"Working directory: {project_path}\n"
                 "Use it as the default root for project files and relative tool paths."
             )
+
+        # Working Memory：排在长期记忆**之前**——「我现在在做什么」是
+        # 「我平时知道什么」的语境，反过来会让长期记忆抢掉当前任务的前景。
+        # 门控（开关 / subagent / dream）全在 ``AgentLoop`` 侧求值完毕，这里
+        # 只判空：空串与 None 同样不 append，避免拼出只有分隔线的空壳段落。
+        if working_memory_section:
+            parts.append(working_memory_section)
 
         if include_memory:
             memory = self.memory.read_memory()
@@ -460,6 +468,7 @@ class ContextBuilder:
         workspace: Path | None = None,
         include_memory: bool = True,
         retrieved_memory_section: str | None = None,
+        working_memory_section: str | None = None,
     ) -> list[dict[str, Any]]:
         """Compatibility wrapper for callers that need merged adjacent roles."""
         messages = self.build_transcript(
@@ -475,6 +484,7 @@ class ContextBuilder:
             workspace=workspace,
             include_memory=include_memory,
             retrieved_memory_section=retrieved_memory_section,
+            working_memory_section=working_memory_section,
         )
         if current_message is None:
             return messages
@@ -502,6 +512,7 @@ class ContextBuilder:
         workspace: Path | None = None,
         include_memory: bool = True,
         retrieved_memory_section: str | None = None,
+        working_memory_section: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build a model transcript while preserving the fresh-turn boundary."""
         root = workspace or self.workspace
@@ -514,6 +525,7 @@ class ContextBuilder:
                     workspace=root,
                     include_memory=include_memory,
                     retrieved_memory_section=retrieved_memory_section,
+                    working_memory_section=working_memory_section,
                 ),
             },
             *transcript.history,

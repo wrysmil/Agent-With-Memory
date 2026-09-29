@@ -1025,11 +1025,16 @@ class Consolidator:
         build_messages: Callable[..., list[dict[str, Any]]],
         get_tool_definitions: Callable[[], list[dict[str, Any]]],
         resolve_prompt_context: Callable[[Session], tuple[str | None, Path | None]] | None = None,
+        working_memory_section_for_key: Callable[[str], str] | None = None,
     ):
         self.store = store
         self.sessions = sessions
         self._build_messages = build_messages
         self._get_tool_definitions = get_tool_definitions
+        # Working Memory 每轮都进 prompt，不计入会低估约 1.5k token，而
+        # ``_SAFETY_BUFFER`` 只有 1024。存 callable 而非求值结果：装配顺序上
+        # Consolidator 早于记忆服务就绪，必须延迟到探测时再取。
+        self._working_memory_section_for_key = working_memory_section_for_key
         self.archiver = MemoryArchiver(
             store=store,
             build_messages=build_messages,
@@ -1147,11 +1152,17 @@ class Consolidator:
             session.metadata,
             fallback_last_active=session.updated_at,
         )
+        working_memory_section = (
+            self._working_memory_section_for_key(session.key)
+            if self._working_memory_section_for_key is not None
+            else ""
+        )
         probe_messages = self._build_messages(
             history=history,
             current_message="[token-probe]",
             channel=channel,
             session_summary=summary,
+            working_memory_section=working_memory_section,
         )
         return estimate_prompt_tokens_chain(
             runtime.provider,

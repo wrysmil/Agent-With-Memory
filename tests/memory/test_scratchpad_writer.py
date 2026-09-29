@@ -6,7 +6,11 @@ import pytest
 
 from nanobot.memory.database import MemoryDatabase
 from nanobot.memory.repository import get_scratchpad
-from nanobot.memory.scratchpad_writer import MAX_ACTIVE_PROJECTS, ScratchpadWriter
+from nanobot.memory.scratchpad_writer import (
+    MAX_ACTIVE_PROJECTS,
+    ScratchpadWriter,
+    _normalize_focus_entry,
+)
 
 
 @pytest.fixture
@@ -180,6 +184,195 @@ class TestUpdateFocus:
         assert "Task 0" not in entry.active_projects[0]
         # 最新的 Task 5 应在列表中
         assert any("Task 5" in p for p in entry.active_projects)
+
+
+# ------------------------------------------------------------------
+# update_focus 归档去重（active_projects 只有 MAX_ACTIVE_PROJECTS 格）
+# ------------------------------------------------------------------
+
+@pytest.mark.asyncio
+class TestUpdateFocusArchiveDedupe:
+    """旧 focus 归一化后若已在 active_projects 中，则不再重复归档。
+
+    背景：用户围绕同一件事连着追问多轮时，每轮 user 消息都不同 → 每轮都触发
+    一次归档 → 5 轮之内 5 个格子被同一话题的碎片占满，挤掉真实历史任务。
+    """
+
+    def _seed(
+        self,
+        db,
+        *,
+        current_focus: str = "",
+        active_projects: list[str] | None = None,
+    ) -> None:
+        """预置一条 scratchpad 行，用于构造「旧 focus 已在列表中」的场景。"""
+        from nanobot.memory.models import ScratchpadEntry
+        from nanobot.memory.repository import upsert_scratchpad
+
+        entry = ScratchpadEntry(
+            user_id="default",
+            workspace_id="default",
+            updated_at="2026-09-10T00:00:00Z",
+            current_focus=current_focus,
+            active_projects=list(active_projects or []),
+        )
+        with db.connect() as conn:
+            upsert_scratchpad(conn, entry)
+
+    async def test_duplicate_focus_does_not_grow_active_projects(self, db):
+        """连续 3 次调用，归一化后命中列表已有条目的那次不使列表变长。"""
+        self._seed(
+            db,
+            current_focus="  Review   the   auth  flow  ",
+            active_projects=["[09-10 15:30] Review the auth flow"],
+        )
+        writer = ScratchpadWriter(db, user_id="default")
+
+        # 第 1 次：old_focus 归一化后等于列表里的条目 → 不归档（长度仍为 1）
+        await writer.update_focus(session_key="s1", new_focus="Ship the release")
+        with db.connect() as conn:
+            after_first = get_scratchpad(conn, "default", "default")
+        assert after_first is not None
+        assert len(after_first.active_projects) == 1
+        assert after_first.current_focus == "Ship the release"
+
+        # 第 2 次：不同 focus → 正常归档
+        await writer.update_focus(session_key="s1", new_focus="Write the RFC")
+        with db.connect() as conn:
+            after_second = get_scratchpad(conn, "default", "default")
+        assert after_second is not None
+        assert len(after_second.active_projects) == 2
+
+        # 第 3 次：仍是不同 focus → 正常归档，长度继续增长
+        await writer.update_focus(session_key="s1", new_focus="Fix the flaky test")
+        with db.connect() as conn:
+            entry = get_scratchpad(conn, "default", "default")
+        assert entry is not None
+        assert len(entry.active_projects) == 3
+        assert entry.current_focus == "Fix the flaky test"
+
+    async def test_bounce_back_to_previous_focus_does_not_duplicate(self, db):
+        """focus 在 A/B 间来回切换时，已归档的 A 不会被再次插入。"""
+        writer = ScratchpadWriter(db, user_id="default")
+
+        await writer.update_focus(session_key="s1", new_focus="Task A")
+        await writer.update_focus(session_key="s1", new_focus="Task B")
+        await writer.update_focus(session_key="s1", new_focus="Task A")
+        # 第四次：old_focus = "Task A"，已在 active_projects 中 → 不归档
+        await writer.update_focus(session_key="s1", new_focus="Task C")
+
+        with db.connect() as conn:
+            entry = get_scratchpad(conn, "default", "default")
+
+        assert entry is not None
+        assert entry.current_focus == "Task C"
+        assert len(entry.active_projects) == 2
+        assert [p.split("] ", 1)[1] for p in entry.active_projects] == ["Task B", "Task A"]
+
+    async def test_case_difference_still_archives(self, db):
+        """大小写不同视为不同 focus（精确匹配是刻意的设计选择）。"""
+        self._seed(
+            db,
+            current_focus="Deploy The Service",
+            active_projects=["[09-10 15:30] deploy the service"],
+        )
+        writer = ScratchpadWriter(db, user_id="default")
+
+        await writer.update_focus(session_key="s1", new_focus="Next thing")
+
+        with db.connect() as conn:
+            entry = get_scratchpad(conn, "default", "default")
+
+        assert entry is not None
+        # 仅大小写不同 → 归一化不相等 → 照常归档
+        assert len(entry.active_projects) == 2
+        assert entry.active_projects[0].endswith("Deploy The Service")
+
+    async def test_chinese_difference_still_archives(self, db):
+        """中文字符不同视为不同 focus（不做同义/近似归并）。"""
+        self._seed(
+            db,
+            current_focus="优化登录流程",
+            active_projects=["[09-10 15:30] 优化登陆流程"],
+        )
+        writer = ScratchpadWriter(db, user_id="default")
+
+        await writer.update_focus(session_key="s1", new_focus="别的任务")
+
+        with db.connect() as conn:
+            entry = get_scratchpad(conn, "default", "default")
+
+        assert entry is not None
+        # 「登录」vs「登陆」字面不同 → 照常归档，不做字形/语义近似匹配
+        assert len(entry.active_projects) == 2
+        assert entry.active_projects[0].endswith("优化登录流程")
+
+    async def test_max_active_projects_cap_still_enforced(self, db):
+        """去重不改变 [:MAX_ACTIVE_PROJECTS] 上限行为。"""
+        writer = ScratchpadWriter(db, user_id="default")
+
+        for i in range(7):
+            await writer.update_focus(session_key="s1", new_focus=f"Task {i}")
+
+        with db.connect() as conn:
+            entry = get_scratchpad(conn, "default", "default")
+
+        assert entry is not None
+        assert len(entry.active_projects) == MAX_ACTIVE_PROJECTS
+        # 最旧的 Task 0 仍被挤出
+        assert all("Task 0" not in p for p in entry.active_projects)
+
+
+# ------------------------------------------------------------------
+# _normalize_focus_entry
+# ------------------------------------------------------------------
+
+class TestNormalizeFocusEntry:
+    def test_strips_timestamp_prefix(self):
+        """剥离 [MM-DD HH:MM] 时间戳前缀。"""
+        assert _normalize_focus_entry("[09-10 15:30] Review auth") == "Review auth"
+
+    def test_strips_leading_and_trailing_whitespace(self):
+        """忽略首尾空白。"""
+        assert _normalize_focus_entry("  Review auth  ") == "Review auth"
+        assert _normalize_focus_entry("\t\nReview auth\n") == "Review auth"
+
+    def test_collapses_repeated_whitespace(self):
+        """连续空白折叠成一个空格。"""
+        assert _normalize_focus_entry("Review    the\t\tauth \n flow") == (
+            "Review the auth flow"
+        )
+
+    def test_strips_prefix_before_collapsing(self):
+        """前缀与空白叠加时结果一致。"""
+        assert _normalize_focus_entry("  [09-10 15:30]   Review   auth  ") == (
+            "Review auth"
+        )
+
+    def test_keeps_case_sensitive(self):
+        """大小写不归并。"""
+        assert _normalize_focus_entry("Review Auth") != _normalize_focus_entry(
+            "review auth"
+        )
+
+    def test_keeps_chinese_exact(self):
+        """中文字符不归并。"""
+        assert _normalize_focus_entry("优化登录流程") != _normalize_focus_entry(
+            "优化登陆流程"
+        )
+
+    def test_entry_without_prefix_is_preserved(self):
+        """无时间戳前缀的条目原样归一化。"""
+        assert _normalize_focus_entry("Review auth") == "Review auth"
+
+    def test_empty_and_blank(self):
+        """空串与纯空白归一化为空串，不抛异常。"""
+        assert _normalize_focus_entry("") == ""
+        assert _normalize_focus_entry("   \t ") == ""
+
+    def test_does_not_strip_non_timestamp_brackets(self):
+        """非 [MM-DD HH:MM] 形态的方括号不当作前缀剥离。"""
+        assert _normalize_focus_entry("[WIP] Review auth") == "[WIP] Review auth"
 
 
 # ------------------------------------------------------------------

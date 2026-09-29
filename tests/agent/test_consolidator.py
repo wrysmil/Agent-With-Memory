@@ -493,6 +493,63 @@ class TestConsolidatorPromptEstimate:
         assert len(captured["history"]) == 8
         assert captured["history"][0]["content"] == "msg-2"
 
+    async def test_estimate_probe_carries_working_memory(self, consolidator, runtime):
+        """工作记忆每轮都进 prompt；不计进去每次低估约 1.5k token，
+        而安全缓冲只有 ``Consolidator._SAFETY_BUFFER``（1024），阈值会偏乐观。"""
+        session = Session(key="cli:direct")
+        session.add_message("user", "hello")
+        captured: dict[str, object] = {}
+
+        def build_messages(**kwargs):
+            captured["working_memory_section"] = kwargs.get("working_memory_section")
+            return kwargs["history"]
+
+        consolidator._build_messages = build_messages
+        consolidator._working_memory_section_for_key = (
+            lambda key: "# Working Memory\n\n## 当前任务\n注入链路"
+        )
+
+        consolidator.estimate_session_prompt_tokens(session, runtime=runtime)
+
+        assert captured["working_memory_section"] == (
+            "# Working Memory\n\n## 当前任务\n注入链路"
+        )
+
+    async def test_estimate_probe_section_is_empty_without_callable(
+        self, consolidator, runtime
+    ):
+        """没接 callable 时传空串，不是 None——保持 builder 侧语义一致。"""
+        session = Session(key="cli:direct")
+        session.add_message("user", "hello")
+        captured: dict[str, object] = {}
+
+        def build_messages(**kwargs):
+            captured["working_memory_section"] = kwargs.get("working_memory_section")
+            return kwargs["history"]
+
+        consolidator._build_messages = build_messages
+
+        consolidator.estimate_session_prompt_tokens(session, runtime=runtime)
+
+        assert captured["working_memory_section"] == ""
+
+    async def test_estimate_probe_uses_session_key(self, consolidator, runtime):
+        """callable 按 session_key 取值，不是闭包捕获的固定块。"""
+        session = Session(key="cli:room-42")
+        captured: dict[str, object] = {}
+
+        def build_messages(**kwargs):
+            captured["working_memory_section"] = kwargs.get("working_memory_section")
+            return kwargs["history"]
+
+        consolidator._build_messages = build_messages
+        consolidator._working_memory_section_for_key = lambda key: f"key={key}"
+
+        consolidator.estimate_session_prompt_tokens(session, runtime=runtime)
+
+        assert captured["working_memory_section"] == "key=cli:room-42"
+
+
 class TestCompactIdleSession:
     """Idle compaction tests."""
 
