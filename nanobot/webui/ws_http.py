@@ -34,6 +34,7 @@ from nanobot.session.session_handles import (
     SessionHandleResolver,
 )
 from nanobot.triggers.local_types import LocalTrigger
+from nanobot.webui.agents_routes import AgentSettingsOperations
 from nanobot.webui.file_preview import (
     WebUIFilePreviewError,
     file_preview_availability_payload,
@@ -199,6 +200,10 @@ _WEBUI_MUTATION_PATHS = {
     "identity.file.save": "/api/settings/identity/file/save",
     "identity.reload": "/api/settings/identity/reload",
     "identity.persona.set": "/api/settings/identity/persona/set",
+    "agents.save": "/api/settings/agents/save",
+    "agents.delete": "/api/settings/agents/delete",
+    "agents.reset": "/api/settings/agents/reset",
+    "agents.visibility": "/api/settings/agents/visibility",
 }
 
 _WEBUI_CHANNEL_CONNECT_ACTIONS = {
@@ -343,6 +348,7 @@ class GatewayHTTPHandler:
         ) = None,
         memory_operations: MemorySettingsOperations | None = None,
         identity_operations: IdentitySettingsOperations | None = None,
+        agents_operations: AgentSettingsOperations | None = None,
         log: Any = logger,
     ) -> None:
         self.config = config
@@ -358,6 +364,7 @@ class GatewayHTTPHandler:
         self.skills_workspace_path = skills_workspace_path
         self.memory_operations = memory_operations
         self.identity_operations = identity_operations
+        self.agents_operations = agents_operations
         self.disabled_skills: set[str] = (
             disabled_skills if disabled_skills is not None else set()
         )
@@ -393,6 +400,7 @@ class GatewayHTTPHandler:
             mcp_oauth_redirect_uri=self._mcp_oauth_redirect_uri,
             memory_operations=self.memory_operations,
             identity_operations=self.identity_operations,
+            agents_operations=self.agents_operations,
         )
 
     def workspace_controls_available(self, connection: Any) -> bool:

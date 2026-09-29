@@ -70,7 +70,9 @@ export function CapabilityPicker({
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // 默认全折叠：工具几十个、技能上百个，铺开的话真正的选择项被挤到看不见。
+  // 记的是「用户点开过哪些」，所以搜索时强制展开——搜了就是想看结果。
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const allIds = useMemo(() => items.map((item) => item.id), [items]);
   const lockedIds = useMemo(
@@ -124,10 +126,10 @@ export function CapabilityPicker({
   };
 
   const toggleGroupCollapsed = (groupId: string) => {
-    const next = new Set(collapsed);
+    const next = new Set(expandedGroups);
     if (next.has(groupId)) next.delete(groupId);
     else next.add(groupId);
-    setCollapsed(next);
+    setExpandedGroups(next);
   };
 
   return (
@@ -177,7 +179,7 @@ export function CapabilityPicker({
             const selectable = group.items.filter((item) => !item.locked && !item.blocked);
             const selectedCount = group.items.filter((item) => enabled.has(item.id)).length;
             const allSelected = selectable.length > 0 && selectedCount === group.items.length;
-            const isCollapsed = collapsed.has(group.id);
+            const isCollapsed = !query && !expandedGroups.has(group.id);
 
             return (
               <div key={group.id} className="border-b border-border/45 last:border-b-0">

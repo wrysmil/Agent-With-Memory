@@ -77,7 +77,8 @@
     "automations": "Automações",
     "skills": {
       "title": "Habilidades"
-    }
+    },
+    "agents": "Agentes"
   },
   "settings": {
     "backToChat": "Voltar para a conversa",
@@ -1171,6 +1172,168 @@
       "activePersona": "Persona ativa",
       "noPersona": "Nenhuma",
       "personaSwitchFailed": "Falha ao trocar a persona"
+    },
+    "agents": {
+      "basics": {
+        "appearance": "Ícone e cor",
+        "category": "Categoria",
+        "custom": "Personalizado",
+        "description": "Descrição",
+        "descriptionPlaceholder": "Uma linha sobre o que ele faz bem e quando usar.",
+        "hidden": "Oculto",
+        "id": "ID",
+        "idLocked": "Predefinições do sistema não podem ser renomeadas",
+        "name": "Nome",
+        "namePlaceholder": "ex. Redator de SEO",
+        "noCategory": "Sem categoria",
+        "systemPreset": "Predefinição do sistema",
+        "updatedAt": "Atualizado {{time}}"
+      },
+      "capability": {
+        "allModeHint": "Está em “Todos” — a lista abaixo é somente leitura. Mude para “Somente selecionados” para escolher item a item.",
+        "clearGroup": "Limpar",
+        "empty": "Nenhuma correspondência",
+        "enabledCount": "{{count}} ativados",
+        "locked": "Obrigatório",
+        "selectGroup": "Selecionar tudo"
+      },
+      "card": {
+        "delete": "Excluir",
+        "duplicate": "Duplicar",
+        "edit": "Editar",
+        "hide": "Ocultar",
+        "menu": "Mais ações",
+        "modelAuto": "Automático (seguir o global)",
+        "noDescription": "Sem descrição",
+        "show": "Mostrar"
+      },
+      "category": {
+        "coding": "Programação",
+        "efficiency": "Produtividade",
+        "general": "Geral",
+        "ops": "Operações",
+        "research": "Pesquisa",
+        "writing": "Escrita"
+      },
+      "categoryAll": "Todos",
+      "color": {
+        "custom": "Cor personalizada",
+        "hex": "Cor hexadecimal"
+      },
+      "create": "Novo agente",
+      "deleteBody": "Isso não pode ser desfeito. Sessões existentes não são afetadas.",
+      "deleteTitle": "Excluir “{{name}}”?",
+      "duplicateSuffix": "cópia",
+      "editor": {
+        "discard": "Descartar alterações",
+        "discardBody": "Fechar agora não vai salvar esta edição.",
+        "discardTitle": "Descartar alterações não salvas?",
+        "edit": "Editar · {{name}}",
+        "new": "Novo agente",
+        "reset": "Restaurar padrão",
+        "save": "Salvar",
+        "saved": "Salvo",
+        "subtitle": "Configure as capacidades, o modelo e o prompt deste agente.",
+        "unsaved": "Alterações não salvas"
+      },
+      "emoji": {
+        "activity": "Atividades",
+        "agents": "Agentes",
+        "food": "Comida",
+        "nature": "Natureza",
+        "objects": "Objetos",
+        "roles": "Papéis",
+        "symbols": "Símbolos",
+        "work": "Trabalho"
+      },
+      "empty": "Nenhum agente ainda",
+      "emptyHint": "Nenhum agente ainda. Crie um para combinar habilidades, ferramentas e um modelo.",
+      "health": {
+        "degraded": "Degradado",
+        "healthy": "Conectado",
+        "unavailable": "Indisponível"
+      },
+      "hiddenGroup": "Agentes ocultos ({{count}})",
+      "icon": {
+        "ariaLabel": "Escolher um ícone",
+        "empty": "Nenhum ícone correspondente",
+        "search": "Buscar ícones"
+      },
+      "loading": "Carregando…",
+      "mode": {
+        "all": "Todos",
+        "exclude": "Excluir selecionados",
+        "include": "Somente selecionados"
+      },
+      "model": {
+        "context": "contexto",
+        "toolUse": "Uso de ferramentas",
+        "vision": "Visão"
+      },
+      "noMatch": "Nenhum agente correspondente — tente outro termo ou limpe os filtros.",
+      "noun": {
+        "skills": "habilidades",
+        "tools": "ferramentas"
+      },
+      "prompt": {
+        "collapse": "Concluir",
+        "expand": "Expandir",
+        "expandedTitle": "Editar prompt",
+        "label": "Prompt do sistema",
+        "placeholder": "Descreva as responsabilidades, os limites e o estilo de saída deste agente. Variáveis como {{name}} são suportadas."
+      },
+      "rail": {
+        "capabilities": "Capacidades efetivas",
+        "model": "Modelo",
+        "skillList": "Habilidades",
+        "toolList": "Ferramentas"
+      },
+      "risk": {
+        "high": "Risco alto",
+        "low": "Risco baixo",
+        "medium": "Risco médio"
+      },
+      "search": "Buscar por nome ou descrição…",
+      "section": {
+        "basics": "① Básico",
+        "model": "④ Modelo",
+        "prompt": "⑤ Prompt",
+        "skills": "③ Capacidades · Habilidades",
+        "tools": "② Capacidades · Ferramentas"
+      },
+      "skillSource": {
+        "builtin": "Integradas",
+        "plugin": "Extensões",
+        "workspace": "Espaço de trabalho"
+      },
+      "skills": {
+        "modeLabel": "Buscar habilidades"
+      },
+      "summary": {
+        "all": "Todas as {{noun}}",
+        "subAgentNoun": "subagentes"
+      },
+      "toolCategory": {
+        "execution": "Execução",
+        "filesystem": "Sistema de arquivos",
+        "media": "Mídia",
+        "memory": "Memória",
+        "orchestration": "Orquestração",
+        "scheduling": "Agendamento",
+        "session": "Sessões",
+        "web": "Web e busca"
+      },
+      "tools": {
+        "modeLabel": "Buscar ferramentas"
+      },
+      "tree": {
+        "empty": "Nenhum agente para exibir"
+      },
+      "untitled": "Sem título",
+      "viewCard": "Cartões",
+      "viewList": "Lista",
+      "viewMode": "Modo de exibição",
+      "viewTree": "Árvore"
     }
   },
   "chat": {

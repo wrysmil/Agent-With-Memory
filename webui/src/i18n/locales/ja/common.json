@@ -77,7 +77,8 @@
     "automations": "自動タスク",
     "skills": {
       "title": "スキル"
-    }
+    },
+    "agents": "エージェント"
   },
   "settings": {
     "backToChat": "チャットに戻る",
@@ -1171,6 +1172,168 @@
       "activePersona": "使用中のペルソナ",
       "noPersona": "なし",
       "personaSwitchFailed": "ペルソナの変更に失敗しました"
+    },
+    "agents": {
+      "basics": {
+        "appearance": "アイコンと色",
+        "category": "カテゴリ",
+        "custom": "カスタム",
+        "description": "説明",
+        "descriptionPlaceholder": "何が得意で、いつ使うかを一行で。",
+        "hidden": "非表示",
+        "id": "ID",
+        "idLocked": "システムプリセットの名前は変更できません",
+        "name": "名前",
+        "namePlaceholder": "例：SEO ライター",
+        "noCategory": "未分類",
+        "systemPreset": "システムプリセット",
+        "updatedAt": "更新 {{time}}"
+      },
+      "capability": {
+        "allModeHint": "現在は「すべて」です。下の一覧は参照のみ。個別に選ぶには「選択した項目のみ」に切り替えてください。",
+        "clearGroup": "すべて解除",
+        "empty": "一致する項目がありません",
+        "enabledCount": "{{count}} 件有効",
+        "locked": "必須",
+        "selectGroup": "すべて選択"
+      },
+      "card": {
+        "delete": "削除",
+        "duplicate": "複製",
+        "edit": "編集",
+        "hide": "非表示",
+        "menu": "その他の操作",
+        "modelAuto": "自動（グローバルに従う）",
+        "noDescription": "説明はありません",
+        "show": "表示"
+      },
+      "category": {
+        "coding": "コーディング",
+        "efficiency": "業務効率化",
+        "general": "汎用",
+        "ops": "運用",
+        "research": "調査",
+        "writing": "ライティング"
+      },
+      "categoryAll": "すべて",
+      "color": {
+        "custom": "カスタムカラー",
+        "hex": "16進カラー"
+      },
+      "create": "新しいエージェント",
+      "deleteBody": "この操作は元に戻せません。既存のセッションには影響しません。",
+      "deleteTitle": "「{{name}}」を削除しますか？",
+      "duplicateSuffix": "コピー",
+      "editor": {
+        "discard": "変更を破棄",
+        "discardBody": "今すぐ閉じると、この編集は保存されません。",
+        "discardTitle": "未保存の変更を破棄しますか？",
+        "edit": "編集 · {{name}}",
+        "new": "新しいエージェント",
+        "reset": "既定に戻す",
+        "save": "保存",
+        "saved": "保存しました",
+        "subtitle": "このエージェントの能力・モデル・プロンプトを設定します。",
+        "unsaved": "未保存の変更があります"
+      },
+      "emoji": {
+        "activity": "アクティビティ",
+        "agents": "エージェント",
+        "food": "食べ物",
+        "nature": "自然",
+        "objects": "もの",
+        "roles": "役割",
+        "symbols": "記号",
+        "work": "仕事"
+      },
+      "empty": "エージェントはまだありません",
+      "emptyHint": "エージェントはまだありません。スキル・ツール・モデルを組み合わせて作成しましょう。",
+      "health": {
+        "degraded": "低下",
+        "healthy": "接続済み",
+        "unavailable": "利用不可"
+      },
+      "hiddenGroup": "非表示のエージェント（{{count}}）",
+      "icon": {
+        "ariaLabel": "アイコンを選択",
+        "empty": "一致するアイコンがありません",
+        "search": "アイコンを検索"
+      },
+      "loading": "読み込み中…",
+      "mode": {
+        "all": "すべて",
+        "exclude": "選択したものを除外",
+        "include": "選択した項目のみ"
+      },
+      "model": {
+        "context": "コンテキスト",
+        "toolUse": "ツール使用",
+        "vision": "ビジョン"
+      },
+      "noMatch": "一致するエージェントがありません。別のキーワードを試すか、絞り込みを解除してください。",
+      "noun": {
+        "skills": "スキル",
+        "tools": "ツール"
+      },
+      "prompt": {
+        "collapse": "完了",
+        "expand": "拡大",
+        "expandedTitle": "プロンプトを編集",
+        "label": "システムプロンプト",
+        "placeholder": "このエージェントの責務・境界・出力スタイルを記述してください。{{name}} などの変数が使えます。"
+      },
+      "rail": {
+        "capabilities": "実効能力",
+        "model": "モデル",
+        "skillList": "スキル",
+        "toolList": "ツール"
+      },
+      "risk": {
+        "high": "高リスク",
+        "low": "低リスク",
+        "medium": "中リスク"
+      },
+      "search": "名前または説明を検索…",
+      "section": {
+        "basics": "① 基本情報",
+        "model": "④ モデル",
+        "prompt": "⑤ プロンプト",
+        "skills": "③ 能力 · スキル",
+        "tools": "② 能力 · ツール"
+      },
+      "skillSource": {
+        "builtin": "組み込み",
+        "plugin": "プラグイン",
+        "workspace": "ワークスペース"
+      },
+      "skills": {
+        "modeLabel": "スキルを検索"
+      },
+      "summary": {
+        "all": "すべての{{noun}}",
+        "subAgentNoun": "サブエージェント"
+      },
+      "toolCategory": {
+        "execution": "実行とプロセス",
+        "filesystem": "ファイルシステム",
+        "media": "メディア",
+        "memory": "メモリ",
+        "orchestration": "オーケストレーション",
+        "scheduling": "スケジュール",
+        "session": "セッション",
+        "web": "ウェブと検索"
+      },
+      "tools": {
+        "modeLabel": "ツールを検索"
+      },
+      "tree": {
+        "empty": "表示するエージェントがありません"
+      },
+      "untitled": "無題",
+      "viewCard": "カード",
+      "viewList": "リスト",
+      "viewMode": "表示モード",
+      "viewTree": "ツリー"
     }
   },
   "chat": {

@@ -77,7 +77,8 @@
     "automations": "Otomasi",
     "skills": {
       "title": "Keterampilan"
-    }
+    },
+    "agents": "Agent"
   },
   "settings": {
     "backToChat": "Kembali ke chat",
@@ -1171,6 +1172,168 @@
       "activePersona": "Persona aktif",
       "noPersona": "Tidak ada",
       "personaSwitchFailed": "Gagal mengganti persona"
+    },
+    "agents": {
+      "basics": {
+        "appearance": "Ikon dan warna",
+        "category": "Kategori",
+        "custom": "Kustom",
+        "description": "Deskripsi",
+        "descriptionPlaceholder": "Satu kalimat tentang keahliannya dan kapan sebaiknya dipakai.",
+        "hidden": "Disembunyikan",
+        "id": "ID",
+        "idLocked": "Preset sistem tidak dapat diganti namanya",
+        "name": "Nama",
+        "namePlaceholder": "mis. Penulis SEO",
+        "noCategory": "Tanpa kategori",
+        "systemPreset": "Preset sistem",
+        "updatedAt": "Diperbarui {{time}}"
+      },
+      "capability": {
+        "allModeHint": "Saatnya “Semua” — daftar di bawah hanya untuk dibaca. Beralih ke “Hanya yang dipilih” untuk memilih satu per satu.",
+        "clearGroup": "Kosongkan",
+        "empty": "Tidak ada yang cocok",
+        "enabledCount": "{{count}} aktif",
+        "locked": "Wajib",
+        "selectGroup": "Pilih semua"
+      },
+      "card": {
+        "delete": "Hapus",
+        "duplicate": "Duplikat",
+        "edit": "Edit",
+        "hide": "Sembunyikan",
+        "menu": "Tindakan lainnya",
+        "modelAuto": "Otomatis (ikuti global)",
+        "noDescription": "Tidak ada deskripsi",
+        "show": "Tampilkan"
+      },
+      "category": {
+        "coding": "Pemrograman",
+        "efficiency": "Produktivitas",
+        "general": "Umum",
+        "ops": "Operasional",
+        "research": "Riset",
+        "writing": "Penulisan"
+      },
+      "categoryAll": "Semua",
+      "color": {
+        "custom": "Warna kustom",
+        "hex": "Warna heksadesimal"
+      },
+      "create": "Agent baru",
+      "deleteBody": "Tindakan ini tidak dapat dibatalkan. Sesi yang ada tidak terpengaruh.",
+      "deleteTitle": "Hapus “{{name}}”?",
+      "duplicateSuffix": "salinan",
+      "editor": {
+        "discard": "Buang perubahan",
+        "discardBody": "Menutup sekarang tidak akan menyimpan editan ini.",
+        "discardTitle": "Buang perubahan yang belum disimpan?",
+        "edit": "Edit · {{name}}",
+        "new": "Agent baru",
+        "reset": "Kembalikan ke bawaan",
+        "save": "Simpan",
+        "saved": "Tersimpan",
+        "subtitle": "Atur kemampuan, model, dan prompt untuk agent ini.",
+        "unsaved": "Perubahan belum disimpan"
+      },
+      "emoji": {
+        "activity": "Aktivitas",
+        "agents": "Agent",
+        "food": "Makanan",
+        "nature": "Alam",
+        "objects": "Objek",
+        "roles": "Peran",
+        "symbols": "Simbol",
+        "work": "Kerja"
+      },
+      "empty": "Belum ada agent",
+      "emptyHint": "Belum ada agent. Buat satu untuk menggabungkan skill, alat, dan model.",
+      "health": {
+        "degraded": "Menurun",
+        "healthy": "Terhubung",
+        "unavailable": "Tidak tersedia"
+      },
+      "hiddenGroup": "Agent tersembunyi ({{count}})",
+      "icon": {
+        "ariaLabel": "Pilih ikon",
+        "empty": "Tidak ada ikon yang cocok",
+        "search": "Cari ikon"
+      },
+      "loading": "Memuat…",
+      "mode": {
+        "all": "Semua",
+        "exclude": "Kecualikan yang dipilih",
+        "include": "Hanya yang dipilih"
+      },
+      "model": {
+        "context": "konteks",
+        "toolUse": "Penggunaan alat",
+        "vision": "Visi"
+      },
+      "noMatch": "Tidak ada agent yang cocok — coba kata lain atau hapus filter.",
+      "noun": {
+        "skills": "skill",
+        "tools": "alat"
+      },
+      "prompt": {
+        "collapse": "Selesai",
+        "expand": "Perluas",
+        "expandedTitle": "Edit prompt",
+        "label": "Prompt sistem",
+        "placeholder": "Jelaskan tanggung jawab, batasan, dan gaya keluaran agent ini. Variabel seperti {{name}} didukung."
+      },
+      "rail": {
+        "capabilities": "Kemampuan efektif",
+        "model": "Model",
+        "skillList": "Skill",
+        "toolList": "Alat"
+      },
+      "risk": {
+        "high": "Risiko tinggi",
+        "low": "Risiko rendah",
+        "medium": "Risiko sedang"
+      },
+      "search": "Cari nama atau deskripsi…",
+      "section": {
+        "basics": "① Dasar",
+        "model": "④ Model",
+        "prompt": "⑤ Prompt",
+        "skills": "③ Kemampuan · Skill",
+        "tools": "② Kemampuan · Alat"
+      },
+      "skillSource": {
+        "builtin": "Bawaan",
+        "plugin": "Plugin",
+        "workspace": "Ruang kerja"
+      },
+      "skills": {
+        "modeLabel": "Cari skill"
+      },
+      "summary": {
+        "all": "Semua {{noun}}",
+        "subAgentNoun": "sub-agent"
+      },
+      "toolCategory": {
+        "execution": "Eksekusi",
+        "filesystem": "Sistem berkas",
+        "media": "Media",
+        "memory": "Memori",
+        "orchestration": "Orkestrasi",
+        "scheduling": "Penjadwalan",
+        "session": "Sesi",
+        "web": "Web dan pencarian"
+      },
+      "tools": {
+        "modeLabel": "Cari alat"
+      },
+      "tree": {
+        "empty": "Tidak ada agent untuk ditampilkan"
+      },
+      "untitled": "Tanpa judul",
+      "viewCard": "Kartu",
+      "viewList": "Daftar",
+      "viewMode": "Mode tampilan",
+      "viewTree": "Pohon"
     }
   },
   "chat": {

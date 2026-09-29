@@ -22,7 +22,8 @@ export interface AgentRowMenu {
   onEdit: () => void;
   onDuplicate: () => void;
   onToggleHidden: () => void;
-  onDelete: () => void;
+  /** system 类型后端会返 409，调用方不传就不渲染这一项。 */
+  onDelete?: () => void;
   labelHidden: boolean;
 }
 
@@ -57,13 +58,15 @@ export function RowMenu({ menu }: { menu: AgentRowMenu }) {  const { t } = useTr
             ? t("settings.agents.card.show", "显示")
             : t("settings.agents.card.hide", "隐藏")}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={menu.onDelete}
-          className="cursor-pointer gap-2 text-[13px] text-destructive focus:text-destructive"
-        >
-          <Trash2 className="h-3.5 w-3.5" aria-hidden />
-          {t("settings.agents.card.delete", "删除")}
-        </DropdownMenuItem>
+        {menu.onDelete ? (
+          <DropdownMenuItem
+            onSelect={menu.onDelete}
+            className="cursor-pointer gap-2 text-[13px] text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            {t("settings.agents.card.delete", "删除")}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -90,7 +93,7 @@ export function AgentRow({
   onEdit: () => void;
   onDuplicate: () => void;
   onToggleHidden: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -142,9 +145,6 @@ export function AgentRow({
             </span>
             {agent.type === "system" ? (
               <Badge tone="info">{t("settings.agents.basics.systemPreset", "系统预设")}</Badge>
-            ) : null}
-            {agent.type === "system" && agent.customized ? (
-              <Badge tone="warn">{t("settings.agents.basics.customized", "已定制")}</Badge>
             ) : null}
             {agent.hidden ? (
               <Badge tone="muted">{t("settings.agents.basics.hidden", "已隐藏")}</Badge>

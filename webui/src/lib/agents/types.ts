@@ -199,31 +199,3 @@ export function cycleBlockedIds(agents: AgentProfile[], editingId: string | null
   }
   return blocked;
 }
-
-export function renderPrompt(template: string, context: PromptContext): string {
-  return template
-    .replaceAll("{{name}}", context.name)
-    .replaceAll("{{description}}", context.description)
-    .replaceAll("{{skills}}", context.skills.join("、") || "无")
-    .replaceAll("{{tools}}", context.tools.join("、") || "无")
-    .replaceAll("{{model}}", context.model)
-    .replaceAll("{{date}}", context.date)
-    .replaceAll("{{user_profile}}", context.userProfile)
-    .replaceAll("{{workspace}}", context.workspace);
-}
-
-export interface AssembledPrompt {
-  base: string;
-  identity: string;
-  custom: string;
-}
-
-export function assemblePrompt(profile: AgentProfile, context: PromptContext): AssembledPrompt {
-  return {
-    base: "你是 nanobot，一个运行在 CLI 与 WebUI 上的通用智能体。你通过工具访问外部世界，回答时保持简洁。",
-    identity: profile.description
-      ? `你是${profile.name}，${profile.description}。`
-      : `你是${profile.name}。`,
-    custom: renderPrompt(profile.prompt, context),
-  };
-}

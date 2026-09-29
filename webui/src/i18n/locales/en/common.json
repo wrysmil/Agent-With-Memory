@@ -105,21 +105,16 @@
       "automations": "Automations",
       "skills": "Skills",
       "memory": "Memory",
-      "agents": "Agents",
       "identity": "Identity"
     },
     "agents": {
-      "title": "Sub-Agents",
-      "subtitle": "Give each agent its own skills, tools, model and prompt.",
       "create": "New agent",
       "untitled": "Untitled",
       "loading": "Loading…",
       "empty": "No agents yet",
       "search": "Search name or description…",
-      "categoryFilter": "Filter by category",
       "categoryAll": "All",
       "viewMode": "View mode",
-      "viewGrid": "Cards",
       "viewTree": "Tree",
       "hiddenGroup": "Hidden agents ({{count}})",
       "deleteTitle": "Delete “{{name}}”?",
@@ -134,11 +129,9 @@
         "tools": "② Capabilities · Tools",
         "skills": "③ Capabilities · Skills",
         "model": "④ Model",
-        "prompt": "⑤ Prompt",
-        "relations": "⑥ Relations"
+        "prompt": "⑤ Prompt"
       },
       "capability": {
-        "count": "{{on}} / {{total}} enabled",
         "enabledCount": "{{count}} enabled",
         "locked": "Required",
         "empty": "No matches",
@@ -153,31 +146,16 @@
         "modeLabel": "Search skills"
       },
       "model": {
-        "label": "Model",
-        "auto": "Automatic (follow global)",
-        "autoHint": "This agent follows the global model setting."
+        "context": "context",
+        "vision": "Vision",
+        "toolUse": "Tool use"
       },
       "prompt": {
         "label": "System prompt",
-        "insertVariable": "Insert variable",
-        "variables": "Available variables",
         "placeholder": "Describe this agent's responsibilities, boundaries and output style. Variables like {{name}} are supported.",
-        "preview": "Final prompt preview",
-        "copy": "Copy",
-        "segmentBase": "Base system prompt (platform)",
-        "segmentIdentity": "Identity section",
-        "segmentCustom": "This agent's prompt",
-        "emptySegment": "(empty)"
-      },
-      "promptContext": {
-        "user": "(no user profile configured)"
-      },
-      "relations": {
-        "group": "Dispatchable sub-agents",
-        "self": "Cannot dispatch itself",
-        "cycle": "Would create a cycle",
-        "modeLabel": "Sub-agent mode",
-        "hint": "Dispatched sub-agents keep their own tool, skill and model settings."
+        "expand": "Expand",
+        "collapse": "Done",
+        "expandedTitle": "Edit prompt"
       },
       "basics": {
         "id": "ID",
@@ -191,7 +169,6 @@
         "appearance": "Icon and colour",
         "systemPreset": "System preset",
         "custom": "Custom",
-        "customized": "Customized",
         "hidden": "Hidden",
         "updatedAt": "Updated {{time}}"
       },
@@ -203,9 +180,6 @@
         "hide": "Hide",
         "delete": "Delete",
         "noDescription": "No description",
-        "tools": "Tools",
-        "skills": "Skills",
-        "subAgents": "Sub-agents",
         "modelAuto": "Automatic (follow global)"
       },
       "color": {
@@ -223,6 +197,7 @@
         "subtitle": "Configure the capabilities, model and prompt for this agent.",
         "reset": "Reset to default",
         "unsaved": "Unsaved changes",
+        "saved": "Saved",
         "save": "Save",
         "discardTitle": "Discard unsaved changes?",
         "discardBody": "Closing now will not save this edit.",
@@ -242,8 +217,6 @@
       },
       "summary": {
         "all": "All {{noun}}",
-        "include": "{{count}} {{noun}}",
-        "exclude": "{{count}} {{noun}} · {{excluded}} excluded",
         "subAgentNoun": "sub-agents"
       },
       "category": {
@@ -279,21 +252,6 @@
         "degraded": "Degraded",
         "unavailable": "Unavailable"
       },
-      "model": {
-        "context": "context",
-        "vision": "Vision",
-        "toolUse": "Tool use"
-      },
-      "variable": {
-        "name": "Agent name",
-        "description": "Agent description",
-        "skills": "Enabled skills",
-        "tools": "Enabled tools",
-        "model": "Current model",
-        "date": "Today's date",
-        "userProfile": "User profile",
-        "workspace": "Workspace name"
-      },
       "emoji": {
         "agents": "Agents",
         "roles": "Roles",
@@ -305,14 +263,10 @@
         "activity": "Activity"
       },
       "rail": {
-        "prompt": "Final prompt",
         "capabilities": "Effective capabilities",
         "model": "Model",
         "toolList": "Tools",
-        "skillList": "Skills",
-        "subAgents": "Dispatchable sub-agents",
-        "noSubAgents": "Dispatches no sub-agents",
-        "none": "None"
+        "skillList": "Skills"
       }
     },
     "sections": {

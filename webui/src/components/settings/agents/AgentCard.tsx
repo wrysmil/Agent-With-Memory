@@ -45,7 +45,7 @@ export function AgentCard({
   onEdit: () => void;
   onDuplicate: () => void;
   onToggleHidden: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -108,9 +108,6 @@ export function AgentCard({
       <div className="mt-2.5 flex flex-wrap items-center gap-1">
         {agent.type === "system" ? (
           <Badge tone="info">{t("settings.agents.basics.systemPreset", "系统预设")}</Badge>
-        ) : null}
-        {agent.type === "system" && agent.customized ? (
-          <Badge tone="warn">{t("settings.agents.basics.customized", "已定制")}</Badge>
         ) : null}
         {categoryKey ? (
           <span className="text-[11px] text-muted-foreground">

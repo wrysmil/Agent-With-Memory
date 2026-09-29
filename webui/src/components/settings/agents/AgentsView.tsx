@@ -18,34 +18,36 @@ import {
 import { AgentCard } from "@/components/settings/agents/AgentCard";
 import { AgentRow } from "@/components/settings/agents/AgentRow";
 import { AgentTreeView } from "@/components/settings/agents/AgentTreeView";
+import { AgentEditorDialog } from "@/components/settings/agents/AgentEditorDialog";
+import { useClient } from "@/providers/ClientProvider";
 import {
-  AgentEditorDialog,
-  createBlankAgent,
-  type AgentCatalog,
-} from "@/components/settings/agents/AgentEditorDialog";
-import { loadAgentCatalog, loadAgents } from "@/lib/agents/mock";
+  deleteAgent,
+  listAgents,
+  loadAgentCatalog,
+  resetAgent,
+  saveAgent,
+  setAgentVisibility,
+} from "@/lib/agents/api";
+import { createBlankAgent, slugifyAgentId, uniqueAgentId } from "@/lib/agents/catalog";
+import type { AgentCatalog } from "@/lib/agents/catalog";
 import type { AgentProfile } from "@/lib/agents/types";
 import { AGENT_CATEGORY_LABEL_KEY } from "@/lib/agents/i18n";
 
-const GLOBAL_MODEL_LABEL = "claude-opus-5";
 const ALL = "__all__";
 type ViewMode = "list" | "card" | "tree";
 
-function slugify(value: string): string {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "agent";
-}
-
 export function AgentsView() {
   const { t } = useTranslation();
+  const { client, getToken, modelName } = useClient();
+  // modelId 为 null 表示「跟随全局」，这里要的是那个全局值的可读标签。
+  const globalModelLabel = modelName ?? "";
   const [agents, setAgents] = useState<AgentProfile[]>([]);
   const [catalog, setCatalog] = useState<AgentCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** 写操作的错误单独放：读失败和写失败要能区分开显示。 */
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL);
   const [query, setQuery] = useState("");
@@ -53,30 +55,47 @@ export function AgentsView() {
 
   const [editing, setEditing] = useState<{ agent: AgentProfile | null; isNew: boolean } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<AgentProfile | null>(null);
+  const [savedNotice, setSavedNotice] = useState(false);
 
   const originalsRef = useRef(new Map<string, AgentProfile>());
+  const savedNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (savedNoticeTimer.current) clearTimeout(savedNoticeTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    Promise.all([loadAgents(), loadAgentCatalog()])
-      .then(([loadedAgents, loadedCatalog]) => {
+    void (async () => {
+      try {
+        const token = await getToken();
+        const [listPayload, catalogPayload] = await Promise.all([
+          listAgents(token),
+          loadAgentCatalog(token),
+        ]);
         if (cancelled) return;
-        setAgents(loadedAgents);
-        setCatalog(loadedCatalog);
-        originalsRef.current = new Map(loadedAgents.map((agent) => [agent.id, agent]));
-      })
-      .catch((reason: unknown) => {
-        if (cancelled) return;
-        setLoadError(reason instanceof Error ? reason.message : String(reason));
-      })
-      .finally(() => {
+        setAgents(listPayload.agents);
+        setCatalog(catalogPayload);
+        originalsRef.current = new Map(
+          listPayload.agents.map((agent) => [agent.id, agent]),
+        );
+      } catch (reason: unknown) {
+        if (!cancelled) {
+          setLoadError(reason instanceof Error ? reason.message : String(reason));
+        }
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
+    // 只在挂载时取一次数据：getToken 每次渲染都是新引用，进依赖会无限重取。
   }, []);
 
   const visibleAgents = useMemo(() => agents.filter((agent) => !agent.hidden), [agents]);
@@ -113,62 +132,103 @@ export function AgentsView() {
   const hiddenAgents = useMemo(() => agents.filter((agent) => agent.hidden), [agents]);
   const agentIds = useMemo(() => agents.map((agent) => agent.id), [agents]);
 
+  /** 写操作的统一壳：跑 mutation、成功后并入列表、失败只落到 actionError。 */
+  const runWrite = async (work: () => Promise<AgentProfile>) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const saved = await work();
+      setAgents((prev) => {
+        const index = prev.findIndex((agent) => agent.id === saved.id);
+        if (index === -1) return [...prev, saved];
+        const copy = prev.slice();
+        copy[index] = saved;
+        return copy;
+      });
+      originalsRef.current.set(saved.id, saved);
+      return saved;
+    } catch (reason: unknown) {
+      setActionError(reason instanceof Error ? reason.message : String(reason));
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleSave = (next: AgentProfile) => {
-    setAgents((prev) => {
-      const index = prev.findIndex((agent) => agent.id === next.id);
-      if (index === -1) return [...prev, next];
-      const copy = prev.slice();
-      copy[index] = next;
-      return copy;
+    void runWrite(async () => {
+      const payload = await saveAgent(client, next);
+      return payload.agent;
+    }).then((saved) => {
+      if (!saved) return;
+      // 保存后留在编辑器里接着改：基线换成刚落库的那份，dirty 随之归零，
+      // 再闪一次「已保存」作为回执。改回 setEditing(null) 会让用户每存一次
+      // 就被弹回列表，想微调提示词就得重开一遍。
+      setEditing((prev) => (prev ? { ...prev, agent: saved, isNew: false } : prev));
+      setSavedNotice(true);
+      if (savedNoticeTimer.current) clearTimeout(savedNoticeTimer.current);
+      savedNoticeTimer.current = setTimeout(() => setSavedNotice(false), 3000);
     });
-    setEditing(null);
   };
 
   const handleDuplicate = (agent: AgentProfile) => {
-    const used = new Set(agentIds);
-    const base = `${slugify(agent.name)}-copy`;
-    let id = base;
-    let suffix = 2;
-    while (used.has(id)) id = `${base}-${suffix++}`;
-    setAgents((prev) => [
-      ...prev,
-      {
+    const id = uniqueAgentId(
+      `${slugifyAgentId(agent.name)}-copy`,
+      new Set(agentIds),
+    );
+    void runWrite(async () => {
+      const payload = await saveAgent(client, {
         ...agent,
         id,
         name: `${agent.name} ${t("settings.agents.duplicateSuffix", "副本")}`,
         type: "custom",
         customized: false,
-        updatedAt: new Date().toISOString(),
-      },
-    ]);
+      });
+      return payload.agent;
+    });
   };
 
-  const handleToggleHidden = (agent: AgentProfile) =>
-    setAgents((prev) =>
-      prev.map((item) => (item.id === agent.id ? { ...item, hidden: !item.hidden } : item)),
-    );
+  const handleToggleHidden = (agent: AgentProfile) => {
+    void runWrite(async () => {
+      const payload = await setAgentVisibility(client, agent.id, !agent.hidden);
+      return payload.agent;
+    });
+  };
 
   const handleDelete = () => {
     if (!pendingDelete) return;
-    setAgents((prev) => prev.filter((agent) => agent.id !== pendingDelete.id));
+    const target = pendingDelete;
     setPendingDelete(null);
+    setBusy(true);
+    setActionError(null);
+    void deleteAgent(client, target.id)
+      .then(() => {
+        setAgents((prev) => prev.filter((agent) => agent.id !== target.id));
+      })
+      .catch((reason: unknown) => {
+        setActionError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => {
+        setBusy(false);
+      });
   };
 
   const handleCreate = () => {
     const blank = createBlankAgent();
-    const used = new Set(agentIds);
-    const base = slugify(blank.name || t("settings.agents.untitled", "未命名"));
-    let id = base;
-    let suffix = 2;
-    while (used.has(id)) id = `${base}-${suffix++}`;
+    const id = uniqueAgentId(
+      slugifyAgentId(blank.name || t("settings.agents.untitled", "未命名")),
+      new Set(agentIds),
+    );
     setEditing({ agent: { ...blank, id }, isNew: true });
   };
 
   const handleReset = (draft: AgentProfile) => {
-    const original = originalsRef.current.get(draft.id);
-    if (!original) return;
-    setAgents((prev) => prev.map((item) => (item.id === draft.id ? original : item)));
-    setEditing(null);
+    void runWrite(async () => {
+      const payload = await resetAgent(client, draft.id);
+      return payload.agent;
+    }).then((saved) => {
+      if (saved) setEditing(null);
+    });
   };
 
   const filtersActive = categoryFilter !== ALL || query.trim().length > 0;
@@ -249,12 +309,12 @@ export function AgentsView() {
         </div>
       ) : null}
 
-      {loadError ? (
+      {loadError || actionError ? (
         <div
           role="alert"
           className="rounded-panel border border-rose-300/70 bg-rose-50/70 px-4 py-3 text-[13px] text-rose-900 dark:border-rose-700/40 dark:bg-rose-950/30 dark:text-rose-200"
         >
-          {loadError}
+          {loadError ?? actionError}
         </div>
       ) : null}
 
@@ -294,7 +354,7 @@ export function AgentsView() {
                   onEdit={() => setEditing({ agent, isNew: false })}
                   onDuplicate={() => handleDuplicate(agent)}
                   onToggleHidden={() => handleToggleHidden(agent)}
-                  onDelete={() => setPendingDelete(agent)}
+                  onDelete={agent.type === "system" ? undefined : () => setPendingDelete(agent)}
                 />
               ))}
             </div>
@@ -313,7 +373,7 @@ export function AgentsView() {
                   onEdit={() => setEditing({ agent, isNew: false })}
                   onDuplicate={() => handleDuplicate(agent)}
                   onToggleHidden={() => handleToggleHidden(agent)}
-                  onDelete={() => setPendingDelete(agent)}
+                  onDelete={agent.type === "system" ? undefined : () => setPendingDelete(agent)}
                 />
               ))}
             </div>
@@ -325,7 +385,7 @@ export function AgentsView() {
               tools={catalog.tools}
               skills={catalog.skills}
               models={catalog.models}
-              globalModelLabel={GLOBAL_MODEL_LABEL}
+              globalModelLabel={globalModelLabel}
             />
           ) : null}
         </>
@@ -351,7 +411,7 @@ export function AgentsView() {
                 onEdit={() => setEditing({ agent, isNew: false })}
                 onDuplicate={() => handleDuplicate(agent)}
                 onToggleHidden={() => handleToggleHidden(agent)}
-                onDelete={() => setPendingDelete(agent)}
+                onDelete={agent.type === "system" ? undefined : () => setPendingDelete(agent)}
               />
             ))}
           </div>
@@ -363,9 +423,11 @@ export function AgentsView() {
           open={editing !== null}
           agent={editing?.agent ?? null}
           isNew={editing?.isNew ?? false}
-          agents={agents}
+
           catalog={catalog}
-          globalModelLabel={GLOBAL_MODEL_LABEL}
+          globalModelLabel={globalModelLabel}
+          saving={busy}
+          savedNotice={savedNotice}
           onOpenChange={(open) => {
             if (!open) setEditing(null);
           }}

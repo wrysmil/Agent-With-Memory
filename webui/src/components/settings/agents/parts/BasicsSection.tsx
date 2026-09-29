@@ -164,9 +164,6 @@ export function BasicsSection({
             ? t("settings.agents.basics.systemPreset", "系统预设")
             : t("settings.agents.basics.custom", "自定义")}
         </Badge>
-        {profile.type === "system" && profile.customized ? (
-          <Badge tone="warn">{t("settings.agents.basics.customized", "已定制")}</Badge>
-        ) : null}
         {profile.hidden ? (
           <Badge tone="muted">{t("settings.agents.basics.hidden", "已隐藏")}</Badge>
         ) : null}

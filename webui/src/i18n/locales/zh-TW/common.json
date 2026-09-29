@@ -77,7 +77,8 @@
     "automations": "自動任務",
     "skills": {
       "title": "技能"
-    }
+    },
+    "agents": "智慧助理"
   },
   "settings": {
     "backToChat": "返回聊天",
@@ -1171,6 +1172,168 @@
       "activePersona": "使用人格",
       "noPersona": "不使用",
       "personaSwitchFailed": "切換人格失敗"
+    },
+    "agents": {
+      "basics": {
+        "appearance": "圖示與顏色",
+        "category": "分類",
+        "custom": "自訂",
+        "description": "描述",
+        "descriptionPlaceholder": "一句話說明它擅長什麼、適合什麼場景。",
+        "hidden": "已隱藏",
+        "id": "ID",
+        "idLocked": "系統預設不可重新命名",
+        "name": "名稱",
+        "namePlaceholder": "例如：SEO 寫手",
+        "noCategory": "未分類",
+        "systemPreset": "系統預設",
+        "updatedAt": "上次修改 {{time}}"
+      },
+      "capability": {
+        "allModeHint": "目前為「全部」，下方僅供檢視。切換到「僅所選」即可逐項勾選。",
+        "clearGroup": "全不選",
+        "empty": "沒有相符項目",
+        "enabledCount": "已啟用 {{count}}",
+        "locked": "框架相依",
+        "selectGroup": "全選"
+      },
+      "card": {
+        "delete": "刪除",
+        "duplicate": "複製",
+        "edit": "編輯",
+        "hide": "隱藏",
+        "menu": "更多操作",
+        "modelAuto": "自動（跟隨全域）",
+        "noDescription": "未填寫描述",
+        "show": "顯示"
+      },
+      "category": {
+        "coding": "編碼",
+        "efficiency": "效率",
+        "general": "通用",
+        "ops": "維運",
+        "research": "研究",
+        "writing": "寫作"
+      },
+      "categoryAll": "全部",
+      "color": {
+        "custom": "自訂顏色",
+        "hex": "十六進位色碼"
+      },
+      "create": "新增 Agent",
+      "deleteBody": "刪除後無法復原，歷史工作階段不受影響。",
+      "deleteTitle": "刪除「{{name}}」？",
+      "duplicateSuffix": "副本",
+      "editor": {
+        "discard": "捨棄變更",
+        "discardBody": "關閉後本次編輯不會儲存。",
+        "discardTitle": "捨棄未儲存的變更？",
+        "edit": "編輯 · {{name}}",
+        "new": "新增 Agent",
+        "reset": "重設為預設",
+        "save": "儲存",
+        "saved": "已儲存",
+        "subtitle": "設定此 Agent 可用的能力、模型與提示詞。",
+        "unsaved": "有未儲存的變更"
+      },
+      "emoji": {
+        "activity": "活動",
+        "agents": "智慧助理",
+        "food": "食物",
+        "nature": "自然",
+        "objects": "物品",
+        "roles": "角色",
+        "symbols": "符號",
+        "work": "工作"
+      },
+      "empty": "尚無 Agent",
+      "emptyHint": "還沒有智慧助理。新增一個，把技能、工具與模型組合起來。",
+      "health": {
+        "degraded": "降級",
+        "healthy": "已連線",
+        "unavailable": "無法使用"
+      },
+      "hiddenGroup": "已隱藏的 Agent（{{count}}）",
+      "icon": {
+        "ariaLabel": "選擇圖示",
+        "empty": "沒有相符的圖示",
+        "search": "搜尋圖示"
+      },
+      "loading": "載入中…",
+      "mode": {
+        "all": "全部",
+        "exclude": "排除所選",
+        "include": "僅所選"
+      },
+      "model": {
+        "context": "上下文",
+        "toolUse": "支援工具呼叫",
+        "vision": "支援視覺"
+      },
+      "noMatch": "沒有相符的智慧助理，換個關鍵字或清除篩選試試。",
+      "noun": {
+        "skills": "技能",
+        "tools": "工具"
+      },
+      "prompt": {
+        "collapse": "完成",
+        "expand": "展開編輯",
+        "expandedTitle": "編輯提示詞",
+        "label": "系統提示詞",
+        "placeholder": "描述這個 Agent 的職責、邊界與輸出風格。可使用 {{name}} 等變數。"
+      },
+      "rail": {
+        "capabilities": "實際能力",
+        "model": "模型",
+        "skillList": "技能",
+        "toolList": "工具"
+      },
+      "risk": {
+        "high": "高風險",
+        "low": "低風險",
+        "medium": "中風險"
+      },
+      "search": "搜尋名稱或描述…",
+      "section": {
+        "basics": "① 基本資訊",
+        "model": "④ 模型",
+        "prompt": "⑤ 提示詞",
+        "skills": "③ 能力 · 技能",
+        "tools": "② 能力 · 工具"
+      },
+      "skillSource": {
+        "builtin": "內建",
+        "plugin": "外掛",
+        "workspace": "工作區"
+      },
+      "skills": {
+        "modeLabel": "搜尋技能"
+      },
+      "summary": {
+        "all": "全部{{noun}}",
+        "subAgentNoun": "個子 Agent"
+      },
+      "toolCategory": {
+        "execution": "執行與處理程序",
+        "filesystem": "檔案系統",
+        "media": "媒體",
+        "memory": "記憶",
+        "orchestration": "編排",
+        "scheduling": "排程與定時",
+        "session": "工作階段",
+        "web": "網路與搜尋"
+      },
+      "tools": {
+        "modeLabel": "搜尋工具"
+      },
+      "tree": {
+        "empty": "沒有可顯示的智慧助理"
+      },
+      "untitled": "未命名",
+      "viewCard": "卡片",
+      "viewList": "清單",
+      "viewMode": "檢視模式",
+      "viewTree": "樹狀"
     }
   },
   "chat": {

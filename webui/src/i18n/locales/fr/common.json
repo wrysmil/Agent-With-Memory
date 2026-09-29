@@ -77,7 +77,8 @@
     "automations": "Automatisations",
     "skills": {
       "title": "Compétences"
-    }
+    },
+    "agents": "Agents"
   },
   "settings": {
     "backToChat": "Retour au chat",
@@ -1171,6 +1172,168 @@
       "activePersona": "Persona active",
       "noPersona": "Aucune",
       "personaSwitchFailed": "Échec du changement de persona"
+    },
+    "agents": {
+      "basics": {
+        "appearance": "Icône et couleur",
+        "category": "Catégorie",
+        "custom": "Personnalisé",
+        "description": "Description",
+        "descriptionPlaceholder": "Une phrase sur ce qu’il fait bien et quand l’utiliser.",
+        "hidden": "Masqué",
+        "id": "ID",
+        "idLocked": "Les préréglages système ne peuvent pas être renommés",
+        "name": "Nom",
+        "namePlaceholder": "ex. Rédacteur SEO",
+        "noCategory": "Sans catégorie",
+        "systemPreset": "Préréglage système",
+        "updatedAt": "Modifié {{time}}"
+      },
+      "capability": {
+        "allModeHint": "Défini sur « Tous » : la liste ci-dessous est en lecture seule. Passez à « Sélection uniquement » pour choisir des éléments.",
+        "clearGroup": "Tout décocher",
+        "empty": "Aucune correspondance",
+        "enabledCount": "{{count}} activés",
+        "locked": "Obligatoire",
+        "selectGroup": "Tout cocher"
+      },
+      "card": {
+        "delete": "Supprimer",
+        "duplicate": "Dupliquer",
+        "edit": "Modifier",
+        "hide": "Masquer",
+        "menu": "Plus d’actions",
+        "modelAuto": "Automatique (suit le global)",
+        "noDescription": "Aucune description",
+        "show": "Afficher"
+      },
+      "category": {
+        "coding": "Programmation",
+        "efficiency": "Productivité",
+        "general": "Général",
+        "ops": "Exploitation",
+        "research": "Recherche",
+        "writing": "Rédaction"
+      },
+      "categoryAll": "Tous",
+      "color": {
+        "custom": "Couleur personnalisée",
+        "hex": "Couleur hexadécimale"
+      },
+      "create": "Nouvel agent",
+      "deleteBody": "Cette action est irréversible. Les sessions existantes ne sont pas affectées.",
+      "deleteTitle": "Supprimer « {{name}} » ?",
+      "duplicateSuffix": "copie",
+      "editor": {
+        "discard": "Abandonner les modifications",
+        "discardBody": "Fermer maintenant n’enregistrera pas cette modification.",
+        "discardTitle": "Abandonner les modifications non enregistrées ?",
+        "edit": "Modifier · {{name}}",
+        "new": "Nouvel agent",
+        "reset": "Réinitialiser",
+        "save": "Enregistrer",
+        "saved": "Enregistré",
+        "subtitle": "Configurez les capacités, le modèle et le prompt de cet agent.",
+        "unsaved": "Modifications non enregistrées"
+      },
+      "emoji": {
+        "activity": "Activités",
+        "agents": "Agents",
+        "food": "Nourriture",
+        "nature": "Nature",
+        "objects": "Objets",
+        "roles": "Rôles",
+        "symbols": "Symboles",
+        "work": "Travail"
+      },
+      "empty": "Aucun agent pour l’instant",
+      "emptyHint": "Aucun agent pour l’instant. Créez-en un pour combiner compétences, outils et modèle.",
+      "health": {
+        "degraded": "Dégradé",
+        "healthy": "Connecté",
+        "unavailable": "Indisponible"
+      },
+      "hiddenGroup": "Agents masqués ({{count}})",
+      "icon": {
+        "ariaLabel": "Choisir une icône",
+        "empty": "Aucune icône correspondante",
+        "search": "Rechercher des icônes"
+      },
+      "loading": "Chargement…",
+      "mode": {
+        "all": "Tous",
+        "exclude": "Exclure la sélection",
+        "include": "Sélection uniquement"
+      },
+      "model": {
+        "context": "contexte",
+        "toolUse": "Utilisation d’outils",
+        "vision": "Vision"
+      },
+      "noMatch": "Aucun agent correspondant — essayez un autre terme ou effacez les filtres.",
+      "noun": {
+        "skills": "compétences",
+        "tools": "outils"
+      },
+      "prompt": {
+        "collapse": "Terminé",
+        "expand": "Agrandir",
+        "expandedTitle": "Modifier le prompt",
+        "label": "Prompt système",
+        "placeholder": "Décrivez les responsabilités, les limites et le style de sortie de cet agent. Les variables comme {{name}} sont prises en charge."
+      },
+      "rail": {
+        "capabilities": "Capacités effectives",
+        "model": "Modèle",
+        "skillList": "Compétences",
+        "toolList": "Outils"
+      },
+      "risk": {
+        "high": "Risque élevé",
+        "low": "Risque faible",
+        "medium": "Risque moyen"
+      },
+      "search": "Rechercher un nom ou une description…",
+      "section": {
+        "basics": "① Bases",
+        "model": "④ Modèle",
+        "prompt": "⑤ Prompt",
+        "skills": "③ Capacités · Compétences",
+        "tools": "② Capacités · Outils"
+      },
+      "skillSource": {
+        "builtin": "Intégrées",
+        "plugin": "Extensions",
+        "workspace": "Espace de travail"
+      },
+      "skills": {
+        "modeLabel": "Rechercher des compétences"
+      },
+      "summary": {
+        "all": "Toutes les {{noun}}",
+        "subAgentNoun": "sous-agents"
+      },
+      "toolCategory": {
+        "execution": "Exécution",
+        "filesystem": "Système de fichiers",
+        "media": "Médias",
+        "memory": "Mémoire",
+        "orchestration": "Orchestration",
+        "scheduling": "Planification",
+        "session": "Sessions",
+        "web": "Web et recherche"
+      },
+      "tools": {
+        "modeLabel": "Rechercher des outils"
+      },
+      "tree": {
+        "empty": "Aucun agent à afficher"
+      },
+      "untitled": "Sans titre",
+      "viewCard": "Cartes",
+      "viewList": "Liste",
+      "viewMode": "Mode d’affichage",
+      "viewTree": "Arborescence"
     }
   },
   "chat": {

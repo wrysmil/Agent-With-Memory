@@ -19,12 +19,14 @@ from nanobot.channels.registry import load_channel_plugin
 from nanobot.channels.validation import validate_channel_config
 from nanobot.memory.reload import request_memory_reload
 from nanobot.pairing import approve_code, deny_code, list_pending
+from nanobot.webui import agents_routes as agents_domain
 from nanobot.webui import identity_routes as identity_domain
 from nanobot.webui import memory_routes as memory_domain
 from nanobot.webui import settings_capabilities as capability_domain
 from nanobot.webui import settings_contracts as contracts
 from nanobot.webui import settings_models as model_domain
 from nanobot.webui import settings_system as system_domain
+from nanobot.webui.agents_routes import AgentSettingsOperations
 from nanobot.webui.cli_apps_api import cli_apps_action, cli_apps_payload
 from nanobot.webui.http_utils import http_response as _http_response
 from nanobot.webui.http_utils import is_local_browser_request as _is_local_browser_request
@@ -171,6 +173,14 @@ _SYSTEM_ROUTES = {
     "/api/settings/identity/presets": "identity-list-presets",
     "/api/settings/identity/persona": "identity-get-active-persona",
     "/api/settings/identity/persona/set": "identity-set-active-persona",
+    "/api/settings/agents": "agents-list",
+    "/api/settings/agents/catalog": "agents-catalog",
+    # 写路径也在这里登记：WS mutation 只是把 action 翻译成路径，最终仍要
+    # 经 _route() 落到 agents handler，漏登记会 404（与 identity/memory 同理）。
+    "/api/settings/agents/save": "agents-save",
+    "/api/settings/agents/delete": "agents-delete",
+    "/api/settings/agents/reset": "agents-reset",
+    "/api/settings/agents/visibility": "agents-visibility",
     **{
         path: f"mcp-{action}"
         for path, action in _MCP_PRESET_ACTIONS_BY_PATH.items()
@@ -193,6 +203,13 @@ _IDENTITY_MUTATION_PATHS = frozenset({
     "/api/settings/identity/file/save",
     "/api/settings/identity/reload",
     "/api/settings/identity/persona/set",
+})
+
+_AGENTS_MUTATION_PATHS = frozenset({
+    "/api/settings/agents/save",
+    "/api/settings/agents/delete",
+    "/api/settings/agents/reset",
+    "/api/settings/agents/visibility",
 })
 
 _SETTINGS_MUTATION_PATHS = frozenset({
@@ -229,6 +246,7 @@ _SETTINGS_MUTATION_PATHS = frozenset({
     *_MCP_PRESET_ACTIONS_BY_PATH,
     *_MEMORY_MUTATION_PATHS,
     *_IDENTITY_MUTATION_PATHS,
+    *_AGENTS_MUTATION_PATHS,
 })
 
 
@@ -304,6 +322,23 @@ def _null_identity_operations() -> IdentitySettingsOperations:
     )
 
 
+def _null_agents_operations() -> AgentSettingsOperations:
+    """Fallback operations so the agents domain still responds when the
+    gateway hasn't injected a real workspace yet (everything returns 503)."""
+
+    def _unavailable(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise WebUISettingsError("agent service is not configured", status=503)
+
+    return AgentSettingsOperations(
+        list_profiles=_unavailable,
+        save_profile=_unavailable,
+        delete_profile=_unavailable,
+        reset_profile=_unavailable,
+        set_visibility=_unavailable,
+        list_catalog=_unavailable,
+    )
+
+
 class WebUISettingsRouter:
     """Authenticate and dispatch settings requests to transport-neutral domains."""
 
@@ -326,6 +361,7 @@ class WebUISettingsRouter:
         mcp_oauth_redirect_uri: Callable[[WsRequest], str] | None = None,
         memory_operations: MemorySettingsOperations | None = None,
         identity_operations: IdentitySettingsOperations | None = None,
+        agents_operations: AgentSettingsOperations | None = None,
     ) -> None:
         self.settings = settings
         self.bus = bus
@@ -356,6 +392,11 @@ class WebUISettingsRouter:
             identity_operations
             if identity_operations is not None
             else _null_identity_operations()
+        )
+        self._agents = agents_domain.AgentSettingsHandler(
+            agents_operations
+            if agents_operations is not None
+            else _null_agents_operations()
         )
 
     async def dispatch(
@@ -430,6 +471,11 @@ class WebUISettingsRouter:
             # gets its own transport-neutral handler with injected operations.
             result = await asyncio.to_thread(
                 lambda: self._identity.handle(action, domain_request),
+            )
+        elif action in agents_domain.AGENTS_ACTION_NAMES:
+            # 与 identity/memory 同构：独立的传输无关 handler + 注入的 operations。
+            result = await asyncio.to_thread(
+                lambda: self._agents.handle(action, domain_request),
             )
         else:
             channel_connect = _channel_connect_route(path)

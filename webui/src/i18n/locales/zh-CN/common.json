@@ -105,21 +105,16 @@
       "automations": "自动任务",
       "skills": "技能",
       "memory": "记忆",
-      "agents": "智能体",
       "identity": "身份"
     },
     "agents": {
-      "title": "子 Agent",
-      "subtitle": "为每个 Agent 单独配置技能、工具、模型与提示词。",
       "create": "新建 Agent",
       "untitled": "未命名",
       "loading": "加载中…",
       "empty": "暂无 Agent",
       "search": "搜索名称或描述…",
-      "categoryFilter": "按分类筛选",
       "categoryAll": "全部",
       "viewMode": "视图模式",
-      "viewGrid": "卡片",
       "viewTree": "树",
       "hiddenGroup": "已隐藏的 Agent（{{count}}）",
       "deleteTitle": "删除「{{name}}」？",
@@ -134,11 +129,9 @@
         "tools": "② 能力 · 工具",
         "skills": "③ 能力 · 技能",
         "model": "④ 模型",
-        "prompt": "⑤ 提示词",
-        "relations": "⑥ 关系与隔离"
+        "prompt": "⑤ 提示词"
       },
       "capability": {
-        "count": "已启用 {{on}} / {{total}}",
         "enabledCount": "已启用 {{count}}",
         "locked": "框架依赖",
         "empty": "没有匹配项",
@@ -153,31 +146,16 @@
         "modeLabel": "搜索技能"
       },
       "model": {
-        "label": "模型",
-        "auto": "自动（跟随全局）",
-        "autoHint": "该 Agent 跟随全局模型设置。"
+        "context": "上下文",
+        "vision": "支持视觉",
+        "toolUse": "支持工具调用"
       },
       "prompt": {
         "label": "系统提示词",
-        "insertVariable": "插入变量",
-        "variables": "可用变量",
         "placeholder": "描述这个 Agent 的职责、边界与输出风格。可使用 {{name}} 等变量。",
-        "preview": "最终 prompt 预览",
-        "copy": "复制",
-        "segmentBase": "基础系统提示词（平台内置）",
-        "segmentIdentity": "身份段落",
-        "segmentCustom": "本 Agent 提示词",
-        "emptySegment": "（空）"
-      },
-      "promptContext": {
-        "user": "（未配置用户档案）"
-      },
-      "relations": {
-        "group": "可调度子 Agent",
-        "self": "不能调度自己",
-        "cycle": "会形成循环依赖",
-        "modeLabel": "子 Agent 模式",
-        "hint": "被调度的子 Agent 各自保留自己的工具、技能与模型设置。"
+        "expand": "展开编辑",
+        "collapse": "完成",
+        "expandedTitle": "编辑提示词"
       },
       "basics": {
         "id": "ID",
@@ -191,7 +169,6 @@
         "appearance": "图标与颜色",
         "systemPreset": "系统预设",
         "custom": "自定义",
-        "customized": "已定制",
         "hidden": "已隐藏",
         "updatedAt": "上次修改 {{time}}"
       },
@@ -203,9 +180,6 @@
         "hide": "隐藏",
         "delete": "删除",
         "noDescription": "未填写描述",
-        "tools": "工具",
-        "skills": "技能",
-        "subAgents": "子 Agent",
         "modelAuto": "自动（跟随全局）"
       },
       "color": {
@@ -223,6 +197,7 @@
         "subtitle": "配置该 Agent 可用的能力、模型与提示词。",
         "reset": "重置为默认",
         "unsaved": "有未保存的修改",
+        "saved": "已保存",
         "save": "保存",
         "discardTitle": "放弃未保存的修改？",
         "discardBody": "关闭后本次编辑不会保存。",
@@ -242,8 +217,6 @@
       },
       "summary": {
         "all": "全部{{noun}}",
-        "include": "{{count}} 个{{noun}}",
-        "exclude": "{{count}} 个{{noun}} · 排除 {{excluded}}",
         "subAgentNoun": "个子 Agent"
       },
       "category": {
@@ -279,21 +252,6 @@
         "degraded": "降级",
         "unavailable": "不可用"
       },
-      "model": {
-        "context": "上下文",
-        "vision": "支持视觉",
-        "toolUse": "支持工具调用"
-      },
-      "variable": {
-        "name": "智能体名称",
-        "description": "智能体描述",
-        "skills": "已启用技能列表",
-        "tools": "已启用工具列表",
-        "model": "当前模型",
-        "date": "今天日期",
-        "userProfile": "用户档案",
-        "workspace": "工作区名称"
-      },
       "emoji": {
         "agents": "智能体",
         "roles": "角色",
@@ -305,14 +263,10 @@
         "activity": "活动"
       },
       "rail": {
-        "prompt": "最终 prompt",
         "capabilities": "实际能力",
         "model": "模型",
         "toolList": "工具清单",
-        "skillList": "技能清单",
-        "subAgents": "可调度子智能体",
-        "noSubAgents": "不调度任何子智能体",
-        "none": "无"
+        "skillList": "技能清单"
       }
     },
     "sections": {

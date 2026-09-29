@@ -77,7 +77,8 @@
     "automations": "Tự động hóa",
     "skills": {
       "title": "Kỹ năng"
-    }
+    },
+    "agents": "Agent"
   },
   "settings": {
     "backToChat": "Quay lại chat",
@@ -1171,6 +1172,168 @@
       "activePersona": "Nhân vật đang dùng",
       "noPersona": "Không dùng",
       "personaSwitchFailed": "Không thể đổi nhân vật"
+    },
+    "agents": {
+      "basics": {
+        "appearance": "Biểu tượng và màu sắc",
+        "category": "Danh mục",
+        "custom": "Tùy chỉnh",
+        "description": "Mô tả",
+        "descriptionPlaceholder": "Một câu về điều nó giỏi và khi nào nên dùng.",
+        "hidden": "Đã ẩn",
+        "id": "ID",
+        "idLocked": "Không thể đổi tên preset hệ thống",
+        "name": "Tên",
+        "namePlaceholder": "ví dụ: Viết nội dung SEO",
+        "noCategory": "Chưa phân loại",
+        "systemPreset": "Preset hệ thống",
+        "updatedAt": "Cập nhật {{time}}"
+      },
+      "capability": {
+        "allModeHint": "Đang để “Tất cả” — danh sách bên dưới chỉ để xem. Chuyển sang “Chỉ mục đã chọn” để chọn từng mục.",
+        "clearGroup": "Bỏ chọn hết",
+        "empty": "Không có kết quả",
+        "enabledCount": "{{count}} đang bật",
+        "locked": "Bắt buộc",
+        "selectGroup": "Chọn hết"
+      },
+      "card": {
+        "delete": "Xóa",
+        "duplicate": "Nhân bản",
+        "edit": "Sửa",
+        "hide": "Ẩn",
+        "menu": "Thao tác khác",
+        "modelAuto": "Tự động (theo toàn cục)",
+        "noDescription": "Chưa có mô tả",
+        "show": "Hiện"
+      },
+      "category": {
+        "coding": "Lập trình",
+        "efficiency": "Năng suất",
+        "general": "Tổng quát",
+        "ops": "Vận hành",
+        "research": "Nghiên cứu",
+        "writing": "Viết lách"
+      },
+      "categoryAll": "Tất cả",
+      "color": {
+        "custom": "Màu tùy chỉnh",
+        "hex": "Mã màu hex"
+      },
+      "create": "Agent mới",
+      "deleteBody": "Không thể hoàn tác. Các phiên hiện có không bị ảnh hưởng.",
+      "deleteTitle": "Xóa “{{name}}”?",
+      "duplicateSuffix": "bản sao",
+      "editor": {
+        "discard": "Bỏ thay đổi",
+        "discardBody": "Đóng ngay sẽ không lưu chỉnh sửa này.",
+        "discardTitle": "Bỏ các thay đổi chưa lưu?",
+        "edit": "Sửa · {{name}}",
+        "new": "Agent mới",
+        "reset": "Đặt lại về mặc định",
+        "save": "Lưu",
+        "saved": "Đã lưu",
+        "subtitle": "Cấu hình năng lực, mô hình và prompt cho agent này.",
+        "unsaved": "Có thay đổi chưa lưu"
+      },
+      "emoji": {
+        "activity": "Hoạt động",
+        "agents": "Agent",
+        "food": "Đồ ăn",
+        "nature": "Thiên nhiên",
+        "objects": "Đồ vật",
+        "roles": "Vai trò",
+        "symbols": "Ký hiệu",
+        "work": "Công việc"
+      },
+      "empty": "Chưa có agent nào",
+      "emptyHint": "Chưa có agent nào. Hãy tạo một agent để kết hợp kỹ năng, công cụ và mô hình.",
+      "health": {
+        "degraded": "Suy giảm",
+        "healthy": "Đã kết nối",
+        "unavailable": "Không khả dụng"
+      },
+      "hiddenGroup": "Agent đã ẩn ({{count}})",
+      "icon": {
+        "ariaLabel": "Chọn biểu tượng",
+        "empty": "Không có biểu tượng phù hợp",
+        "search": "Tìm biểu tượng"
+      },
+      "loading": "Đang tải…",
+      "mode": {
+        "all": "Tất cả",
+        "exclude": "Loại trừ mục đã chọn",
+        "include": "Chỉ mục đã chọn"
+      },
+      "model": {
+        "context": "ngữ cảnh",
+        "toolUse": "Dùng công cụ",
+        "vision": "Thị giác"
+      },
+      "noMatch": "Không có agent phù hợp — hãy thử từ khóa khác hoặc xóa bộ lọc.",
+      "noun": {
+        "skills": "kỹ năng",
+        "tools": "công cụ"
+      },
+      "prompt": {
+        "collapse": "Xong",
+        "expand": "Mở rộng",
+        "expandedTitle": "Sửa prompt",
+        "label": "Prompt hệ thống",
+        "placeholder": "Mô tả trách nhiệm, ranh giới và phong cách đầu ra của agent này. Hỗ trợ biến như {{name}}."
+      },
+      "rail": {
+        "capabilities": "Năng lực thực tế",
+        "model": "Mô hình",
+        "skillList": "Kỹ năng",
+        "toolList": "Công cụ"
+      },
+      "risk": {
+        "high": "Rủi ro cao",
+        "low": "Rủi ro thấp",
+        "medium": "Rủi ro trung bình"
+      },
+      "search": "Tìm theo tên hoặc mô tả…",
+      "section": {
+        "basics": "① Cơ bản",
+        "model": "④ Mô hình",
+        "prompt": "⑤ Prompt",
+        "skills": "③ Năng lực · Kỹ năng",
+        "tools": "② Năng lực · Công cụ"
+      },
+      "skillSource": {
+        "builtin": "Tích hợp",
+        "plugin": "Tiện ích",
+        "workspace": "Không gian làm việc"
+      },
+      "skills": {
+        "modeLabel": "Tìm kỹ năng"
+      },
+      "summary": {
+        "all": "Tất cả {{noun}}",
+        "subAgentNoun": "agent con"
+      },
+      "toolCategory": {
+        "execution": "Thực thi",
+        "filesystem": "Hệ thống tệp",
+        "media": "Nội dung đa phương tiện",
+        "memory": "Bộ nhớ",
+        "orchestration": "Điều phối",
+        "scheduling": "Lên lịch",
+        "session": "Phiên",
+        "web": "Web và tìm kiếm"
+      },
+      "tools": {
+        "modeLabel": "Tìm công cụ"
+      },
+      "tree": {
+        "empty": "Không có agent để hiển thị"
+      },
+      "untitled": "Chưa đặt tên",
+      "viewCard": "Thẻ",
+      "viewList": "Danh sách",
+      "viewMode": "Chế độ hiển thị",
+      "viewTree": "Cây"
     }
   },
   "chat": {

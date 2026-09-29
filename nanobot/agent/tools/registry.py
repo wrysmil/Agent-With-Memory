@@ -41,6 +41,14 @@ class ToolRegistry:
         """Get a tool by name."""
         return self._tools.get(name)
 
+    def names(self) -> list[str]:
+        """已注册工具名，按字典序返回，供展示与遍历用。
+
+        与 :attr:`tool_names` 的区别只有排序：``names()`` 每次都给出稳定的
+        顺序（``tool_names`` 是注册顺序），调用方不必自己 ``sorted()``。
+        """
+        return sorted(self._tools)
+
     def get_runtime_context_providers(self) -> list[RuntimeContextProvider]:
         """Return tool-owned providers in stable tool-name order."""
         providers: list[RuntimeContextProvider] = []

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CircleAlert, RotateCcw, X } from "lucide-react";
+import { CircleAlert, CircleCheck, RotateCcw, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -28,67 +28,37 @@ import {
 } from "@/components/settings/agents/parts/CapabilityPicker";
 import { ModelPicker } from "@/components/settings/agents/parts/ModelPicker";
 import { PromptSection } from "@/components/settings/agents/parts/PromptSection";
-import { RelationsSection } from "@/components/settings/agents/parts/RelationsSection";
-import { AgentPreviewRail } from "@/components/settings/agents/parts/AgentPreviewRail";
-import type {
-  AgentCategory,
-  AgentProfile,
-  ModelDescriptor,
-  PromptContext,
-  SkillDescriptor,
-  ToolDescriptor,
-} from "@/lib/agents/types";
+import { AgentRailSummary } from "@/components/settings/agents/parts/AgentRailSummary";
+import type { AgentProfile } from "@/lib/agents/types";
+import type { AgentCatalog } from "@/lib/agents/catalog";
 import { PROMPT_MAX_LENGTH, TOOL_CATEGORIES, resolveSelection } from "@/lib/agents/types";
 import { SKILL_SOURCE_LABEL_KEY, TOOL_CATEGORY_LABEL_KEY } from "@/lib/agents/i18n";
 import { cn } from "@/lib/utils";
 
-export interface AgentCatalog {
-  tools: ToolDescriptor[];
-  skills: SkillDescriptor[];
-  models: ModelDescriptor[];
-  categories: AgentCategory[];
-}
-
-export function createBlankAgent(): AgentProfile {
-  return {
-    id: "",
-    name: "",
-    description: "",
-    type: "custom",
-    customized: false,
-    categoryId: null,
-    icon: "🤖",
-    color: "#4A90D9",
-    prompt: "",
-    modelId: null,
-    tools: { mode: "all", entries: [] },
-    skills: { mode: "all", entries: [] },
-    subAgents: { mode: "all", entries: [] },
-    hidden: false,
-    updatedAt: new Date().toISOString(),
-  };
-}
+export type { AgentCatalog };
 
 export function AgentEditorDialog({
   open,
   agent,
   isNew,
-  agents,
   catalog,
   globalModelLabel,
   onOpenChange,
   onSave,
   onReset,
+  saving = false,
+  savedNotice = false,
 }: {
   open: boolean;
   agent: AgentProfile | null;
   isNew: boolean;
-  agents: AgentProfile[];
   catalog: AgentCatalog;
   globalModelLabel: string;
   onOpenChange: (open: boolean) => void;
   onSave: (agent: AgentProfile) => void;
   onReset?: (agent: AgentProfile) => void;
+  saving?: boolean;
+  savedNotice?: boolean;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<AgentProfile | null>(agent);
@@ -148,32 +118,7 @@ export function AgentEditorDialog({
     [draft?.skills, catalog.skills],
   );
 
-  const enabledSubAgentIds = useMemo(
-    () =>
-      resolveSelection(
-        draft?.subAgents ?? { mode: "all", entries: [] },
-        agents.map((item) => item.id).filter((id) => id !== draft?.id),
-      ),
-    [draft?.subAgents, agents, draft?.id],
-  );
-
-  const promptContext = useMemo<PromptContext | null>(() => {
-    if (!draft) return null;
-    const modelLabel =
-      catalog.models.find((model) => model.id === draft.modelId)?.label ?? globalModelLabel;
-    return {
-      name: draft.name || t("settings.agents.untitled", "未命名"),
-      description: draft.description,
-      skills: catalog.skills.filter((skill) => enabledSkillIds.has(skill.name)).map((s) => s.name),
-      tools: catalog.tools.filter((tool) => enabledToolIds.has(tool.name)).map((tool) => tool.label),
-      model: modelLabel,
-      date: new Intl.DateTimeFormat("zh-CN", { dateStyle: "long" }).format(new Date()),
-      userProfile: t("settings.agents.promptContext.user", "（未配置用户档案）"),
-      workspace: "nanobot",
-    };
-  }, [draft, catalog, enabledSkillIds, enabledToolIds, globalModelLabel, t]);
-
-  if (!draft || !promptContext) return null;
+  if (!draft) return null;
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(agent);
   const canSave =
@@ -302,18 +247,6 @@ export function AgentEditorDialog({
                 </SectionLabel>
                 <PromptSection profile={draft} onChange={(prompt) => patch({ prompt })} />
               </section>
-
-              <section className="space-y-3">
-                <SectionLabel index="⑥">
-                  {t("settings.agents.section.relations", "关系与调度")}
-                </SectionLabel>
-                <RelationsSection
-                  agents={agents}
-                  editingId={draft.id || null}
-                  selection={draft.subAgents}
-                  onChange={(subAgents) => patch({ subAgents })}
-                />
-              </section>
             </div>
 
             <aside
@@ -324,16 +257,13 @@ export function AgentEditorDialog({
                   : "max-h-[45vh] overflow-y-auto border-t scrollbar-thin",
               )}
             >
-              <AgentPreviewRail
-                profile={draft}
-                context={promptContext}
-                agents={agents}
+              <AgentRailSummary
+                modelId={draft.modelId}
                 tools={catalog.tools}
                 skills={catalog.skills}
                 models={catalog.models}
                 enabledToolIds={enabledToolIds}
                 enabledSkillIds={enabledSkillIds}
-                enabledSubAgentIds={enabledSubAgentIds}
               />
             </aside>
           </div>
@@ -344,13 +274,22 @@ export function AgentEditorDialog({
               dirty && "bg-amber-50/70 dark:bg-amber-950/25",
             )}
           >
-            {dirty ? (
-              <p className="flex items-center gap-1.5 text-[12px] text-amber-800 dark:text-amber-200">
-                <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                {t("settings.agents.editor.unsaved", "有未保存的修改")}
-              </p>
-            ) : null}
-            <div className={cn("flex gap-2", !dirty && "ml-auto")}>
+            {/* 提示槽位宽度写死：文案出现或消失时按钮都不能挪位置，
+                否则「有未保存的修改」每次闪现都会让保存按钮跳一下。 */}
+            <div className="w-44 shrink-0">
+              {dirty ? (
+                <p className="flex items-center gap-1.5 text-[12px] text-amber-800 dark:text-amber-200">
+                  <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {t("settings.agents.editor.unsaved", "有未保存的修改")}
+                </p>
+              ) : savedNotice ? (
+                <p className="flex items-center gap-1.5 text-[12px] text-emerald-700 dark:text-emerald-300">
+                  <CircleCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {t("settings.agents.editor.saved", "已保存")}
+                </p>
+              ) : null}
+            </div>
+            <div className="ml-auto flex gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -363,7 +302,7 @@ export function AgentEditorDialog({
               <Button
                 type="button"
                 size="sm"
-                disabled={!canSave}
+                disabled={!canSave || saving}
                 onClick={() => onSave({ ...draft, updatedAt: new Date().toISOString() })}
                 className="text-[13px]"
               >

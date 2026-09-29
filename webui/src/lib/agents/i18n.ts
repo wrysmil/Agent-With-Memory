@@ -50,14 +50,3 @@ export const EMOJI_GROUP_LABEL_KEY: Record<string, string> = {
   food: `${PREFIX}emoji.food`,
   activity: `${PREFIX}emoji.activity`,
 };
-
-export const PROMPT_VARIABLE_LABEL_KEY: Record<string, string> = {
-  "{{name}}": `${PREFIX}variable.name`,
-  "{{description}}": `${PREFIX}variable.description`,
-  "{{skills}}": `${PREFIX}variable.skills`,
-  "{{tools}}": `${PREFIX}variable.tools`,
-  "{{model}}": `${PREFIX}variable.model`,
-  "{{date}}": `${PREFIX}variable.date`,
-  "{{user_profile}}": `${PREFIX}variable.userProfile`,
-  "{{workspace}}": `${PREFIX}variable.workspace`,
-};

@@ -1,0 +1,210 @@
+"""Agent 档案的持久化存储。
+
+布局照 openakita 的 ``ProfileStore``：``{workspace}/agents/profiles/{id}.json``
++ ``{workspace}/agents/categories.json``。base_dir 落在 workspace 之下与
+``identity/`` 并列，理由见契约 §5。
+
+**读路径不落盘。** 出厂预置只补进内存缓存，文件要到 ``save_profile`` /
+``reset_profile`` / ``set_visibility`` 才真正产生——刷新一次列表不该在
+用户磁盘上创建目录。
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import threading
+from dataclasses import replace
+from datetime import datetime, timezone
+from pathlib import Path
+
+from loguru import logger
+
+from nanobot.agents.catalog import (
+    AGENTS_DIR_NAME,
+    CATEGORIES_FILE,
+    FACTORY_AGENT_CATEGORIES,
+    FACTORY_PROFILES,
+    PROFILES_SUBDIR,
+    factory_for,
+    is_customized,
+    is_valid_agent_id,
+)
+from nanobot.agents.models import AgentCategory, AgentProfile
+
+
+class AgentStoreError(ValueError):
+    """可安全回传给 WebUI 的存储层错误。"""
+
+    def __init__(self, message: str, *, status: int = 400) -> None:
+        super().__init__(message)
+        self.message = message
+        self.status = status
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    """同 nanobot/identity/compiler.py:224 的写法：先写临时文件再 os.replace。"""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _sort_key(profile: AgentProfile) -> tuple[bool, str, str, str]:
+    """系统预设先于自定义，同组内按分类、名称、id 稳定排序。"""
+    return (profile.type != "system", profile.category_id or "", profile.name, profile.id)
+
+
+class AgentStore:
+    def __init__(self, workspace: Path) -> None:
+        self._root = Path(workspace) / AGENTS_DIR_NAME
+        self._profiles_dir = self._root / PROFILES_SUBDIR
+        self._categories_file = self._root / CATEGORIES_FILE
+        self._lock = threading.RLock()
+        self._cache: dict[str, AgentProfile] | None = None
+        self._categories: list[AgentCategory] | None = None
+
+    # -- 路径 -----------------------------------------------------------------
+
+    def _path_for(self, agent_id: str) -> Path:
+        """档案 id → 绝对路径，两道闸：白名单正则 + 前缀比对。
+
+        与 ``nanobot/identity/store.py:62`` 的 ``_resolve`` 同构。白名单挡
+        绝对路径与 ``..``，``is_relative_to`` 挡符号链接逃逸。
+        """
+        if not is_valid_agent_id(agent_id):
+            raise AgentStoreError(f"非法 Agent id：{agent_id!r}", status=400)
+        root = self._profiles_dir.resolve()
+        candidate = (self._profiles_dir / f"{agent_id}.json").resolve()
+        if candidate == root or not candidate.is_relative_to(root):
+            raise AgentStoreError("路径越界：档案必须位于 agents/profiles/ 目录内", status=403)
+        return candidate
+
+    # -- 加载 -----------------------------------------------------------------
+
+    def _load_all(self) -> dict[str, AgentProfile]:
+        if self._cache is not None:
+            return self._cache
+        loaded: dict[str, AgentProfile] = {}
+        if self._profiles_dir.is_dir():
+            for path in sorted(self._profiles_dir.glob("*.json")):
+                try:
+                    profile = AgentProfile.from_dict(json.loads(path.read_text(encoding="utf-8")))
+                except (OSError, ValueError) as exc:
+                    logger.warning("跳过无法解析的 Agent 档案 {}：{}", path.name, exc)
+                    continue
+                if not is_valid_agent_id(profile.id):
+                    logger.warning("跳过 id 非法的 Agent 档案 {}：{}", path.name, profile.id)
+                    continue
+                loaded[profile.id] = profile
+        # 出厂预置只补内存：磁盘上已有的档案一律不覆盖。
+        for factory in FACTORY_PROFILES:
+            if factory.id not in loaded:
+                loaded[factory.id] = factory_for(factory.id) or factory
+        self._cache = loaded
+        return loaded
+
+    def _load_categories(self) -> list[AgentCategory]:
+        if self._categories is not None:
+            return self._categories
+        parsed: list[AgentCategory] = []
+        if self._categories_file.is_file():
+            try:
+                raw = json.loads(self._categories_file.read_text(encoding="utf-8"))
+                parsed = [AgentCategory.from_dict(x) for x in raw if isinstance(x, dict)]
+            except (OSError, ValueError, TypeError) as exc:
+                logger.warning("分类文件无法解析，回落到出厂分类：{}", exc)
+                parsed = []
+        self._categories = parsed or list(FACTORY_AGENT_CATEGORIES)
+        return self._categories
+
+    def _persist(self, profile: AgentProfile) -> None:
+        path = self._path_for(profile.id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write(path, json.dumps(profile.to_dict(), ensure_ascii=False, indent=2))
+        self._load_all()[profile.id] = profile
+
+    # -- 读 -------------------------------------------------------------------
+
+    def list_profiles(self) -> list[AgentProfile]:
+        with self._lock:
+            profiles = list(self._load_all().values())
+        profiles.sort(key=_sort_key)
+        return profiles
+
+    def get_profile(self, agent_id: str) -> AgentProfile:
+        with self._lock:
+            # 读路径也要过白名单：id 来自 URL query / mutation payload，
+            # 非法 id 是 400 而不是「查无此人」的 404。
+            if not is_valid_agent_id(agent_id):
+                raise AgentStoreError(f"非法 Agent id：{agent_id!r}", status=400)
+            profile = self._load_all().get(agent_id)
+        if profile is None:
+            raise AgentStoreError(f"Agent 不存在：{agent_id}", status=404)
+        return profile
+
+    def list_categories(self) -> list[AgentCategory]:
+        with self._lock:
+            return list(self._load_categories())
+
+    # -- 写 -------------------------------------------------------------------
+
+    def save_profile(self, profile: AgentProfile) -> AgentProfile:
+        """校验并落盘。``type`` / ``customized`` / ``updatedAt`` 一律由服务端决定。"""
+        with self._lock:
+            self._path_for(profile.id)
+            profile.validate()
+            factory = factory_for(profile.id)
+            stored = replace(
+                profile,
+                type="system" if factory is not None else "custom",
+                customized=is_customized(profile, factory) if factory is not None else False,
+                updated_at=_utc_now(),
+            )
+            self._persist(stored)
+            return stored
+
+    def delete_profile(self, agent_id: str) -> None:
+        with self._lock:
+            profile = self.get_profile(agent_id)
+            if profile.type == "system":
+                # 拒绝而不是删：出厂自愈会在下一次加载时把它补回来，
+                # 用户会看到「删了又出现」。见契约 §9.5。
+                raise AgentStoreError(
+                    f"系统预设「{agent_id}」不可删除，可重置或隐藏", status=409
+                )
+            path = self._path_for(agent_id)
+            path.unlink(missing_ok=True)
+            self._load_all().pop(agent_id, None)
+
+    def reset_profile(self, agent_id: str) -> AgentProfile:
+        with self._lock:
+            current = self.get_profile(agent_id)
+            factory = factory_for(agent_id)
+            if factory is None or current.type != "system":
+                raise AgentStoreError("只有系统预设可以重置", status=409)
+            # hidden 是视图偏好而非内容定制，重置不该把它一并抹掉。
+            fresh = replace(factory, hidden=current.hidden, updated_at=_utc_now())
+            self._persist(fresh)
+            return fresh
+
+    def set_visibility(self, agent_id: str, hidden: bool) -> AgentProfile:
+        with self._lock:
+            current = self.get_profile(agent_id)
+            updated = replace(current, hidden=hidden, updated_at=_utc_now())
+            self._persist(updated)
+            return updated
+
+    def save_categories(self, categories: list[AgentCategory]) -> list[AgentCategory]:
+        """一期不接线（前端分类写死在前端常量里），保留供二期使用。"""
+        with self._lock:
+            self._categories = list(categories)
+            self._root.mkdir(parents=True, exist_ok=True)
+            _atomic_write(
+                self._categories_file,
+                json.dumps([c.to_dict() for c in categories], ensure_ascii=False, indent=2),
+            )
+            return list(self._categories)

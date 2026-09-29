@@ -11,8 +11,10 @@ from typing import TYPE_CHECKING, Any, Callable
 from loguru import logger as default_logger
 
 from nanobot.config.loader import get_config_path
+from nanobot.config.loader import load_config as _load_config
 from nanobot.memory.lifecycle import MemoryLifecycle
-from nanobot.webui import identity_api, memory_api
+from nanobot.webui import agents_api, identity_api, memory_api
+from nanobot.webui.agents_routes import AgentSettingsOperations
 from nanobot.webui.gateway_endpoint import WebUIGatewayEndpoint
 from nanobot.webui.gateway_tokens import GatewayTokenStore
 from nanobot.webui.identity_routes import IdentitySettingsOperations
@@ -30,6 +32,7 @@ from nanobot.webui.ws_http import GatewayHTTPHandler
 if TYPE_CHECKING:
     from nanobot.bus.queue import MessageBus
     from nanobot.channels.websocket.runtime import WebSocketConfig
+    from nanobot.config.schema import Config
     from nanobot.cron.service import CronService
     from nanobot.session.manager import SessionManager
     from nanobot.triggers.local_store import LocalTriggerStore
@@ -118,6 +121,31 @@ def build_identity_operations(
     )
 
 
+def build_agents_operations(
+    *,
+    workspace_path: Path,
+    load_config: Callable[[], Config] | None = None,
+) -> AgentSettingsOperations:
+    """Wire the real ``agents_api`` actions to a workspace-scoped store.
+
+    ``load_config`` 只被 ``agents_catalog`` 消费（工具与模型描述符要读
+    ``Config.tools`` / 模型预设），未注入时回落到进程级配置路径。
+    """
+    workspace = Path(workspace_path)
+    return AgentSettingsOperations(
+        list_profiles=partial(agents_api.agents_list, workspace),
+        save_profile=partial(agents_api.agents_save, workspace),
+        delete_profile=partial(agents_api.agents_delete, workspace),
+        reset_profile=partial(agents_api.agents_reset, workspace),
+        set_visibility=partial(agents_api.agents_visibility, workspace),
+        list_catalog=partial(
+            agents_api.agents_catalog,
+            workspace,
+            load_config=load_config or _load_config,
+        ),
+    )
+
+
 def build_gateway_services(
     *,
     config: WebSocketConfig,
@@ -203,6 +231,11 @@ def build_gateway_services(
         identity_operations=build_identity_operations(
             workspace_id="default",
             workspace_path=workspace_path,
+        ),
+        agents_operations=build_agents_operations(
+            workspace_path=workspace_path,
+            # 用 gateway 自己的配置路径，不要读进程级的默认路径。
+            load_config=settings.config.load,
         ),
         cron_service=cron_service,
         local_trigger_store=local_trigger_store,
