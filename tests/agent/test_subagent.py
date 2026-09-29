@@ -225,3 +225,22 @@ async def test_spawned_subagent_inherits_llm_usage_source(tmp_path):
 
     spec = sm.runner.run.call_args.args[0]
     assert spec.llm_usage_source == "cron"
+
+
+def test_subagent_prompt_never_contains_persona_section(tmp_path):
+    """persona 是主 Agent 的表现层；子 agent 走独立模板，不应继承。"""
+    identity = tmp_path / "identity"
+    identity.mkdir(parents=True, exist_ok=True)
+    (identity / "personas").mkdir(parents=True, exist_ok=True)
+    (identity / "personas" / "tech_expert.md").write_text("PERSONA_BODY", encoding="utf-8")
+    (identity / "active_persona").write_text("tech_expert", encoding="utf-8")
+    manager = SubagentManager(
+        workspace=tmp_path,
+        bus=MessageBus(),
+        max_tool_result_chars=16_000,
+    )
+
+    prompt = manager._build_subagent_prompt()
+
+    assert "## 当前人格" not in prompt
+    assert "PERSONA_BODY" not in prompt

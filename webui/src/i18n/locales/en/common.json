@@ -1007,7 +1007,6 @@
       "groupCore": "Core files",
       "groupPersonas": "Personas",
       "warningBanner": "Identity files define your Agent's core personality and behavior. Improper edits may cause the agent to misbehave, lose capabilities, or produce unexpected replies. If unsure, back up the original first.",
-      "badgeFullTextInject": "Full-text inject",
       "badgeNeedsCompile": "Needs compile",
       "badgeAutoRegen": "Auto-regen",
       "badgeSystemSection": "System section",
@@ -1063,7 +1062,10 @@
           "label": "Tech expert",
           "description": "No diluted jargon; version-scoped claims; evidence over vibes"
         }
-      }
+      },
+      "activePersona": "Active persona",
+      "noPersona": "None",
+      "personaSwitchFailed": "Failed to switch persona"
     },
     "memory": {
       "tabSemantic": "Semantic memory",

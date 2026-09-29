@@ -22,12 +22,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { formControlFocusClassName } from "@/components/ui/form-control";
 import {
   fetchIdentityFile,
+  getActivePersona,
   listIdentityFiles,
   listIdentityPresets,
   reloadIdentity,
   saveIdentityFile,
+  setActivePersona,
   type IdentityPreset,
 } from "@/lib/api";
 import type { IdentityFileEntry } from "@/lib/types";
@@ -57,7 +60,6 @@ function badgeTone(tone: string): BadgeTone {
  * Keys come from the backend catalog (`BADGE_*`); unknown keys fall through to "".
  */
 const BADGE_DEFAULTS: Record<string, string> = {
-  "settings.identity.badgeFullTextInject": "全文注入",
   "settings.identity.badgeNeedsCompile": "需编译",
   "settings.identity.badgeAutoRegen": "自动重生成",
   "settings.identity.badgeSystemSection": "系统段落",
@@ -132,6 +134,9 @@ function IdentityFileRow({
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <span className="shrink-0 font-mono text-[11px] leading-5 text-muted-foreground/80">
+          ≈{file.tokens ?? 0} tokens
+        </span>
         {file.badge && badgeFallback && (
           <FileBadge tone={badgeTone(file.badge.tone)} fallback={badgeFallback} />
         )}
@@ -188,6 +193,8 @@ export function IdentityView() {
   const [fromTemplate, setFromTemplate] = useState(false);
   const [presetLoaded, setPresetLoaded] = useState(false);
   const [presets, setPresets] = useState<IdentityPreset[]>([]);
+  const [activePersona, setActivePersonaState] = useState("");
+  const [personaOptions, setPersonaOptions] = useState<string[]>([]);
 
   // Load the catalog once per token. `cancelled` makes the effect safe against
   // unmount and against a token change that races the in-flight request.
@@ -228,6 +235,29 @@ export function IdentityView() {
       })
       .catch(() => {
         /* presets are optional UX; ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // Which persona file is injected into the system prompt. Also optional: a
+  // failure leaves the picker on "None" rather than breaking the whole page.
+  useEffect(() => {
+    let cancelled = false;
+    getActivePersona(token)
+      .then((payload) => {
+        if (cancelled) return;
+        setPersonaOptions(payload.options ?? []);
+        // The backend normalizes an unknown stem to "", but a stale gateway
+        // could still answer with a value absent from options — fall back to
+        // "None" so the select can never hold a value it cannot render.
+        setActivePersonaState(
+          payload.active && payload.options?.includes(payload.active) ? payload.active : "",
+        );
+      })
+      .catch(() => {
+        /* persona switching is optional UX; ignore */
       });
     return () => {
       cancelled = true;
@@ -313,6 +343,23 @@ export function IdentityView() {
 
   function handleBack() {
     setCompactDetailOpen(false);
+  }
+
+  async function handlePersonaChange(next: string) {
+    const previous = activePersona;
+    if (next === previous) return;
+    setActivePersonaState(next);
+    setSaveError(null);
+    try {
+      await setActivePersona(client, next);
+    } catch (reason) {
+      setActivePersonaState(previous);
+      setSaveError(
+        `${tx("settings.identity.personaSwitchFailed", "切换人格失败")}: ${
+          reason instanceof Error ? reason.message : String(reason)
+        }`,
+      );
+    }
   }
 
   async function handleSave() {
@@ -439,6 +486,34 @@ export function IdentityView() {
                     onSelect={() => handleSelect(file)}
                   />
                 ))}
+                <div className="px-3 pb-1 pt-4">
+                  <label
+                    htmlFor="identity-active-persona"
+                    className="mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80"
+                  >
+                    {tx("settings.identity.activePersona", "使用人格")}
+                  </label>
+                  <select
+                    id="identity-active-persona"
+                    value={activePersona}
+                    onChange={(event) => {
+                      void handlePersonaChange(event.target.value);
+                    }}
+                    className={cn(
+                      "h-8 w-full rounded-control border border-input bg-settings-surface px-2 text-[12.5px] text-foreground transition-colors",
+                      formControlFocusClassName,
+                    )}
+                  >
+                    <option value="">
+                      {tx("settings.identity.noPersona", "不使用")}
+                    </option>
+                    {personaOptions.map((stem) => (
+                      <option key={stem} value={stem}>
+                        {tx(`settings.identity.preset.${stem}.label`, stem)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <GroupHeader
                   icon={<FolderTree className="h-3 w-3" />}
                   label={tx("settings.identity.groupPersonas", "人格模板")}

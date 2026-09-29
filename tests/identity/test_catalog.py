@@ -51,3 +51,23 @@ def test_discover_personas_returns_sorted_markdown_only(tmp_path: Path):
 
 def test_discover_personas_missing_dir_is_empty(tmp_path: Path):
     assert discover_personas(tmp_path) == []
+
+
+def test_personas_carry_no_badge(tmp_path: Path):
+    from nanobot.identity.catalog import build_persona_specs
+
+    personas = tmp_path / IDENTITY_DIR_NAME / PERSONAS_SUBDIR
+    personas.mkdir(parents=True)
+    (personas / "tech_expert.md").write_text("x", encoding="utf-8")
+
+    specs = build_persona_specs(tmp_path)
+
+    assert [s.badge_label_key for s in specs] == [None]
+
+
+def test_tech_expert_template_title_is_not_soul():
+    from nanobot.utils.helpers import load_bundled_template
+
+    content = load_bundled_template("personas/tech_expert.md")
+    assert content is not None
+    assert content.splitlines()[0] == "# 技术专家"

@@ -1384,3 +1384,28 @@ export async function reloadIdentity(
 ): Promise<ReloadIdentityResponse> {
   return mutation<ReloadIdentityResponse>(transport, "identity.reload");
 }
+
+export interface ActivePersonaResponse {
+  active: string;
+  options: string[];
+}
+
+export async function getActivePersona(
+  token: string,
+  base: string = "",
+): Promise<ActivePersonaResponse> {
+  return request<ActivePersonaResponse>(
+    `${base}${IDENTITY_BASE}/persona`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+/** Set (or, with an empty stem, clear) the persona injected into the system prompt. */
+export async function setActivePersona(
+  transport: WebUIMutationTransport,
+  stem: string,
+): Promise<{ active: string }> {
+  return mutation<{ active: string }>(transport, "identity.persona.set", { stem });
+}

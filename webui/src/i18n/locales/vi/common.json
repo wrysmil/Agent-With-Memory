@@ -1112,7 +1112,6 @@
       "groupCore": "Tệp cốt lõi",
       "groupPersonas": "Nhân cách",
       "warningBanner": "Tệp danh tính định hình nhân cách và hành vi của Agent. Sửa sai có thể gây hành vi bất thường hoặc phản hồi không mong muốn. Nếu chưa chắc, hãy sao lưu trước.",
-      "badgeFullTextInject": "Chèn toàn văn",
       "badgeNeedsCompile": "Cần biên dịch",
       "badgeAutoRegen": "Tự sinh lại",
       "badgeSystemSection": "Phần hệ thống",
@@ -1168,7 +1167,10 @@
           "label": "Chuyên gia kỹ thuật",
           "description": "Không làm loãng thuật ngữ; nêu phiên bản; chứng minh bằng test"
         }
-      }
+      },
+      "activePersona": "Nhân vật đang dùng",
+      "noPersona": "Không dùng",
+      "personaSwitchFailed": "Không thể đổi nhân vật"
     }
   },
   "chat": {

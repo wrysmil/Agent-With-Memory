@@ -45,16 +45,20 @@ EXPECTED_SYSTEM_ROUTES = {
     "/api/settings/identity/file/save": "identity-write-file",
     "/api/settings/identity/reload": "identity-reload",
     "/api/settings/identity/presets": "identity-list-presets",
+    "/api/settings/identity/persona": "identity-get-active-persona",
+    "/api/settings/identity/persona/set": "identity-set-active-persona",
 }
 
 EXPECTED_MUTATION_PATHS = frozenset({
     "/api/settings/identity/file/save",
     "/api/settings/identity/reload",
+    "/api/settings/identity/persona/set",
 })
 
 EXPECTED_WS_ACTIONS = {
     "identity.file.save": "/api/settings/identity/file/save",
     "identity.reload": "/api/settings/identity/reload",
+    "identity.persona.set": "/api/settings/identity/persona/set",
 }
 
 
@@ -66,7 +70,7 @@ def test_identity_paths_are_in_system_routes(path: str, action: str) -> None:
     assert _SYSTEM_ROUTES.get(path) == action
 
 
-def test_system_routes_has_exactly_six_identity_entries() -> None:
+def test_system_routes_has_exactly_the_expected_identity_entries() -> None:
     assert {
         path for path in _SYSTEM_ROUTES if "/identity/" in path
     } == set(EXPECTED_SYSTEM_ROUTES)

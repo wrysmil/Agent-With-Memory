@@ -1007,7 +1007,6 @@
       "groupCore": "核心文件",
       "groupPersonas": "人格模板",
       "warningBanner": "身份文件是 Agent 的核心人格和行为基础。不当修改可能导致 Agent 行为异常、丧失关键能力或产生不可预期的回复。如果你不确定某项修改的影响，建议先备份原文件。",
-      "badgeFullTextInject": "全文注入",
       "badgeNeedsCompile": "需编译",
       "badgeAutoRegen": "自动重生成",
       "badgeSystemSection": "系统段落",
@@ -1063,7 +1062,10 @@
           "label": "技术专家",
           "description": "术语不稀释；结论带版本前提；以测试为准"
         }
-      }
+      },
+      "activePersona": "使用人格",
+      "noPersona": "不使用",
+      "personaSwitchFailed": "切换人格失败"
     },
     "memory": {
       "tabSemantic": "语义记忆",

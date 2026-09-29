@@ -26,6 +26,17 @@ from nanobot.webui.settings_contracts import (
 )
 
 
+def _persona_activation_unavailable(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    """Default for the persona-activation operations.
+
+    They carry a default so a handler built before persona activation existed
+    stays constructible; calling one is a loud 503 rather than an ``AttributeError``
+    deep inside dispatch. The gateway and ``_null_identity_operations`` both bind
+    real implementations explicitly.
+    """
+    raise WebUISettingsError("persona activation is not configured", status=503)
+
+
 @dataclass(frozen=True)
 class IdentitySettingsOperations:
     """Transport-neutral entry points injected into the handler.
@@ -41,6 +52,8 @@ class IdentitySettingsOperations:
     write_file: Callable[..., dict[str, Any]]
     reload: Callable[..., dict[str, Any]]
     list_presets: Callable[..., dict[str, Any]]
+    get_active_persona: Callable[..., dict[str, Any]] = _persona_activation_unavailable
+    set_active_persona: Callable[..., dict[str, Any]] = _persona_activation_unavailable
 
 
 # Canonical set of actions this domain understands; the settings router uses
@@ -51,6 +64,8 @@ IDENTITY_ACTION_NAMES = frozenset({
     "identity-write-file",
     "identity-reload",
     "identity-list-presets",
+    "identity-get-active-persona",
+    "identity-set-active-persona",
 })
 
 
@@ -109,6 +124,15 @@ def dispatch(
         if not isinstance(content, str):
             raise WebUISettingsError("content must be a string")
         return operations.write_file(name=name.strip(), content=content)
+
+    if action == "identity-get-active-persona":
+        return operations.get_active_persona()
+
+    if action == "identity-set-active-persona":
+        stem = payload.get("stem", "")
+        if not isinstance(stem, str):
+            raise WebUISettingsError("stem must be a string")
+        return operations.set_active_persona(stem=stem)
 
     if action == "identity-reload":
         return operations.reload()

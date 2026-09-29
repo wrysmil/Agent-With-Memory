@@ -12,10 +12,12 @@ from nanobot.identity.catalog import (
     CORE_FILES,
     IDENTITY_DIR_NAME,
     LIFECYCLE_OWNED_FILES,
+    PERSONA_STATE_FILE,
     PERSONAS_SUBDIR,
     RUNTIME_SUBDIR,
     IdentityFileSpec,
     discover_personas,
+    is_safe_persona_stem,
     resolve_identity_dir,
 )
 from nanobot.identity.compiler import (
@@ -34,6 +36,7 @@ __all__ = [
     "LIFECYCLE_OWNED_FILES",
     "PERSONA_PRESET_STEMS",
     "PERSONAS_SUBDIR",
+    "PERSONA_STATE_FILE",
     "RUNTIME_SUBDIR",
     "IdentityFileSpec",
     "IdentityStore",
@@ -42,6 +45,7 @@ __all__ = [
     "compiled_status",
     "discover_personas",
     "ensure_identity_templates",
+    "is_safe_persona_stem",
     "load_identity_template",
     "migrate_legacy_identity_files",
     "read_compiled",

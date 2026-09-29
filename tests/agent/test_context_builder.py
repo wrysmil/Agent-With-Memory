@@ -662,3 +662,124 @@ class TestPoliciesSectionInjection:
 
         assert "## Policies" not in result
 
+
+
+# ---------------------------------------------------------------------------
+# Persona injection（表现层段落）
+# ---------------------------------------------------------------------------
+
+
+def _write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("state", "persona_body", "expected"),
+    [
+        (None, "你是技术搭档", False),
+        ("", "你是技术搭档", False),
+        ("tech_expert", "你是技术搭档", True),
+        ("missing_one", "你是技术搭档", False),
+        ("tech_expert", "", False),
+    ],
+)
+def test_persona_section_only_injects_when_active(tmp_path, state, persona_body, expected):
+    ws = tmp_path / "workspace"
+    _write(ws / "identity" / "SOUL.md", "# Soul\n\n本体内容。\n")
+    _write(ws / "identity" / "AGENT.md", "# Agent 行为准则\n\n方法论内容。\n")
+    _write(ws / "identity" / "personas" / "tech_expert.md", f"# 技术专家\n\n{persona_body}\n")
+    if state is not None:
+        _write(ws / "identity" / "active_persona", state + "\n")
+
+    prompt = ContextBuilder(ws).build_system_prompt()
+
+    assert ("## 当前人格：tech_expert" in prompt) is expected
+
+
+def test_persona_strips_leading_h1_and_keeps_lower_headings(tmp_path):
+    ws = tmp_path / "workspace"
+    _write(ws / "identity" / "personas" / "tech_expert.md", "# 技术专家\n\n## 人格\n\n严谨。\n")
+    _write(ws / "identity" / "active_persona", "tech_expert\n")
+
+    prompt = ContextBuilder(ws).build_system_prompt()
+
+    assert "## 当前人格：tech_expert" in prompt
+    tail = prompt.split("## 当前人格：tech_expert", 1)[1]
+    assert "技术专家" not in tail
+    assert "## 人格" in tail
+
+
+def test_persona_section_sits_between_soul_and_agent(tmp_path):
+    ws = tmp_path / "workspace"
+    _write(ws / "identity" / "SOUL.md", "SOUL_BODY")
+    _write(ws / "identity" / "AGENT.md", "AGENT_BODY")
+    _write(ws / "identity" / "personas" / "tech_expert.md", "PERSONA_BODY")
+    _write(ws / "identity" / "active_persona", "tech_expert")
+
+    prompt = ContextBuilder(ws).build_system_prompt()
+
+    assert prompt.index("## SOUL.md") < prompt.index("## 当前人格") < prompt.index("## AGENT.md")
+
+
+def test_persona_ignores_path_traversal_state(tmp_path):
+    """状态文件是用户可写的，``../`` 不能被当成 persona 路径拼进 prompt。
+
+    逃逸目标必须真实存在——指向不存在的文件只会走到 ``OSError`` 兜底分支，
+    那样即使删掉 ``is_safe_persona_stem`` 守卫这条测试也照样绿，等于没钉住任何东西。
+    """
+    ws = tmp_path / "workspace"
+    _write(ws / "identity" / "personas" / "tech_expert.md", "PERSONA_BODY")
+    _write(ws / "identity" / "active_persona", "../../../escape")
+    # ws/identity/personas/../../../escape.md == tmp_path/escape.md
+    _write(tmp_path / "escape.md", "ESCAPED_BODY")
+
+    prompt = ContextBuilder(ws).build_system_prompt()
+
+    assert "## 当前人格" not in prompt
+    assert "ESCAPED_BODY" not in prompt
+
+
+def test_persona_stem_with_dot_is_injected(tmp_path):
+    """``foo.bar.md`` 的 stem 含点：能被列出就必须能被激活、能注入。
+
+    旧守卫用 ``str.isidentifier()``，会静默吞掉这类 persona——文件在选择列表里
+    可见，激活却永远失败。
+    """
+    ws = tmp_path / "workspace"
+    _write(ws / "identity" / "personas" / "foo.bar.md", "# 点号人格\n\nDOTTED_BODY\n")
+    _write(ws / "identity" / "active_persona", "foo.bar")
+
+    prompt = ContextBuilder(ws).build_system_prompt()
+
+    assert "## 当前人格：foo.bar" in prompt
+    assert "DOTTED_BODY" in prompt
+
+
+def test_persona_injects_once_when_soul_absent(tmp_path):
+    """SOUL.md 缺失时 persona 仍要注入，且只注入一次。
+
+    段位挂在 ``sources`` 的 SOUL 槽位上而非「SOUL 渲染成功之后」，所以本体
+    缺失不会连带把人格吞掉——这条钉的就是这个行为不被回归掉。
+    """
+    ws = tmp_path / "workspace"
+    _write(ws / "identity" / "personas" / "tech_expert.md", "PERSONA_BODY")
+    _write(ws / "identity" / "active_persona", "tech_expert")
+
+    prompt = ContextBuilder(ws).build_system_prompt()
+
+    assert prompt.count("## 当前人格：tech_expert") == 1
+    assert "PERSONA_BODY" in prompt
+
+
+def test_factory_template_persona_is_not_injected(tmp_path):
+    """出厂 persona 模板没被改过就不该占 prompt（零 token 成本）。"""
+    template = load_bundled_template("personas/tech_expert.md")
+    assert template is not None
+    ws = tmp_path / "workspace"
+    _write(ws / "identity" / "personas" / "tech_expert.md", template)
+    _write(ws / "identity" / "active_persona", "tech_expert")
+
+    prompt = ContextBuilder(ws).build_system_prompt()
+
+    assert "## 当前人格" not in prompt

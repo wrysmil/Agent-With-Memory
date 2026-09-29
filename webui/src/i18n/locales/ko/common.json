@@ -1112,7 +1112,6 @@
       "groupCore": "핵심 파일",
       "groupPersonas": "페르소나",
       "warningBanner": "ID 파일은 에이전트의 핵심 인격과 행동 기반입니다. 부적절한 수정은 행동 이상, 핵심 능력 상실 또는 예상치 못한 응답을 일으킬 수 있습니다. 영향이 불확실하면 원본을 백업하세요.",
-      "badgeFullTextInject": "전문 삽입",
       "badgeNeedsCompile": "컴파일 필요",
       "badgeAutoRegen": "자동 재생성",
       "badgeSystemSection": "시스템 섹션",
@@ -1168,7 +1167,10 @@
           "label": "기술 전문가",
           "description": "용어 축소 없음, 버전 전제, 테스트로 증명"
         }
-      }
+      },
+      "activePersona": "사용 중인 페르소나",
+      "noPersona": "사용 안 함",
+      "personaSwitchFailed": "페르소나 전환에 실패했습니다"
     }
   },
   "chat": {
