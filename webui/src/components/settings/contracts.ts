@@ -11,6 +11,7 @@ export type SettingsSectionKey =
   | "apps"
   | "automations"
   | "skills"
+  | "agents"
   | "memory"
   | "identity"
   | "runtime"

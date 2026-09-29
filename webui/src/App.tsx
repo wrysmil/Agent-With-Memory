@@ -116,7 +116,7 @@ const TOKEN_REFRESH_MIN_DELAY_MS = 5_000;
 const PAIRING_POLL_INTERVAL_MS = 5_000;
 const PAIRING_IDLE_POLL_INTERVAL_MS = 15_000;
 const PAIRING_DISMISS_SNOOZE_MS = 30_000;
-type ShellView = "chat" | "settings" | "apps" | "automations" | "skills";
+type ShellView = "chat" | "settings" | "apps" | "automations" | "skills" | "agents";
 type ShellRoute = {
   view: ShellView;
   activeKey: string | null;
@@ -168,6 +168,7 @@ const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
   "apps",
   "automations",
   "skills",
+  "agents",
   "memory",
   "identity",
   "runtime",
@@ -183,7 +184,9 @@ function defaultShellRoute(): ShellRoute {
 }
 
 function shellViewForSettingsSection(section: SettingsSectionKey): ShellView {
-  if (section === "apps" || section === "automations" || section === "skills") return section;
+  if (section === "apps" || section === "automations" || section === "skills" || section === "agents") {
+    return section;
+  }
   return "settings";
 }
 
@@ -253,6 +256,9 @@ function readShellRoute(): ShellRoute {
   }
   if (path === "/skills") {
     return { view: "skills", activeKey, settingsSection: "skills" };
+  }
+  if (path === "/agents") {
+    return { view: "agents", activeKey, settingsSection: "agents" };
   }
   if (path.startsWith("/temporary/")) {
     const encoded = path.slice("/temporary/".length);
@@ -1931,6 +1937,12 @@ function Shell({
     setMobileSidebarOpen(false);
   }, [activeKey, navigate]);
 
+  const onOpenAgents = useCallback(() => {
+    setSessionSearchOpen(false);
+    navigate({ view: "agents", activeKey, settingsSection: "agents" });
+    setMobileSidebarOpen(false);
+  }, [activeKey, navigate]);
+
   const onOpenSkills = useCallback(() => {
     setSessionSearchOpen(false);
     navigate({ view: "skills", activeKey, settingsSection: "skills" });
@@ -2477,10 +2489,14 @@ function Shell({
     onOpenSettings,
     onOpenApps,
     onOpenAutomations,
+    onOpenAgents,
     onOpenSkills,
     onSettingsIntent,
     onOpenSearch: onOpenSessionSearch,
-    activeUtility: view === "apps" || view === "automations" || view === "skills" ? view : null,
+    activeUtility:
+      view === "apps" || view === "automations" || view === "skills" || view === "agents"
+        ? view
+        : null,
     onToggleArchived,
     pinnedKeys: sidebarPinnedTabKeys,
     archivedKeys: sidebarArchivedTabKeys,

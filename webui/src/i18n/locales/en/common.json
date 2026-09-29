@@ -75,6 +75,7 @@
     },
     "apps": "Apps",
     "automations": "Automations",
+    "agents": "Agents",
     "skills": {
       "title": "Skills"
     }
@@ -104,7 +105,215 @@
       "automations": "Automations",
       "skills": "Skills",
       "memory": "Memory",
+      "agents": "Agents",
       "identity": "Identity"
+    },
+    "agents": {
+      "title": "Sub-Agents",
+      "subtitle": "Give each agent its own skills, tools, model and prompt.",
+      "create": "New agent",
+      "untitled": "Untitled",
+      "loading": "Loading…",
+      "empty": "No agents yet",
+      "search": "Search name or description…",
+      "categoryFilter": "Filter by category",
+      "categoryAll": "All",
+      "viewMode": "View mode",
+      "viewGrid": "Cards",
+      "viewTree": "Tree",
+      "hiddenGroup": "Hidden agents ({{count}})",
+      "deleteTitle": "Delete “{{name}}”?",
+      "deleteBody": "This cannot be undone. Existing sessions are not affected.",
+      "mode": {
+        "all": "All",
+        "include": "Only selected",
+        "exclude": "Exclude selected"
+      },
+      "section": {
+        "basics": "① Basics",
+        "tools": "② Capabilities · Tools",
+        "skills": "③ Capabilities · Skills",
+        "model": "④ Model",
+        "prompt": "⑤ Prompt",
+        "relations": "⑥ Relations"
+      },
+      "capability": {
+        "count": "{{on}} / {{total}} enabled",
+        "enabledCount": "{{count}} enabled",
+        "locked": "Required",
+        "empty": "No matches",
+        "allModeHint": "Currently set to “All” — the list below is read-only. Switch to “Only selected” to pick individual items.",
+        "selectGroup": "Select all",
+        "clearGroup": "Clear"
+      },
+      "tools": {
+        "modeLabel": "Search tools"
+      },
+      "skills": {
+        "modeLabel": "Search skills"
+      },
+      "model": {
+        "label": "Model",
+        "auto": "Automatic (follow global)",
+        "autoHint": "This agent follows the global model setting."
+      },
+      "prompt": {
+        "label": "System prompt",
+        "insertVariable": "Insert variable",
+        "variables": "Available variables",
+        "placeholder": "Describe this agent's responsibilities, boundaries and output style. Variables like {{name}} are supported.",
+        "preview": "Final prompt preview",
+        "copy": "Copy",
+        "segmentBase": "Base system prompt (platform)",
+        "segmentIdentity": "Identity section",
+        "segmentCustom": "This agent's prompt",
+        "emptySegment": "(empty)"
+      },
+      "promptContext": {
+        "user": "(no user profile configured)"
+      },
+      "relations": {
+        "group": "Dispatchable sub-agents",
+        "self": "Cannot dispatch itself",
+        "cycle": "Would create a cycle",
+        "modeLabel": "Sub-agent mode",
+        "hint": "Dispatched sub-agents keep their own tool, skill and model settings."
+      },
+      "basics": {
+        "id": "ID",
+        "idLocked": "System presets cannot be renamed",
+        "name": "Name",
+        "namePlaceholder": "e.g. SEO writer",
+        "description": "Description",
+        "descriptionPlaceholder": "One line on what it is good at and when to use it.",
+        "category": "Category",
+        "noCategory": "Uncategorized",
+        "appearance": "Icon and colour",
+        "systemPreset": "System preset",
+        "custom": "Custom",
+        "customized": "Customized",
+        "hidden": "Hidden",
+        "updatedAt": "Updated {{time}}"
+      },
+      "card": {
+        "menu": "More actions",
+        "edit": "Edit",
+        "duplicate": "Duplicate",
+        "show": "Show",
+        "hide": "Hide",
+        "delete": "Delete",
+        "noDescription": "No description",
+        "tools": "Tools",
+        "skills": "Skills",
+        "subAgents": "Sub-agents",
+        "modelAuto": "Automatic (follow global)"
+      },
+      "color": {
+        "custom": "Custom colour",
+        "hex": "Hex colour"
+      },
+      "icon": {
+        "ariaLabel": "Pick an icon",
+        "search": "Search icons",
+        "empty": "No matching icons"
+      },
+      "editor": {
+        "new": "New agent",
+        "edit": "Edit · {{name}}",
+        "subtitle": "Configure the capabilities, model and prompt for this agent.",
+        "reset": "Reset to default",
+        "unsaved": "Unsaved changes",
+        "save": "Save",
+        "discardTitle": "Discard unsaved changes?",
+        "discardBody": "Closing now will not save this edit.",
+        "discard": "Discard changes"
+      },
+      "tree": {
+        "empty": "No agents to show"
+      },
+      "duplicateSuffix": "copy",
+      "viewList": "List",
+      "viewCard": "Cards",
+      "noMatch": "No matching agents — try a different term or clear the filters.",
+      "emptyHint": "No agents yet. Create one to combine skills, tools and a model.",
+      "noun": {
+        "tools": "tools",
+        "skills": "skills"
+      },
+      "summary": {
+        "all": "All {{noun}}",
+        "include": "{{count}} {{noun}}",
+        "exclude": "{{count}} {{noun}} · {{excluded}} excluded",
+        "subAgentNoun": "sub-agents"
+      },
+      "category": {
+        "general": "General",
+        "coding": "Coding",
+        "writing": "Writing",
+        "research": "Research",
+        "ops": "Ops",
+        "efficiency": "Productivity"
+      },
+      "toolCategory": {
+        "filesystem": "Filesystem",
+        "execution": "Execution",
+        "web": "Web and search",
+        "memory": "Memory",
+        "scheduling": "Scheduling",
+        "session": "Sessions",
+        "orchestration": "Orchestration",
+        "media": "Media"
+      },
+      "skillSource": {
+        "builtin": "Built-in",
+        "workspace": "Workspace",
+        "plugin": "Plugins"
+      },
+      "risk": {
+        "low": "Low risk",
+        "medium": "Medium risk",
+        "high": "High risk"
+      },
+      "health": {
+        "healthy": "Connected",
+        "degraded": "Degraded",
+        "unavailable": "Unavailable"
+      },
+      "model": {
+        "context": "context",
+        "vision": "Vision",
+        "toolUse": "Tool use"
+      },
+      "variable": {
+        "name": "Agent name",
+        "description": "Agent description",
+        "skills": "Enabled skills",
+        "tools": "Enabled tools",
+        "model": "Current model",
+        "date": "Today's date",
+        "userProfile": "User profile",
+        "workspace": "Workspace name"
+      },
+      "emoji": {
+        "agents": "Agents",
+        "roles": "Roles",
+        "work": "Work",
+        "nature": "Nature",
+        "objects": "Objects",
+        "symbols": "Symbols",
+        "food": "Food",
+        "activity": "Activity"
+      },
+      "rail": {
+        "prompt": "Final prompt",
+        "capabilities": "Effective capabilities",
+        "model": "Model",
+        "toolList": "Tools",
+        "skillList": "Skills",
+        "subAgents": "Dispatchable sub-agents",
+        "noSubAgents": "Dispatches no sub-agents",
+        "none": "None"
+      }
     },
     "sections": {
       "interface": "Interface",

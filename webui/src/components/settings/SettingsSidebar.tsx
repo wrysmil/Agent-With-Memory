@@ -51,6 +51,7 @@ export function standaloneSectionTitle(section: SettingsSectionKey): string {
   if (section === "apps") return "Apps";
   if (section === "automations") return "Automations";
   if (section === "skills") return "Skills";
+  if (section === "agents") return "Agents";
   return SETTINGS_NAV_ITEMS.find((item) => item.key === section)?.fallback ?? "Settings";
 }
 
