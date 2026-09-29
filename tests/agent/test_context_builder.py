@@ -771,8 +771,16 @@ def test_persona_injects_once_when_soul_absent(tmp_path):
     assert "PERSONA_BODY" in prompt
 
 
-def test_factory_template_persona_is_not_injected(tmp_path):
-    """出厂 persona 模板没被改过就不该占 prompt（零 token 成本）。"""
+def test_factory_template_persona_is_injected_when_activated(tmp_path):
+    """出厂 persona 预设被显式激活时照常注入。
+
+    这条断言原本是反的，理由是「没被改过的出厂模板不该占 prompt」。但 persona
+    是否生效由 ``active_persona`` 决定，而用户写这个文件的目的就是激活某个
+    人格——跳过出厂内容等于「选了等于没选」，还必须手动改一个字才生效。省下的
+    那点 token 不值这个代价。与 SOUL 走同一套判断：SOUL 也不跳过出厂模板。
+
+    真正该零成本的是**未被激活**的 persona，由下面那条用例钉住。
+    """
     template = load_bundled_template("personas/tech_expert.md")
     assert template is not None
     ws = tmp_path / "workspace"
@@ -781,7 +789,23 @@ def test_factory_template_persona_is_not_injected(tmp_path):
 
     prompt = ContextBuilder(ws).build_system_prompt()
 
-    assert "## 当前人格" not in prompt
+    assert prompt.count("## 当前人格：tech_expert") == 1
+    assert "你是 nanobot 的技术搭档" in prompt
+
+
+def test_unactivated_factory_persona_costs_nothing(tmp_path):
+    """没被选中的出厂 persona 不占 prompt——这才是零 token 成本该管的地方。"""
+    template = load_bundled_template("personas/tech_expert.md")
+    assert template is not None
+    ws = tmp_path / "workspace"
+    _write(ws / "identity" / "personas" / "tech_expert.md", template)
+    _write(ws / "identity" / "personas" / "companion.md", template)
+    _write(ws / "identity" / "active_persona", "companion")
+
+    prompt = ContextBuilder(ws).build_system_prompt()
+
+    assert "## 当前人格：companion" in prompt
+    assert "## 当前人格：tech_expert" not in prompt
 
 
 class TestWorkingMemoryInjection:

@@ -408,7 +408,15 @@ class ContextBuilder:
         persona 是可切换的表现层，SOUL 是不可切换的本体，两者分段注入让
         「改本体」与「切表现」互不干扰。文件内容原样注入、只剥一级标题，
         不解析字段——用户改标题不会让 persona 静默失效。未激活 / 目标缺失 /
-        空文件 / 仍是出厂模板时静默跳过，不报错。
+        空文件时静默跳过，不报错。
+
+        这里**不**跳过出厂 persona 预设，与 SOUL 走同一套判断
+        （``_SKIPPABLE_DEFAULTS`` 同样不含 SOUL.md）：出厂 persona 同样是用户
+        显式激活才生效的东西，而「是否激活」已由 ``active_persona`` 决定。
+        早先这里对 persona 额外做了 ``_is_template_content`` 跳过，结果所有
+        未改过的出厂 persona 全部不注入——用户选了 companion 却毫无反应，
+        必须手动改一个字才生效。是否注入只该由激活态决定，不该由内容像不像
+        出厂模板决定。
         """
         identity_dir = resolve_identity_dir(self.workspace)
         try:
@@ -423,7 +431,7 @@ class ContextBuilder:
             content = (identity_dir / PERSONAS_SUBDIR / f"{stem}.md").read_text(encoding="utf-8")
         except OSError:
             return ""
-        if not content.strip() or self._is_template_content(content, f"personas/{stem}.md"):
+        if not content.strip():
             return ""
         body = _strip_leading_h1(content).strip()
         if not body:

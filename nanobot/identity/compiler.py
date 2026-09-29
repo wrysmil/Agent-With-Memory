@@ -37,6 +37,16 @@ COMPILER_VERSION_FILENAME = ".compiler_version"
 # 单行上限：压掉用户写进身份文件里的整段长文，但保留一行内的完整语义。
 MAX_LINE_CHARS = 240
 
+# owned section 提取到的正文行占全量正文行的比例低于此值时，即使有标题命中也
+# 降级为「收全文」。命中的往往只是导语所属的那一个标题——marker 是中英混排的
+# 词表，用户的标题语言一对不上就会静默丢掉整份正文（实测：SOUL.md 用英文
+# ``## Core Principles`` / ``## Execution Rules``，``# Soul`` 命中后 ``## Core
+# Principles`` 不命中，产物只剩 50 字节的导语，规则全丢）。
+#
+# 取值刻意低于 0.5：章节收窄本就可以只留少数几节，owned 占比天然偏低；阈值
+# 再高就会把「SOUL.md 里有大段非身份章节」的正常情况误判成 marker 没对上。
+MIN_OWNED_COVERAGE = 0.34
+
 # 占位符：未填写的字段不该进 system prompt——这是编译相对全文注入最大的收益。
 _PLACEHOLDER_MARKERS: tuple[str, ...] = (
     "（待填",
@@ -90,6 +100,15 @@ COMPILE_TARGETS: tuple[CompileTarget, ...] = (
             "价值取向",
             "气质",
             "overview",
+            # marker 走子串匹配，故单词形式即可覆盖复数与派生（rule → rules）。
+            # 缺了英文这组，用户用英文标题写身份就会只剩导语——见
+            # _extract_owned_sections 的降级说明。
+            "principle",
+            "rule",
+            "guideline",
+            "value",
+            "personality",
+            "mission",
         ),
     ),
     CompileTarget(
@@ -134,14 +153,34 @@ def _is_noise(stripped: str) -> bool:
     return len(stripped) >= 3 and set(stripped) <= {"-", "*", "_"}
 
 
-def _extract_owned_sections(lines: list[str], owned_markers: tuple[str, ...]) -> list[str]:
-    """取本目标拥有的章节；一个标题都没命中时降级为「全部非标题行」。
+def _payload_line_count(lines: list[str]) -> int:
+    """计入覆盖率的正文行数：排除标题行与 Markdown 噪声行。
 
-    降级是刻意的：用户的 SOUL.md 未必用出厂模板的标题（「核心原则」「执行规则」），
-    收窄失败时宁可全收，也不要因为标题对不上而编译出空产物。
+    噪声行必须排除——``picked`` 会连同 owned 章节之间的空行一起收进来，若把它们
+    算进分母，一个「只有导语」的结果看上去也占了三成，覆盖率检查就形同虚设。
     """
+    return sum(
+        1
+        for line in lines
+        if not line.lstrip().startswith("#") and not _is_noise(line.strip())
+    )
+
+
+def _extract_owned_sections(lines: list[str], owned_markers: tuple[str, ...]) -> list[str]:
+    """取本目标拥有的章节；标题对不上或收窄明显漏料时降级为「全部正文行」。
+
+    降级有两条触发路径，两条的缺失形态不同：
+
+    1. 一个标题都没命中——用户的 SOUL.md 未必用出厂模板的标题（「核心原则」
+       「执行规则」），收窄失败时宁可全收，也不要编译出空产物。
+    2. 命中了但收窄后正文覆盖率低于 :data:`MIN_OWNED_COVERAGE`——这类更隐蔽：
+       导语所属的标题（「# Soul」）总能被 marker 命中，于是 ``matched_any`` 为真，
+       后面所有正文因标题语言不同而全部落选，只剩导语被当成"编译成功"。
+    """
+    all_body = [line for line in lines if not line.lstrip().startswith("#")]
+
     if not owned_markers:
-        return [line for line in lines if not line.lstrip().startswith("#")]
+        return all_body
 
     picked: list[str] = []
     current_owned = False
@@ -154,9 +193,14 @@ def _extract_owned_sections(lines: list[str], owned_markers: tuple[str, ...]) ->
         if current_owned:
             picked.append(line)
 
-    if matched_any:
-        return picked
-    return [line for line in lines if not line.lstrip().startswith("#")]
+    if not matched_any:
+        return all_body
+
+    owned_body = _payload_line_count(picked)
+    total_body = _payload_line_count(all_body)
+    if total_body and owned_body < total_body * MIN_OWNED_COVERAGE:
+        return all_body
+    return picked
 
 
 def _enforce_char_budget(lines: list[str], max_chars: int) -> str:

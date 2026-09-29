@@ -53,6 +53,46 @@ def test_owned_sections_are_kept_and_other_sections_dropped():
     assert "不该出现" not in out
 
 
+def test_english_headings_are_kept_for_identity_core():
+    """用户的 SOUL.md 未必用中文标题；英文标题也要能收进来。
+
+    回归用例：``# Soul`` 命中 marker、``## Core Principles`` / ``## Execution
+    Rules`` 不命中时，产物只剩导语，12 条规则整份丢失。
+    """
+    content = (
+        "# Soul\n\n"
+        "I am a personal AI assistant.\n\n"
+        "## Core Principles\n\n"
+        "- Solve by doing, not by describing what I would do.\n"
+        "- Keep responses short unless depth is asked for.\n"
+        "\n"
+        "## Execution Rules\n\n"
+        "- Act immediately on single-step tasks.\n"
+        "- Read before you write.\n"
+    )
+
+    out = compile_content(content, _target("identity_core"))
+
+    assert "Solve by doing" in out
+    assert "Keep responses short" in out
+    assert "Act immediately" in out
+    assert "Read before you write" in out
+
+
+def test_thin_owned_coverage_falls_back_to_all_body_lines():
+    """只命中导语标题、正文几乎全落选时，按漏料处理并收全文。
+
+    覆盖 :data:`MIN_OWNED_COVERAGE` 触发路径——这类缺失比「一个标题都没命中」
+    更隐蔽，因为 ``matched_any`` 为真，旧的降级判断不会触发。
+    """
+    content = "# Soul\n\n- 导语一行\n\n## 某个完全不认识的章节\n\n- 规则一\n- 规则二\n- 规则三\n"
+
+    out = compile_content(content, _target("identity_core"))
+
+    assert "规则一" in out
+    assert "规则三" in out
+
+
 def test_falls_back_to_all_body_lines_when_no_section_matches():
     """用户的标题未必和出厂模板一致；收窄失败时宁可全收，不要编译出空产物。"""
     content = "# 我的设定\n\n- 规则一\n- 规则二\n"
