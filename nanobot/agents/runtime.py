@@ -121,9 +121,9 @@ class AgentProfileRuntime:
 
         names: list[str] = []
         for entry in SkillsLoader(self._workspace).list_skills(filter_unavailable=False):
-            name = entry.get("name") if isinstance(entry, dict) else None
+            name = entry.get("name")
             if name:
-                names.append(str(name))
+                names.append(name)
         return names
 
     def _known_tool_ids(self, tools_config: object | None) -> list[str]:
@@ -179,7 +179,13 @@ class AgentProfileRuntime:
             # ``_resolve_tool_config_refs`` 在导入期跑过一次，被循环依赖挡下后
             # 不会自动重试（schema.py:790-794 捕获 ImportError 即 pass）。
             # 这里显式补一次，函数幂等。
-            from nanobot.config.schema import _resolve_tool_config_refs
+            #
+            # 跨模块调用私有名是刻意的：config.schema 没有暴露公开的 rebuild
+            # 入口，而这是唯一能把 pydantic 的延迟字段类型补全的路径。改用
+            # 「先 import 工具模块再试构造」不管用——那个函数已经跑过了。
+            from nanobot.config.schema import (
+                _resolve_tool_config_refs,  # type: ignore[reportPrivateUsage]  # 见上
+            )
 
             _resolve_tool_config_refs()
             return ToolsConfig()

@@ -48,6 +48,7 @@ from nanobot.agent.turn_delivery import (
 )
 from nanobot.agent.turn_delivery import TurnRoute as TurnRoute
 from nanobot.agent.turn_hooks import AgentTurnHookSpec, build_agent_turn_hook
+from nanobot.agents.runtime import AgentProfileRuntime
 from nanobot.bus.events import INBOUND_META_USER_SHELL, InboundMessage, OutboundMessage
 from nanobot.bus.outbound_events import (
     StreamDeltaEvent,
@@ -427,6 +428,10 @@ class AgentLoop:
             max_iterations=self.max_iterations,
             max_concurrent_subagents=max_concurrent_subagents,
             llm_wall_timeout_for_session=lambda sk: runner_wall_llm_timeout_s(self.sessions, sk),
+            # 二期：让 spawn 能按 Agent 档案裁剪工具/技能并注入提示词。
+            # 只接 agent_profiles，不接 model_resolver —— modelId 在宿主注入
+            # resolver 之前是惰性的，解析 provider 凭据不是 subagent 的职责。
+            agent_profiles=AgentProfileRuntime(workspace),
         )
         self._unified_session = unified_session
         self._running = False
