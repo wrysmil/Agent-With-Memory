@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from nanobot.agent.tools.base import Tool, ToolResult, tool_parameters
@@ -14,6 +15,7 @@ from nanobot.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
+from nanobot.agents.runtime import AgentProfileRuntime
 from nanobot.security.workspace_access import current_workspace_scope
 
 if TYPE_CHECKING:
@@ -42,6 +44,13 @@ if TYPE_CHECKING:
             ),
             default=False,
         ),
+        agent=StringSchema(
+            description=(
+                "Optional id of a configured Agent profile. When given, the subagent "
+                "runs with that profile's prompt, tool set and skill set. Omit to use "
+                "the default subagent configuration."
+            ),
+        ),
         required=["task"],
     )
 )
@@ -50,6 +59,12 @@ class SpawnTool(Tool):
 
     def __init__(self, manager: "SubagentManager"):
         self._manager = manager
+        self._agent_profiles: AgentProfileRuntime | None = None
+        try:
+            self._agent_profiles = AgentProfileRuntime(Path(manager.workspace))
+        except (TypeError, AttributeError):
+            # manager 没有 workspace（测试替身等）——描述里就不枚举档案。
+            self._agent_profiles = None
 
     @classmethod
     def create(cls, ctx: ToolContext) -> Tool:
@@ -64,7 +79,7 @@ class SpawnTool(Tool):
 
     @property
     def description(self) -> str:
-        return (
+        base = (
             "Spawn a subagent to handle a task in the background. "
             "Use this for complex or time-consuming tasks that can run independently. "
             "Set wait=true for a consultation whose result must inform the current turn. "
@@ -72,6 +87,24 @@ class SpawnTool(Tool):
             "For deliverables or existing projects, inspect the workspace first "
             "and use a dedicated subdirectory when helpful."
         )
+        available = self._available_agent_ids()
+        if not available:
+            return base
+        return (
+            f"{base} Pass agent=<id> to run it as a configured Agent profile. "
+            f"Available profiles: {', '.join(available)}."
+        )
+
+    def _available_agent_ids(self) -> list[str]:
+        """当前可用的档案 id 列表；读不到时返回空列表（描述退回基础文案）。"""
+        if self._agent_profiles is None:
+            return []
+        try:
+            from nanobot.agents.store import AgentStore  # local: 避免导入环
+
+            return [p.id for p in AgentStore(self._agent_profiles.workspace).list_profiles()]
+        except (OSError, ValueError):
+            return []
 
     @property
     def concurrency_safe(self) -> bool:
@@ -84,6 +117,7 @@ class SpawnTool(Tool):
         label: str | None = None,
         temperature: float | None = None,
         wait: bool = False,
+        agent: str | None = None,
         **kwargs: Any,
     ) -> str:
         """Spawn a subagent to execute the given task."""
@@ -94,6 +128,9 @@ class SpawnTool(Tool):
         origin_chat_id = request_ctx.chat_id
         session_key = request_ctx.session_key or f"{origin_channel}:{origin_chat_id}"
         method = self._manager.run_inline if wait else self._manager.spawn
+        # 只在真的要按档案跑时才传 agent_id：省略时保持旧调用形状，
+        # 第三方替身 / 子类若还没跟上新签名也不会被这一个可选参数打爆。
+        extra: dict[str, Any] = {} if agent is None else {"agent_id": agent}
         return await method(
             task=task,
             runtime=request_ctx.runtime,
@@ -104,4 +141,5 @@ class SpawnTool(Tool):
             origin_message_id=request_ctx.message_id,
             temperature=temperature,
             workspace_scope=current_workspace_scope(),
+            **extra,
         )
