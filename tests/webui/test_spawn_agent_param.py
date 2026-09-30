@@ -84,3 +84,29 @@ async def test_execute_forwards_agent_id(tmp_path: Path) -> None:
     with request_context(RequestContext(channel="cli", chat_id="c1", runtime=_runtime())):
         await tool.execute("do it", agent="code-reviewer")
     assert manager.calls[0]["agent_id"] == "code-reviewer"
+
+
+@pytest.mark.asyncio
+async def test_execute_rejects_bad_agent_before_spawning(tmp_path: Path) -> None:
+    """档案 id 拼错时必须当场报错，不能先回一句「started」再让模型干等。
+
+    后台路径的失败要等任务跑完才通过 announce 回到 LLM，模型会以为派发成功。
+    """
+    from nanobot.agent.subagent import SubagentManager
+    from nanobot.agents.runtime import AgentProfileRuntime
+    from nanobot.bus.queue import MessageBus
+
+    manager = SubagentManager(
+        workspace=tmp_path,
+        bus=MessageBus(),
+        max_tool_result_chars=1000,
+        agent_profiles=AgentProfileRuntime(tmp_path),
+    )
+    tool = SpawnTool(manager)
+    with request_context(RequestContext(channel="cli", chat_id="c1", runtime=_runtime())):
+        out = await tool.execute("do it", agent="code-reviwer")
+
+    text = str(out)
+    assert "code-reviwer" in text, "错误信息应指出是哪个 id 出的问题"
+    assert "code-reviewer" in text, "错误信息应列出可用的真实 id 让模型能纠正"
+    assert "started" not in text, "拒绝时不得回「started」——那会让模型以为派发成功"

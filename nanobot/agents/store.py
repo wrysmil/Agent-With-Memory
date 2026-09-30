@@ -129,9 +129,17 @@ class AgentStore:
 
     # -- 读 -------------------------------------------------------------------
 
-    def list_profiles(self) -> list[AgentProfile]:
+    def list_profiles(self, *, include_hidden: bool = True) -> list[AgentProfile]:
+        """列出档案。
+
+        ``include_hidden=False`` 排除 ``hidden=True`` 的档案。给「对 LLM 可见」
+        的消费方用——用户把档案隐藏起来，意图是不想让它出现在被枚举的清单里，
+        而 spawn 的工具描述正是这样一个清单。
+        """
         with self._lock:
             profiles = list(self._load_all().values())
+        if not include_hidden:
+            profiles = [p for p in profiles if not p.hidden]
         profiles.sort(key=_sort_key)
         return profiles
 

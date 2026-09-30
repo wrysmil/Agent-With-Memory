@@ -48,6 +48,28 @@ class _SubagentOrigin(TypedDict):
     llm_usage_source: NotRequired[LLMUsageSource]
 
 
+@dataclass(frozen=True, slots=True)
+class _AgentPreparation:
+    """``agent`` 参数的解析结果。
+
+    区分两件必须分开的事：
+
+    - **没传 agent**（``agent_id`` 为 None）→ :attr:`allowed_tools` 为 None，
+      工具集不裁剪。这是二期之前就有的默认行为，不是漏洞。
+    - **传了但解析不出来** → :attr:`rejected` 为 True、:attr:`allowed_tools`
+      为空集。绝不能退化成上一条。
+
+    漏掉这个区分的后果：用户在档案页配了只读档案，LLM 把 id 拼错一个字母，
+    解析失败后子 Agent 却拿到 subagent 范围的全量 13 个工具（含 exec /
+    write_file / edit_file），用户画的能力边界被静默丢弃，且没有任何信号。
+    """
+
+    rejected: bool
+    error: str | None = None
+    agent: "ResolvedAgent | None" = None
+    allowed_tools: frozenset[str] | None = None
+
+
 @dataclass(slots=True)
 class SubagentStatus:
     """Real-time status of a running subagent."""
@@ -204,7 +226,9 @@ class SubagentManager:
     def _resolve_agent(self, agent_id: str | None) -> ResolvedAgent | None:
         """把档案 id 解析成运行时约束。未注入 / id 非法 / 档案不存在 → None。
 
-        解析失败一律回退而不是抛错：配置有问题不该让子 agent 拒绝干活。
+        仅保留给「未注入 agent_profiles 的宿主」和测试用。**运行路径请用
+        :meth:`_prepare_agent`** —— 它会区分「没传」与「传了但解析失败」，
+        这里的 None 无法表达这个区别。
         """
         if agent_id is None or self._agent_profiles is None:
             return None
@@ -212,11 +236,88 @@ class SubagentManager:
             return self._agent_profiles.resolve(
                 agent_id, workspace=self.workspace, tools_config=self.tools_config
             )
-        except Exception:  # noqa: BLE001 - 解析失败必须退化成默认行为
-            logger.warning(
-                "Agent 档案 {} 解析失败，回退到默认子 agent", agent_id, exc_info=True
-            )
+        except Exception:  # noqa: BLE001 - 调用方需自行决定降级策略
+            logger.warning("Agent 档案 {} 解析异常", agent_id, exc_info=True)
             return None
+
+    def _available_agent_ids(self) -> list[str]:
+        """当前可用的档案 id，供错误信息列出可选值。
+
+        排除 ``hidden`` 的：用户隐藏档案的意图是不让它出现在被枚举的清单里，
+        而这份清单会进 LLM 的工具描述与报错信息。
+        """
+        if self._agent_profiles is None:
+            return []
+        try:
+            from nanobot.agents.store import AgentStore  # local: 避免导入环
+
+            return [
+                p.id
+                for p in AgentStore(self.workspace).list_profiles(include_hidden=False)
+            ]
+        except (OSError, ValueError):
+            return []
+
+    def _prepare_agent(self, agent_id: str | None) -> _AgentPreparation:
+        """解析 ``agent`` 参数，解析不出来就 fail-closed。
+
+        ``agent_id`` 是 LLM 传的**不可信输入**（见 nanobot 的 spawn schema），
+        最常见的错误是拼错一个字母。若此时退回「无档案」路径，子 Agent 会拿到
+        subagent 范围的全量工具，用户显式配置的只读约束被静默丢弃且无任何
+        信号——所以这里拒绝执行，并把可选 id 一并回给 LLM 让它能自行纠正。
+
+        空格、空白串同样按非法处理：LLM 传空值本身就是异常信号，静默当
+        「未传」会掩盖问题。
+        """
+        if agent_id is None:
+            return _AgentPreparation(rejected=False, allowed_tools=None)
+
+        if self._agent_profiles is None:
+            # 宿主没注入档案能力。保留一期行为：此时 agent 参数本就无从解析，
+            # 拒绝会让所有旧宿主直接不可用。
+            return _AgentPreparation(rejected=False, allowed_tools=None)
+
+        if not agent_id.strip():
+            logger.warning("spawn 收到空的 agent 参数，按非法档案拒绝")
+            return self._reject_agent(agent_id, "档案 id 为空")
+
+        try:
+            resolved = self._agent_profiles.resolve(
+                agent_id, workspace=self.workspace, tools_config=self.tools_config
+            )
+        except Exception:  # noqa: BLE001 - 解析异常同样按拒绝处理
+            logger.warning("Agent 档案 {} 解析异常，已拒绝", agent_id, exc_info=True)
+            return self._reject_agent(agent_id, "档案读取失败")
+
+        if resolved is None:
+            return self._reject_agent(agent_id, "找不到该档案")
+
+        return _AgentPreparation(
+            rejected=False, agent=resolved, allowed_tools=resolved.tool_names
+        )
+
+    def _reject_agent(self, agent_id: str, reason: str) -> _AgentPreparation:
+        """构造拒绝结果：记录日志、列出可用 id 供 LLM 纠正。"""
+        available = self._available_agent_ids()
+        logger.warning(
+            "spawn 收到无法解析的 agent={!r}（{}），已拒绝执行。"
+            "可用档案：{}",
+            agent_id,
+            reason,
+            ", ".join(available) or "（无）",
+        )
+        hint = f"可用档案：{', '.join(available)}" if available else "当前没有可用档案"
+        return _AgentPreparation(
+            rejected=True,
+            error=(
+                f"Error: 无法使用 Agent 档案 {agent_id!r}——{reason}。"
+                f"{hint}。"
+                "请改用其中一个 id，或省略 agent 参数以使用默认子 Agent。"
+            ),
+            agent=None,
+            # 空集：万一有调用方忽略了 rejected 标记，工具也不会被放开。
+            allowed_tools=frozenset(),
+        )
 
     def _apply_model_override(self, runtime: LLMRuntime, model_id: str | None) -> LLMRuntime:
         """按档案的 ``modelId`` 换 runtime；未注入 resolver 或解析不出则原样返回。
@@ -454,11 +555,17 @@ class SubagentManager:
                 cfg = self._subagent_tools_config()
                 cfg.restrict_to_workspace = workspace_scope.restrict_to_workspace
             # 一次解析，工具与提示词共用同一个档案 —— 否则两者会各说各话。
-            agent = self._resolve_agent(agent_id)
+            # 解析失败必须在这里短路：再往下走一步，allowed_tools 就是 None，
+            # 裁剪被跳过，子 Agent 会拿到全量工具。
+            prep = self._prepare_agent(agent_id)
+            if prep.rejected:
+                logger.info("Subagent [{}] 因档案无效被拒绝：{}", task_id, prep.error)
+                return prep.error or "Error: Agent 档案无效"
+            agent = prep.agent
             # Construct from the agent workspace; the bound scope below supplies the project cwd.
             tools = self._build_tools(
                 tools_config=cfg,
-                allowed_tools=agent.tool_names if agent is not None else None,
+                allowed_tools=prep.allowed_tools,
             )
             system_prompt = self._build_subagent_prompt(workspace=root, agent=agent)
             runtime = self._apply_model_override(runtime, agent.model_id if agent else None)

@@ -143,15 +143,24 @@ def test_model_resolver_result_is_used(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_agent_id_reaches_admitted_subagent(tmp_path: Path) -> None:
-    """agent_id 必须一路从 run_inline 传到 _run_admitted_subagent 的 _resolve_agent。
+    """agent_id 必须一路从 run_inline 传到 _run_admitted_subagent 的解析层。
 
     传递链 4 跳：run_inline → _run_subagent → _run_admitted_subagent →
-    _resolve_agent。这里 patch 的是链路终点而非中间方法，后续真实流程
+    _prepare_agent。这里 patch 的是链路终点而非中间方法，后续真实流程
     （announce 等）照常走完。
+
+    探针是 ``_prepare_agent`` 而非 ``_resolve_agent``：运行路径走前者
+    （后者只服务「未注入档案的宿主」与测试）。
     """
     manager = _manager(tmp_path)
     seen: list[str | None] = []
-    with patch.object(manager, "_resolve_agent", side_effect=seen.append):
+    real = manager._prepare_agent
+
+    def _spy(agent_id: str | None):
+        seen.append(agent_id)
+        return real(agent_id)
+
+    with patch.object(manager, "_prepare_agent", side_effect=_spy):
         await manager.run_inline(task="t", agent_id="code-reviewer", runtime=_runtime())
     assert seen == ["code-reviewer"]
 
@@ -163,7 +172,13 @@ async def test_agent_id_reaches_background_subagent(tmp_path: Path) -> None:
     origin = {"channel": "cli", "chat_id": "c1", "session_key": "cli:c1"}
     status = SubagentStatus(task_id="tid", label="lbl", task_description="t", started_at=0.0)
     seen: list[str | None] = []
-    with patch.object(manager, "_resolve_agent", side_effect=seen.append):
+    real = manager._prepare_agent
+
+    def _spy(agent_id: str | None):
+        seen.append(agent_id)
+        return real(agent_id)
+
+    with patch.object(manager, "_prepare_agent", side_effect=_spy):
         async with manager._run_slots:
             await manager._run_subagent(
                 "tid", "t", "lbl", origin, status, _runtime(),  # type: ignore[arg-type]

@@ -96,13 +96,22 @@ class SpawnTool(Tool):
         )
 
     def _available_agent_ids(self) -> list[str]:
-        """当前可用的档案 id 列表；读不到时返回空列表（描述退回基础文案）。"""
+        """当前可用的档案 id 列表；读不到时返回空列表（描述退回基础文案）。
+
+        排除 ``hidden`` 的：这份清单会进 LLM 的工具描述，用户隐藏档案的意图
+        就是不让它出现在被枚举的范围里。
+        """
         if self._agent_profiles is None:
             return []
         try:
             from nanobot.agents.store import AgentStore  # local: 避免导入环
 
-            return [p.id for p in AgentStore(self._agent_profiles.workspace).list_profiles()]
+            return [
+                p.id
+                for p in AgentStore(self._agent_profiles.workspace).list_profiles(
+                    include_hidden=False
+                )
+            ]
         except (OSError, ValueError):
             return []
 
@@ -131,6 +140,15 @@ class SpawnTool(Tool):
         # 只在真的要按档案跑时才传 agent_id：省略时保持旧调用形状，
         # 第三方替身 / 子类若还没跟上新签名也不会被这一个可选参数打爆。
         extra: dict[str, Any] = {} if agent is None else {"agent_id": agent}
+
+        # 后台路径的失败要等任务跑完才通过 announce 回到 LLM 那儿，模型会先
+        # 收到一句「started」然后等上几十秒才知道白等。这里在派发前预检，把
+        # 档案 id 拼错这类错误当场回给 LLM，让它能立刻改用正确的 id。
+        if agent is not None and hasattr(self._manager, "_prepare_agent"):
+            prep = self._manager._prepare_agent(agent)  # type: ignore[attr-defined]
+            if prep.rejected:
+                return ToolResult.error(prep.error or "Error: Agent 档案无效")
+
         return await method(
             task=task,
             runtime=request_ctx.runtime,
