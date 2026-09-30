@@ -25,6 +25,7 @@ from nanobot.agent.tools.exec_session import ExecSessionManager
 from nanobot.agent.tools.file_state import FileStates
 from nanobot.agent.tools.loader import ToolLoader
 from nanobot.agent.tools.registry import ToolRegistry
+from nanobot.agents.runtime import AgentProfileRuntime, ResolvedAgent
 from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import AgentDefaults, ToolsConfig
@@ -106,6 +107,8 @@ class SubagentManager:
         max_iterations: int | None = None,
         max_concurrent_subagents: int | None = None,
         llm_wall_timeout_for_session: Callable[[str | None], float | None] | None = None,
+        agent_profiles: AgentProfileRuntime | None = None,
+        model_resolver: Callable[[str], LLMRuntime | None] | None = None,
     ):
         if workspace is None:
             raise TypeError("SubagentManager.__init__() missing required argument: 'workspace'")
@@ -152,6 +155,9 @@ class SubagentManager:
         self.runner = AgentRunner()
         self._exec_session_manager = ExecSessionManager()
         self._llm_wall_timeout_for_session = llm_wall_timeout_for_session
+        # 二期：Agent 档案。默认 None = 完全保持一期之前的子 agent 行为。
+        self._agent_profiles = agent_profiles
+        self._model_resolver = model_resolver
         self._running_tasks: dict[str, asyncio.Task[str]] = {}
         self._task_statuses: dict[str, SubagentStatus] = {}
         self._session_tasks: dict[str, set[str]] = {}  # session_key -> {task_id, ...}
@@ -195,6 +201,33 @@ class SubagentManager:
             context_window_tokens=runtime.context_window_tokens,
         )
 
+    def _resolve_agent(self, agent_id: str | None) -> ResolvedAgent | None:
+        """把档案 id 解析成运行时约束。未注入 / id 非法 / 档案不存在 → None。
+
+        解析失败一律回退而不是抛错：配置有问题不该让子 agent 拒绝干活。
+        """
+        if agent_id is None or self._agent_profiles is None:
+            return None
+        try:
+            return self._agent_profiles.resolve(
+                agent_id, workspace=self.workspace, tools_config=self.tools_config
+            )
+        except Exception:  # noqa: BLE001 - 解析失败必须退化成默认行为
+            logger.warning(
+                "Agent 档案 {} 解析失败，回退到默认子 agent", agent_id, exc_info=True
+            )
+            return None
+
+    def _apply_model_override(self, runtime: LLMRuntime, model_id: str | None) -> LLMRuntime:
+        """按档案的 ``modelId`` 换 runtime；未注入 resolver 或解析不出则原样返回。
+
+        provider/凭据的解析不属于 subagent 的职责，宿主注入 resolver 才有覆盖。
+        """
+        if model_id is None or self._model_resolver is None:
+            return runtime
+        resolved = self._model_resolver(model_id)
+        return resolved if resolved is not None else runtime
+
     def _subagent_tools_config(self) -> ToolsConfig:
         """Build a ToolsConfig scoped for subagent use."""
         return ToolsConfig(
@@ -208,6 +241,7 @@ class SubagentManager:
         self,
         workspace: Path | None = None,
         tools_config: ToolsConfig | None = None,
+        allowed_tools: frozenset[str] | None = None,
     ) -> ToolRegistry:
         """Build an isolated subagent tool registry via ToolLoader."""
         root = self.workspace if workspace is None else workspace
@@ -224,6 +258,10 @@ class SubagentManager:
             ),
         )
         ToolLoader().load(ctx, registry, scope="subagent")
+        if allowed_tools is not None:
+            for name in registry.names():
+                if name not in allowed_tools:
+                    registry.unregister(name)
         return registry
 
     async def spawn(
@@ -236,6 +274,7 @@ class SubagentManager:
         origin_message_id: str | None = None,
         temperature: float | None = None,
         workspace_scope: WorkspaceScope | None = None,
+        agent_id: str | None = None,
         *,
         runtime: LLMRuntime | None = None,
     ) -> str:
@@ -271,6 +310,7 @@ class SubagentManager:
                 runtime,
                 origin_message_id,
                 workspace_scope,
+                agent_id=agent_id,
             )
         )
         self._running_tasks[task_id] = bg_task
@@ -300,6 +340,7 @@ class SubagentManager:
         origin_message_id: str | None = None,
         temperature: float | None = None,
         workspace_scope: WorkspaceScope | None = None,
+        agent_id: str | None = None,
         *,
         runtime: LLMRuntime | None = None,
     ) -> str:
@@ -334,6 +375,7 @@ class SubagentManager:
                 runtime,
                 origin_message_id,
                 workspace_scope,
+                agent_id=agent_id,
                 announce=False,
             )
         )
@@ -363,6 +405,7 @@ class SubagentManager:
         runtime: LLMRuntime,
         origin_message_id: str | None = None,
         workspace_scope: WorkspaceScope | None = None,
+        agent_id: str | None = None,
         *,
         announce: bool = True,
     ) -> str:
@@ -379,6 +422,7 @@ class SubagentManager:
                 runtime,
                 origin_message_id,
                 workspace_scope,
+                agent_id=agent_id,
                 announce=announce,
             )
 
@@ -392,6 +436,7 @@ class SubagentManager:
         runtime: LLMRuntime,
         origin_message_id: str | None = None,
         workspace_scope: WorkspaceScope | None = None,
+        agent_id: str | None = None,
         *,
         announce: bool = True,
     ) -> str:
@@ -408,9 +453,15 @@ class SubagentManager:
             if workspace_scope is not None:
                 cfg = self._subagent_tools_config()
                 cfg.restrict_to_workspace = workspace_scope.restrict_to_workspace
+            # 一次解析，工具与提示词共用同一个档案 —— 否则两者会各说各话。
+            agent = self._resolve_agent(agent_id)
             # Construct from the agent workspace; the bound scope below supplies the project cwd.
-            tools = self._build_tools(tools_config=cfg)
-            system_prompt = self._build_subagent_prompt(workspace=root)
+            tools = self._build_tools(
+                tools_config=cfg,
+                allowed_tools=agent.tool_names if agent is not None else None,
+            )
+            system_prompt = self._build_subagent_prompt(workspace=root, agent=agent)
+            runtime = self._apply_model_override(runtime, agent.model_id if agent else None)
             messages: list[dict[str, Any]] = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": task},
@@ -538,28 +589,45 @@ class SubagentManager:
         await self.bus.publish_inbound(msg)
         logger.debug("Subagent [{}] announced result to {}:{}", task_id, origin['channel'], origin['chat_id'])
 
-    def _build_subagent_prompt(self, workspace: Path | None = None) -> str:
-        """Build a focused system prompt for the subagent."""
+    def _build_subagent_prompt(
+        self,
+        workspace: Path | None = None,
+        agent: ResolvedAgent | None = None,
+    ) -> str:
+        """Build a focused system prompt for the subagent.
+
+        给了档案时，在出厂模板前面拼一段身份 + 档案自定义提示词；技能摘要按
+        档案的 ``skills`` 选择裁剪。没给档案时行为与一期完全一致。
+        """
         from nanobot.agent.skills import SkillsLoader
 
         agent_workspace = self.workspace.expanduser().resolve()
         project_workspace = workspace.expanduser().resolve() if workspace else agent_workspace
+        exclude = set(agent.skill_exclude) if agent is not None else None
         skills_summary = SkillsLoader(
             self.workspace,
             disabled_skills=self.disabled_skills,
-        ).build_skills_summary(workspace=project_workspace)
+        ).build_skills_summary(exclude=exclude, workspace=project_workspace)
         history_log = (
             str(agent_workspace / "memory" / "history.jsonl")
             if agent_workspace != project_workspace
             else "memory/history.jsonl"
         )
-        return render_template(
+        base = render_template(
             "agent/subagent_system.md",
             workspace=str(project_workspace),
             agent_workspace=str(agent_workspace),
             history_log=history_log,
             skills_summary=skills_summary or "",
         )
+        if agent is None or not agent.prompt:
+            return base
+        identity = (
+            f"你是{agent.name}，{agent.description}。"
+            if agent.description
+            else f"你是{agent.name}。"
+        )
+        return f"{identity}\n\n{agent.prompt}\n\n{base}"
 
     async def cancel_by_session(self, session_key: str) -> int:
         """Cancel all subagents for the given session. Returns count cancelled."""

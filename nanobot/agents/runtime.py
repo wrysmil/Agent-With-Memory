@@ -113,20 +113,24 @@ class AgentProfileRuntime:
         ``config.loader``，那条链会把 ``nanobot.agent`` 拉进来，与本模块的
         导入形成环（``ImportError: cannot import name 'agent'``）。技能清单的
         权威来源本就是 ``SkillsLoader``，webui 那层只是加了路径脱敏与 i18n。
+
+        ``list_skills`` 返回的是 **dict** 列表（``nanobot/agent/skills.py``），
+        不是带属性的对象——按属性取名会恒得空列表。
         """
         from nanobot.agent.skills import SkillsLoader
 
-        return [
-            str(skill.name)
-            for skill in SkillsLoader(self._workspace).list_skills(filter_unavailable=False)
-            if getattr(skill, "name", "")
-        ]
+        names: list[str] = []
+        for entry in SkillsLoader(self._workspace).list_skills(filter_unavailable=False):
+            name = entry.get("name") if isinstance(entry, dict) else None
+            if name:
+                names.append(str(name))
+        return names
 
     def _known_tool_ids(self, tools_config: object | None) -> list[str]:
         """当前 scope 下真实存在的工具名。
 
         档案的 ``tools.entries`` 要和真实工具求交，否则档案里写了
-        ``execute_command`` 而该工具因配置被关掉时，解析结果会撒谎。
+        ``exec`` 而该工具因配置被关掉时，解析结果会撒谎。
         """
         import importlib
 
