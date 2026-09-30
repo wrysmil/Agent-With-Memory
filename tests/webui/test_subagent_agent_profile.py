@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from nanobot.agent.subagent import SubagentManager
+import pytest
+
+from nanobot.agent.subagent import SubagentManager, SubagentStatus
 from nanobot.agents.models import AgentProfile, AgentSelection
 from nanobot.agents.runtime import AgentProfileRuntime
 from nanobot.agents.store import AgentStore
 from nanobot.bus.queue import MessageBus
+from nanobot.providers.base import GenerationSettings, LLMProvider
+from nanobot.utils.llm_runtime import LLMRuntime
+
+
+def _runtime(model: str = "test-model") -> LLMRuntime:
+    provider = MagicMock(spec=LLMProvider)
+    provider.generation = GenerationSettings()
+    return LLMRuntime.capture(provider, model, context_window_tokens=128_000)
 
 
 def _manager(tmp_path: Path, **kwargs: object) -> SubagentManager:
@@ -130,17 +141,35 @@ def test_model_resolver_result_is_used(tmp_path: Path) -> None:
     assert manager._apply_model_override(sentinel, "default") is replacement  # type: ignore[arg-type]
 
 
-def test_spawn_passes_agent_id_through(tmp_path: Path) -> None:
-    """spawn 必须把 agent_id 一路传到 _resolve_agent，否则整条链路是断的。"""
-    import inspect
+@pytest.mark.asyncio
+async def test_agent_id_reaches_admitted_subagent(tmp_path: Path) -> None:
+    """agent_id 必须一路从 run_inline 传到 _run_admitted_subagent 的 _resolve_agent。
 
-    source = inspect.getsource(SubagentManager.spawn)
-    assert "agent_id=agent_id" in source
-    source = inspect.getsource(SubagentManager.run_inline)
-    assert "agent_id=agent_id" in source
-    source = inspect.getsource(SubagentManager._run_admitted_subagent)
-    assert "_resolve_agent" in source
-    assert "_apply_model_override" in source
+    传递链 4 跳：run_inline → _run_subagent → _run_admitted_subagent →
+    _resolve_agent。这里 patch 的是链路终点而非中间方法，后续真实流程
+    （announce 等）照常走完。
+    """
+    manager = _manager(tmp_path)
+    seen: list[str | None] = []
+    with patch.object(manager, "_resolve_agent", side_effect=seen.append):
+        await manager.run_inline(task="t", agent_id="code-reviewer", runtime=_runtime())
+    assert seen == ["code-reviewer"]
+
+
+@pytest.mark.asyncio
+async def test_agent_id_reaches_background_subagent(tmp_path: Path) -> None:
+    """后台 spawn 走 _run_subagent 中转，agent_id 不能在这一跳丢掉。"""
+    manager = _manager(tmp_path)
+    origin = {"channel": "cli", "chat_id": "c1", "session_key": "cli:c1"}
+    status = SubagentStatus(task_id="tid", label="lbl", task_description="t", started_at=0.0)
+    seen: list[str | None] = []
+    with patch.object(manager, "_resolve_agent", side_effect=seen.append):
+        async with manager._run_slots:
+            await manager._run_subagent(
+                "tid", "t", "lbl", origin, status, _runtime(),  # type: ignore[arg-type]
+                agent_id="researcher",
+            )
+    assert seen == ["researcher"]
 
 
 def test_tools_and_skills_are_trimmed_together(tmp_path: Path) -> None:
