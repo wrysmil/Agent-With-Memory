@@ -79,6 +79,8 @@ export function AgentEditorDialog({
         groupLabel: tool.category,
         risk: tool.risk,
         locked: tool.locked,
+        blocked: tool.blocked,
+        blockedReason: tool.blockedReason,
       })),
     [catalog.tools],
   );
@@ -103,7 +105,10 @@ export function AgentEditorDialog({
     () =>
       resolveSelection(
         draft?.tools ?? { mode: "all", entries: [] },
-        catalog.tools.map((tool) => tool.name),
+        // 只算子 Agent 实际能拿到的工具。core-only 工具勾了也会在运行时
+        // 被丢弃（后端 tool_names 与 subagent scope 求交），算进来会让
+        // 「已启用」这一栏与实际生效集不一致。
+        catalog.tools.filter((tool) => !tool.blocked).map((tool) => tool.name),
         catalog.tools.filter((tool) => tool.locked).map((tool) => tool.name),
       ),
     [draft?.tools, catalog.tools],

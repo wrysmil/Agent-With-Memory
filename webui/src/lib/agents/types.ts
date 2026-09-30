@@ -50,6 +50,9 @@ export interface ToolDescriptor {
   scope: "core" | "subagent" | "plugin";
   /** Framework dependency — always on, cannot be unchecked. */
   locked?: boolean;
+  /** Not usable by subagents — visible but not selectable in the profile editor. */
+  blocked?: boolean;
+  blockedReason?: string;
 }
 
 export interface ToolCategoryDescriptor {

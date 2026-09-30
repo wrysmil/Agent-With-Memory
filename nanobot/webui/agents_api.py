@@ -32,6 +32,18 @@ _DEFAULT_CONTEXT_WINDOW = 200_000
 
 _TOOL_RISK_BY_READ_ONLY = ("low", "medium")
 
+# 档案页「锁定」的最小集合：勾上也无法取消的工具。
+#
+# 只有「没有它子 Agent 就完全无法工作」的才该进这里。``locked`` 会作为
+# ``resolve_selection`` 的 lockedIds 强制保留，所以锁错等于静默扩权。
+# 判据不能是「工具声明了 core scope」——子 Agent 可用的工具全都声明了
+# core，那样会锁死全部 13 个，档案页等于无法收紧能力。
+#
+# 目前只有两个：读文件与列目录。任何子 Agent 任务都从「看现状」开始，
+# 没有它们连任务描述都无法落地。write_file / exec / web_* / apply_patch
+# 都必须可取消——``code-reviewer`` 这类只读档案正是靠白名单把它们排除的。
+_MIN_LOCKED_TOOL_NAMES = frozenset({"read_file", "list_dir"})
+
 
 def _translate(exc: AgentStoreError) -> WebUISettingsError:
     return WebUISettingsError(exc.message, status=exc.status)
@@ -131,6 +143,12 @@ def _tool_descriptors(workspace: Path, tools_config: ToolsConfig) -> list[dict[s
             continue
         scopes = set(getattr(type(tool), "_scopes", {"core"}))
         description = _truncate((tool.description or "").strip())
+        # ``scope`` 回答的是「这个工具能不能出现在子 Agent 档案的能力集里」。
+        # 判据是「工具自己声明了 subagent scope」，不是「它不是 core-only」——
+        # 子 Agent 可用的 13 个工具**全部**同时声明了 core 与 subagent
+        # （``_scopes = {"core", "subagent"}``），用「core not in scopes」判会
+        # 永远得出 False，档案页就一个子 Agent 工具都选不出来。
+        usable_by_subagent = "subagent" in scopes
         descriptors.append(
             {
                 "name": name,
@@ -141,13 +159,17 @@ def _tool_descriptors(workspace: Path, tools_config: ToolsConfig) -> list[dict[s
                 "risk": TOOL_RISK_OVERRIDES.get(
                     name, _TOOL_RISK_BY_READ_ONLY[0 if tool.read_only else 1]
                 ),
-                "scope": (
-                    "subagent"
-                    if "subagent" in scopes and "core" not in scopes
-                    else "core"
+                "scope": "subagent" if usable_by_subagent else "core",
+                # 主 Agent 专属工具：档案里看得见但勾不了，否则用户会以为
+                # 勾了就能用，实际运行时会因不在子 Agent 工具集里被静默丢弃。
+                "blocked": not usable_by_subagent,
+                "blockedReason": (
+                    None if usable_by_subagent else "主 Agent 专属，子 Agent 不可用"
                 ),
-                # core/memory scope 的工具是框架依赖，取消会让档案跑不起来。
-                "locked": bool(scopes & {"core", "memory"}),
+                # 只有「档案跑起来的最小组装集」才锁死。之前用
+                # ``scopes & {"core","memory"}`` 判会让全部 14 个工具都被锁死，
+                # 档案页等于无法收紧能力——而收紧能力正是档案的核心用途。
+                "locked": name in _MIN_LOCKED_TOOL_NAMES,
             }
         )
     return descriptors

@@ -125,14 +125,51 @@ def test_catalog_tool_descriptors_match_frontend_type(tmp_path: Path) -> None:
     for tool in catalog["tools"]:
         assert set(tool) == {
             "name", "label", "description", "category", "risk", "scope", "locked",
+            "blocked", "blockedReason",
         }
         assert tool["label"] == tool["name"]
         assert tool["risk"] in {"low", "medium", "high"}
         assert tool["scope"] in {"core", "subagent"}
         assert isinstance(tool["locked"], bool)
+        assert isinstance(tool["blocked"], bool)
     names = {t["name"] for t in catalog["tools"]}
     assert "read_file" in names
     assert "exec" in names
+
+
+def test_catalog_marks_core_only_tools_as_blocked(tmp_path: Path) -> None:
+    """主 Agent 专属工具在档案页可见但不可勾选。
+
+    它们不进子 Agent 的工具集，勾了会在运行时被静默丢弃——用户以为配上了，
+    实际没有。``CapabilityPicker`` 的 blocked 分支已就位，这里只保证后端
+    标得对。
+    """
+    catalog = _catalog(_minimal_workspace(tmp_path))
+    by_name = {t["name"]: t for t in catalog["tools"]}
+    assert "message" in by_name, "message 工具应出现在目录里（可见但不可选）"
+    assert by_name["message"]["scope"] == "core"
+    assert by_name["message"]["blocked"] is True
+    assert by_name["message"]["blockedReason"]
+
+
+def test_catalog_does_not_lock_every_subagent_tool(tmp_path: Path) -> None:
+    """回归防线：子 Agent 可用的工具不应被大面积锁死。
+
+    旧判据 ``scopes & {"core","memory"}`` 会把全部 14 个工具都标成 locked
+    （子 Agent 可用的工具全都声明了 core scope），档案页等于无法收紧能力，
+    而收紧能力正是档案的核心用途。
+    """
+    catalog = _catalog(_minimal_workspace(tmp_path))
+    by_name = {t["name"]: t for t in catalog["tools"]}
+    subagent_tools = {n: t for n, t in by_name.items() if t["scope"] == "subagent"}
+    assert len(subagent_tools) >= 10, "子 Agent 可用工具数量异常"
+    locked = {n for n, t in subagent_tools.items() if t["locked"]}
+    assert locked == {"read_file", "list_dir"}, f"锁定集合应收窄到最小组装集，实际 {locked}"
+    # code-reviewer 预设正是靠 include 白名单排除 exec/write_file，
+    # 若这两项被锁，白名单就失去意义。
+    assert by_name["exec"]["locked"] is False
+    assert by_name["write_file"]["locked"] is False
+    assert by_name["exec"]["blocked"] is False
 
 
 def test_catalog_marks_dangerous_tools_high_risk(tmp_path: Path) -> None:
