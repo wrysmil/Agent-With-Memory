@@ -1,0 +1,128 @@
+"""AgentProfileRuntime：把档案解析成运行时约束。"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from nanobot.agents.models import AgentProfile, AgentSelection
+from nanobot.agents.runtime import AgentProfileRuntime, resolve_selection
+
+
+def test_resolve_selection_all_ignores_entries() -> None:
+    selection = AgentSelection("all", ["ignored"])
+    assert resolve_selection(selection, ["a", "b"]) == {"a", "b"}
+
+
+def test_resolve_selection_include() -> None:
+    assert resolve_selection(AgentSelection("include", ["b"]), ["a", "b", "c"]) == {"b"}
+
+
+def test_resolve_selection_exclude() -> None:
+    assert resolve_selection(AgentSelection("exclude", ["b"]), ["a", "b", "c"]) == {"a", "c"}
+
+
+def test_resolve_selection_always_keeps_locked() -> None:
+    assert resolve_selection(AgentSelection("include", []), ["a"], ["a"]) == {"a"}
+    assert resolve_selection(AgentSelection("exclude", ["a"]), ["a"], ["a"]) == {"a"}
+
+
+def test_resolve_selection_drops_unknown_entries() -> None:
+    """档案可以预配置尚未安装的技能/工具；解析时只保留真实存在的。"""
+    assert resolve_selection(AgentSelection("include", ["ghost"]), ["a"]) == set()
+
+
+@pytest.fixture()
+def runtime(tmp_path: Path) -> AgentProfileRuntime:
+    return AgentProfileRuntime(tmp_path)
+
+
+def test_missing_profile_resolves_to_none(runtime: AgentProfileRuntime) -> None:
+    assert runtime.resolve("no-such-agent") is None
+
+
+def test_illegal_id_resolves_to_none(runtime: AgentProfileRuntime) -> None:
+    assert runtime.resolve("../../etc/passwd") is None
+
+
+def test_hidden_agent_still_resolves(runtime: AgentProfileRuntime) -> None:
+    """隐藏只影响 WebUI 列表，不影响运行时按 id 直接使用。"""
+    runtime.store.set_visibility("code-reviewer", True)
+    assert runtime.resolve("code-reviewer") is not None
+
+
+def test_resolved_tool_names_follow_selection(runtime: AgentProfileRuntime) -> None:
+    resolved = runtime.resolve("code-reviewer")
+    assert resolved is not None
+    assert "read_file" in resolved.tool_names
+    assert "execute_command" not in resolved.tool_names
+
+
+def test_resolved_skill_exclude_is_the_complement(runtime: AgentProfileRuntime) -> None:
+    """出厂档案 ``skills=include[]``（不给技能），所以排除集就是全部真实技能。"""
+    resolved = runtime.resolve("code-reviewer")
+    assert resolved is not None
+    assert resolved.skill_exclude == set(runtime._known_skill_ids())
+
+
+def test_resolved_prompt_renders_template_variables(runtime: AgentProfileRuntime) -> None:
+    runtime.store.save_profile(
+        AgentProfile(
+            id="templated",
+            name="模板档案",
+            type="custom",
+            description="示例描述",
+            prompt="你是{{name}}，负责{{description}}。",
+        )
+    )
+    resolved = runtime.resolve("templated")
+    assert resolved is not None
+    assert "{{" not in resolved.prompt
+    assert "模板档案" in resolved.prompt
+    assert "示例描述" in resolved.prompt
+
+
+def test_factory_profile_has_empty_prompt(runtime: AgentProfileRuntime) -> None:
+    """出厂档案出厂即空提示词：角色说明交给用户在档案页写。"""
+    resolved = runtime.resolve("general-assistant")
+    assert resolved is not None
+    assert resolved.prompt == ""
+
+
+def test_resolved_prompt_fills_date_and_workspace(runtime: AgentProfileRuntime) -> None:
+    runtime.store.save_profile(
+        AgentProfile(
+            id="dated",
+            name="日期档案",
+            type="custom",
+            prompt="今天 {{date}}，工作区 {{workspace}}。",
+        )
+    )
+    resolved = runtime.resolve("dated", workspace=Path("/tmp/ws"))
+    assert resolved is not None
+    assert "{{date}}" not in resolved.prompt
+    assert "ws" in resolved.prompt
+
+
+def test_resolved_model_id_is_optional(runtime: AgentProfileRuntime) -> None:
+    assert runtime.resolve("code-reviewer").model_id is None  # type: ignore[union-attr]
+    runtime.store.save_profile(
+        AgentProfile(
+            id="picky",
+            name="挑剔",
+            type="system",
+            prompt="",
+            model_id="default",
+        )
+    )
+    assert runtime.resolve("picky").model_id == "default"  # type: ignore[union-attr]
+
+
+def test_unresolvable_variable_is_left_verbatim(runtime: AgentProfileRuntime) -> None:
+    runtime.store.save_profile(
+        AgentProfile(id="odd", name="古怪", type="custom", prompt="见 {{unknown_token}}")
+    )
+    resolved = runtime.resolve("odd")
+    assert resolved is not None
+    assert "{{unknown_token}}" in resolved.prompt

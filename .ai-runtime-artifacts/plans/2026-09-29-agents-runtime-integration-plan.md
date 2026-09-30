@@ -12,9 +12,19 @@ source:
   - harness-kit/core/routing.md
   - .ai-runtime-artifacts/contracts/2026-09-29-agents-contract.md
   - .ai-runtime-artifacts/plans/2026-09-29-agents-storage-and-crud-plan.md
+  - .ai-runtime-artifacts/research/2026-09-30-openakita-subagent-integration-research.md
 created_at: 2026-09-29
-status: draft
-approved: false
+updated_at: 2026-09-30
+update_note: >
+  2026-09-30 依 openakita 调研结论增补三处：
+  (1) 「✅ 关于防递归」——原以为存在递归风险，实测证伪，裁定本期不新增防递归代码，
+      附 `_scopes` 机制依据与实测工具集；
+  (2) 「✅ 技能门禁由用户在页面配置」——纠正定性：技能可见性是配置未接通，
+      非代码缺陷，本期不引入硬编码技能白名单；
+  (3) 验收口径新增第 4/5 条 + 档案 prompt 字段内容约定。
+status: approved
+approved: true
+approved_by: 用户在 2026-09-30 会话中明确回复「可以执行了吗」并在追问中选「批准并开工」
 ---
 
 # Agent 档案运行时接入实施计划（二期）
@@ -47,6 +57,38 @@ approved: false
 | 按档案改 `max_iterations` | 档案字段里没有这个概念 |
 | `ToolLoader` 的插件来源标记、`scope: "plugin"` | 契约 §8.1 已划给后续；二期不碰 |
 | 为 `modelId` 解析 provider/凭据 | 见下方「⚠️ 关于 modelId」 |
+| **防递归机制** | **已由现有 scope 机制提供**，实测确认无需新增代码。见下方「✅ 关于防递归」 |
+
+### ✅ 关于防递归（2026-09-30 核实，无需改造）
+
+原以为「子 Agent 仍能看到 `spawn` 工具、存在无限递归风险」是真实风险，**实测证伪**。子 Agent 的工具集由 `SubagentManager._build_tools`（`subagent.py:207-227`）以 `scope="subagent"` 加载，而 `SpawnTool` **未声明 `_scopes`**，走 `Tool.base` 的默认值 `{"core"}`（`base.py:208`），在 `loader.py:100` 的 `if scope not in getattr(tool_cls, "_scopes", {"core"})` 处即被过滤。
+
+实测（`SubagentManager._build_tools()` 实跑）：
+
+```
+子 Agent 工具集（13 个）: apply_patch, edit_file, exec, exec_session, find_files,
+                          grep, list_dir, list_exec_sessions, read_file,
+                          run_cli_app, web_fetch, web_search, write_file
+spawn=False  long_task=False  cron=False  self=False  message=False
+```
+
+**第二道保险**：`subagent_manager` 只在 `loop.py:925` 注入主 Agent 的 `ToolContext`；子 Agent 的 `ToolContext`（`subagent.py:216-225`）不传该字段，默认 `None`，所以 `SpawnTool.create`（`spawn.py:56-58`）即使被调到也会抛 `RuntimeError`。
+
+**结论**：递归防护已具备且是双层的。**二期不要新增防递归代码**——`AgentProfile.sub_agents` 字段（`models.py:118`）本期保持「定义但不消费」，等真要支持多层嵌套时再用。若将来改 `_scopes` 默认值或给 `SpawnTool` 显式加 `"subagent"`，**必须同步复核这两道防线**。
+
+### ✅ 技能门禁由用户在页面配置，不硬编码
+
+技能可见性**不是**代码要解决的问题，而是**配置还没接通到运行时**的阶段性现象。
+
+现状：`AgentProfile.skills: AgentSelection` 字段已定义（`models.py:117`），WebUI 侧 `CapabilityPicker` 已能勾选，二期实施后 `_build_subagent_prompt` 的 `skill_exclude` 会把用户的选择应用上去。届时子 Agent 拿到什么技能由**用户在档案页勾什么**决定。
+
+现在之所以是「全套 11 个内置技能」，是因为二期未实施 —— `AgentProfileRuntime` 尚不存在，`_build_subagent_prompt`（`subagent.py:541-562`）调 `build_skills_summary()` 时**不传任何 `exclude`**，等于「不裁剪 = 全给」。
+
+**因此本期不引入任何硬编码技能白名单。** 与 openakita 的差异是刻意的：openakita 的 `skills_mode` 由用户在档案里配，但它的出厂 21 个预设各自硬编码了一份技能清单；nanobot 的 4 个出厂预设（`catalog.py:87-124`）出厂时 `skills=AgentSelection("include", [])` 即**不给技能** —— 从最小集起步，用户勾了才有。`catalog.py:81-85` 的注释已写明这个取向：
+
+> 全量工具一上来就摆着既看得见噪声，也让人以为默认就该全开；从最小可用集起步，需要什么再勾，档案与工具的关系才是有意图的。
+
+**唯一要在验收里断言的**：`skills` 与 `tools` 两个 Selection 在同一次装配里都被应用（`subagent.py:412-413`），不能只裁工具不裁技能。二期 Task 2 已天然满足，加一条测试钉死。
 
 ## ⚠️ 三个必须先看清的坑
 
@@ -1070,12 +1112,31 @@ git commit -m "feat(agents): CLI 侧接入 Agent 档案运行时"
    - 同一个任务改成 `agent=通用助理`（或省略 `agent=`），子 agent 拿到完整工具集
    - 传一个不存在的 `agent=不存在`，任务照常完成（回退到默认行为，不报错）
 3. `modelId` 未接通这件事在交付说明里写明，不当成 bug。
+4. **子 Agent 拿不到 `spawn`**（2026-09-30 新增）——本计划不改动 `SpawnTool._scopes`，实施后重跑 §「✅ 关于防递归」里的实测命令，工具集仍应是 13 个且 `spawn=False`。**若出现 `spawn=True`，说明 scope 机制被意外改动，立即回滚排查。**
+5. **`skills` 与 `tools` 在同一次装配里都被应用**（2026-09-30 新增）——新增一条测试：档案 `tools=include[read_file]` + `skills=include[]` 时，断言 registry 只有 `read_file` **且** `build_skills_summary()` 返回空串。只裁工具不裁技能、或反之，都算不通过。
+
+## 档案 `prompt` 字段的内容约定（2026-09-30 新增）
+
+`AgentProfile.prompt` 是**追加**到子 Agent 基础提示词之后（openakita 的 `custom_prompt` 同此语义，`profile.py:145`）。当前基础提示词（`templates/agent/subagent_system.md`）只有 3 行实质内容，档案 prompt 是子 Agent 唯一的「角色说明书」，应当写清四件事：
+
+| 该写 | 不该写 |
+| --- | --- |
+| 角色与专长（你是谁、擅长什么） | 「你有 spawn 工具」这类事实描述（模板已隐含） |
+| 工作方式与产出形态（怎么交付、产物落在哪） | 工具清单（已由 `tools` Selection 决定，重复即失配） |
+| 边界（什么不做、什么情况放弃并上报） | 通用安全规则（已由全局模板覆盖） |
+| 失败时的行为（返回什么、怎么说明失败原因） | 措辞打磨类的空话 |
+
+对照 openakita：它的 `custom_prompt` 追加在编译后的 system prompt 末尾（`_agent_runtime.py:3287`），21 个预设各自写了 5–7 行角色说明，是这个字段的正确用法样本。
+
+**不建议本期做的事**：不要在档案 prompt 里教模型「怎么写委派 prompt」（openakita `prompt/builder.py:288-319` 那段协作原则）。nanobot 是单跳架构且档案由用户自配，这段文案对「用户勾了哪些子 Agent」是动态的，静态写死会与实际不符。若后续要加，做成主 Agent 侧的一段系统文案，且必须随可见子 Agent 动态渲染。
 
 ## 后续
 
 - provider 侧的模型解析器 → 让 `modelId` 真正生效
 - `ToolLoader` 插件来源标记 → 解锁 `scope: "plugin"`（契约 §8.1）
 - 档案版本历史 / 子 agent 运行结果回写
+- 子 Agent 运行结果的结构化回执（参考 openakita 的 `DelegationResult` 状态头 + `__ARTIFACT_RECEIPTS__` 哨兵块，调研见 `.ai-runtime-artifacts/research/2026-09-30-openakita-subagent-integration-research.md` §五）
+- 主 Agent 侧的子 Agent 状态可观测（WS 广播 + 磁盘快照，调研同上 §九）
 
 ---
 
