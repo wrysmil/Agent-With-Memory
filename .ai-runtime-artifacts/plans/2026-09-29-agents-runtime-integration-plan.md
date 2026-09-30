@@ -22,6 +22,15 @@ update_note: >
   (2) 「✅ 技能门禁由用户在页面配置」——纠正定性：技能可见性是配置未接通，
       非代码缺陷，本期不引入硬编码技能白名单；
   (3) 验收口径新增第 4/5 条 + 档案 prompt 字段内容约定。
+update_note_2: >
+  2026-09-30 实施后代码审查发现本计划「档案 prompt 追加到基础提示词之后」
+  被实现为「前置」。用户裁决保留前置实现，理由：
+  (1) 角色定义在前更符合「先确立身份、再给框架」的习惯；
+  (2) 出厂模板首行本就是 "You are a subagent spawned by the main agent"，
+      身份行紧邻其后不冲突；
+  (3) 子 Agent 无多轮对话场景，顺序对实际行为影响有限。
+  唯一顾虑是「用户自由文本排在全局安全框架之前」——已记录，若将来出现
+  提示词注入绕过案例，应重新评估为追加。
 status: approved
 approved: true
 approved_by: 用户在 2026-09-30 会话中明确回复「可以执行了吗」并在追问中选「批准并开工」
@@ -1117,7 +1126,9 @@ git commit -m "feat(agents): CLI 侧接入 Agent 档案运行时"
 
 ## 档案 `prompt` 字段的内容约定（2026-09-30 新增）
 
-`AgentProfile.prompt` 是**追加**到子 Agent 基础提示词之后（openakita 的 `custom_prompt` 同此语义，`profile.py:145`）。当前基础提示词（`templates/agent/subagent_system.md`）只有 3 行实质内容，档案 prompt 是子 Agent 唯一的「角色说明书」，应当写清四件事：
+`AgentProfile.prompt` 是**前置**到子 Agent 基础模板之前的，完整形态是「身份行 + 档案 prompt + 空行 + 出厂模板」（`subagent.py` 的 `_build_subagent_prompt`）。> **2026-09-30 裁决**：本节原写「追加到基础提示词之后」（对齐 openakita 的 `custom_prompt` 语义，`profile.py:145`），实施时改为前置，理由见 FM `update_note_2`。语义差异是有意的，不是遗漏。
+
+当前基础提示词（`templates/agent/subagent_system.md`）只有 3 行实质内容，档案 prompt 是子 Agent 唯一的「角色说明书」，应当写清四件事：
 
 | 该写 | 不该写 |
 | --- | --- |
@@ -1126,7 +1137,7 @@ git commit -m "feat(agents): CLI 侧接入 Agent 档案运行时"
 | 边界（什么不做、什么情况放弃并上报） | 通用安全规则（已由全局模板覆盖） |
 | 失败时的行为（返回什么、怎么说明失败原因） | 措辞打磨类的空话 |
 
-对照 openakita：它的 `custom_prompt` 追加在编译后的 system prompt 末尾（`_agent_runtime.py:3287`），21 个预设各自写了 5–7 行角色说明，是这个字段的正确用法样本。
+对照 openakita：它的 `custom_prompt` 追加在编译后的 system prompt 末尾（`_agent_runtime.py:3287`），21 个预设各自写了 5–7 行角色说明，是这个字段的**写法**参考样本。注意它用的是**追加**语义，与本仓的前置不同——这是 2026-09-30 有意偏离，理由见 FM `update_note_2`。两者可参考的是「每个角色写 5–7 行具体说明」这个实践，不是拼接位置。
 
 **不建议本期做的事**：不要在档案 prompt 里教模型「怎么写委派 prompt」（openakita `prompt/builder.py:288-319` 那段协作原则）。nanobot 是单跳架构且档案由用户自配，这段文案对「用户勾了哪些子 Agent」是动态的，静态写死会与实际不符。若后续要加，做成主 Agent 侧的一段系统文案，且必须随可见子 Agent 动态渲染。
 

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -19,6 +20,9 @@ from nanobot.agents.store import AgentStore, AgentStoreError
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ToolsConfig
+
+# 单趟模板替换。escaped 分支处理 Jinja 的四花括号转义写法。
+_TOKEN_RE = re.compile(r"\{\{\{\{(?P<escaped>\w+)\}\}\}\}|\{\{(?P<plain>\w+)\}\}")
 
 
 def resolve_selection(
@@ -67,19 +71,34 @@ def render_profile_prompt(
     未知变量**原样保留**：模板里出现 ``{{unknown}}`` 说明用户还没填上下文，
     静默替换成空串会让提示词莫名其妙地少一块。调用方（``SubagentManager``）
     在这段文本前面还会拼上身份行，所以这里返回空串时调用方要能跳过。
+
+    **单趟替换**。顺序 ``str.replace`` 没有单次替换语义，替换值本身若含
+    ``{{...}}`` 会被后续 token 二次替换：档案名叫 ``{{tools}}`` 时，
+    ``{{name}}`` 展开成 ``{{tools}}`` 后又会被 ``{{tools}}`` 展开成工具清单，
+    档案名被静默改写。这里用一次 ``re.sub`` 完成全部替换，替换值不参与
+    下一次匹配。四花括号 ``{{{{name}}}}`` 按 Jinja 惯例输出为字面量
+    ``{{name}}``。
     """
     replacements = {
-        "{{name}}": profile.name,
-        "{{description}}": profile.description,
-        "{{skills}}": "、".join(enabled_skills or []) or "无",
-        "{{tools}}": "、".join(enabled_tools or []) or "无",
-        "{{date}}": date.today().isoformat(),
-        "{{user_profile}}": "",
-        "{{workspace}}": workspace.name,
+        "name": profile.name,
+        "description": profile.description,
+        "skills": "、".join(enabled_skills or []) or "无",
+        "tools": "、".join(enabled_tools or []) or "无",
+        "date": date.today().isoformat(),
+        "user_profile": "",
+        "workspace": workspace.name,
     }
-    rendered = profile.prompt
-    for token, value in replacements.items():
-        rendered = rendered.replace(token, value)
+
+    def _sub(match: re.Match[str]) -> str:
+        escaped, plain = match.group("escaped"), match.group("plain")
+        if escaped is not None:
+            # 四花括号 = 转义，输出双花括号包裹的 token
+            return f"{{{{{escaped}}}}}"
+        if plain is None:
+            return match.group(0)
+        return replacements.get(plain, match.group(0))
+
+    rendered = _TOKEN_RE.sub(_sub, profile.prompt)
     return rendered.strip()
 
 
