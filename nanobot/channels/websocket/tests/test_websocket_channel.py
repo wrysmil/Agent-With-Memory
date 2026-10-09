@@ -5487,6 +5487,71 @@ def test_handle_webui_thread_get_returns_json(tmp_path, monkeypatch) -> None:
     assert body["has_pending_tool_calls"] is False
 
 
+def _webui_thread_get(gateway: GatewayServices, key: str) -> Any:
+    from urllib.parse import quote
+
+    from websockets.datastructures import Headers
+    from websockets.http11 import Request
+
+    gateway.tokens.api_tokens["tok"] = time.monotonic() + 300.0
+    encoded = quote(key, safe="")
+    request = Request(
+        f"/api/sessions/{encoded}/webui-thread?limit=80&direction=latest",
+        Headers([("Authorization", "Bearer tok")]),
+    )
+    return gateway.http._handle_webui_thread_get(request, encoded)
+
+
+def test_webui_thread_get_returns_empty_payload_for_unpersisted_new_chat(
+    tmp_path, monkeypatch
+) -> None:
+    """A chat the server staged but never persisted is known, so it must not 404."""
+    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    sm = SessionManager(tmp_path / "sessions")
+    gateway = _basic_handler(MagicMock(), session_manager=sm, workspace_path=tmp_path)
+    gateway.workspaces.stage_scope("fresh", gateway.workspaces.default_scope())
+
+    response = _webui_thread_get(gateway, "websocket:fresh")
+
+    assert response.status_code == 200
+    body = json.loads(response.body.decode())
+    assert body["sessionKey"] == "websocket:fresh"
+    assert body["messages"] == []
+    assert body["has_pending_tool_calls"] is False
+    assert body["active_turn_id"] is None
+    assert sm.list_sessions() == []
+
+
+def test_webui_thread_get_returns_empty_payload_for_session_without_messages(
+    tmp_path, monkeypatch
+) -> None:
+    """A persisted session whose transcript is still empty is known, so it must not 404."""
+    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    sm = SessionManager(tmp_path / "sessions")
+    sm.save(sm.get_or_create("websocket:no-messages"))
+    gateway = _basic_handler(MagicMock(), session_manager=sm, workspace_path=tmp_path)
+
+    response = _webui_thread_get(gateway, "websocket:no-messages")
+
+    assert response.status_code == 200
+    body = json.loads(response.body.decode())
+    assert body["sessionKey"] == "websocket:no-messages"
+    assert body["messages"] == []
+
+
+def test_webui_thread_get_returns_404_for_unknown_session_key(
+    tmp_path, monkeypatch
+) -> None:
+    """An unknown key is neither persisted nor staged, so it stays a 404."""
+    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    sm = SessionManager(tmp_path / "sessions")
+    gateway = _basic_handler(MagicMock(), session_manager=sm, workspace_path=tmp_path)
+
+    response = _webui_thread_get(gateway, "websocket:never-created")
+
+    assert response.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_handle_session_context_get_reads_detached_session() -> None:
     from urllib.parse import quote

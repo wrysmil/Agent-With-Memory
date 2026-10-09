@@ -358,6 +358,10 @@ class WebUIWorkspaceController:
         while len(self._draft_scopes) > _MAX_DRAFT_SCOPES:
             self._draft_scopes.popitem(last=False)
 
+    def has_staged_scope(self, session_key: str) -> bool:
+        """Whether the server holds a transient scope for a not-yet-persisted chat."""
+        return session_key in self._draft_scopes
+
     def discard_draft_scope(self, session_key: str) -> bool:
         """Discard the staged scope for a chat that has not persisted yet."""
         return self._draft_scopes.pop(session_key, None) is not None

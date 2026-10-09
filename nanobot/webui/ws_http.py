@@ -131,7 +131,10 @@ from nanobot.webui.skills_marketplace import (
     trending_marketplace_skills,
 )
 from nanobot.webui.thread_disk import delete_webui_thread
-from nanobot.webui.transcript import build_webui_thread_response
+from nanobot.webui.transcript import (
+    WEBUI_TRANSCRIPT_SCHEMA_VERSION,
+    build_webui_thread_response,
+)
 from nanobot.webui.workspaces import WebUIWorkspaceController
 
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
@@ -830,6 +833,19 @@ class GatewayHTTPHandler:
             cleaned.append(row)
         return {"sessions": cleaned}
 
+    def _webui_session_known(self, key: str) -> bool:
+        """Whether the server still knows *key* even though it has no transcript.
+
+        A chat becomes known either by being staged in memory (a ``new_chat`` that
+        has not sent its first message yet, so no file exists) or by having a
+        session file. Anything else is an unknown or already-cleared key.
+        """
+        if self.workspaces.has_staged_scope(key):
+            return True
+        if self.session_manager is None:
+            return False
+        return self.session_manager.read_session_metadata(key) is not None
+
     def _handle_webui_thread_get(self, request: WsRequest, key: str) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
@@ -897,7 +913,9 @@ class GatewayHTTPHandler:
             before=before,
         )
         if data is None:
-            return _http_error(404, "webui thread not found")
+            if not self._webui_session_known(decoded_key):
+                return _http_error(404, "webui thread not found")
+            data = _empty_webui_thread_payload(decoded_key)
         data["workspace_scope"] = scope.payload()
         return _http_json_response(
             data,
@@ -1649,3 +1667,19 @@ def _positive_int(value: Any) -> int | None:
 
 def _is_websocket_channel_session_key(key: str) -> bool:
     return is_webui_session_key(key)
+
+
+def _empty_webui_thread_payload(session_key: str) -> dict[str, Any]:
+    """Payload for a known session that has no persisted transcript yet.
+
+    Mirrors the shape ``build_webui_thread_response`` returns for a replayable
+    thread so the WebUI can render a freshly created, still-empty chat.
+    """
+    return {
+        "schemaVersion": WEBUI_TRANSCRIPT_SCHEMA_VERSION,
+        "sessionKey": session_key,
+        "messages": [],
+        "completed_turn_ids": [],
+        "has_pending_tool_calls": False,
+        "active_turn_id": None,
+    }

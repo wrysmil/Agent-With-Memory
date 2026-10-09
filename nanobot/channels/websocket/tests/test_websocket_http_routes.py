@@ -2356,6 +2356,63 @@ async def test_session_delete_removes_unpersisted_new_chat(
 
 
 @pytest.mark.asyncio
+async def test_webui_thread_get_returns_200_for_new_chat_without_message(
+    bus: MagicMock, tmp_path: Path
+) -> None:
+    """The WebUI fetches history right after ``new_chat``; that must not be a 404."""
+    from urllib.parse import quote
+
+    from websockets.datastructures import Headers
+    from websockets.http11 import Request
+
+    sm = SessionManager(tmp_path / "sessions")
+    project = tmp_path / "project"
+    project.mkdir()
+    channel = _ch(bus, session_manager=sm, workspace_path=tmp_path, port=_free_port())
+    connection = AsyncMock()
+    connection.remote_address = ("127.0.0.1", 50124)
+
+    await channel._dispatch_envelope(
+        connection,
+        "webui-client",
+        {
+            "type": "new_chat",
+            "workspace_scope": {
+                "project_path": str(project),
+                "access_mode": "full",
+            },
+        },
+    )
+
+    attached = next(
+        payload
+        for payload in (
+            json.loads(call.args[0]) for call in connection.send.await_args_list
+        )
+        if payload.get("event") == "attached"
+    )
+    key = f"websocket:{attached['chat_id']}"
+    assert sm.list_sessions() == []
+
+    channel.gateway.tokens.api_tokens["tok"] = time.monotonic() + 300.0
+    encoded = quote(key, safe="")
+    response = channel.gateway.http._handle_webui_thread_get(
+        Request(
+            f"/api/sessions/{encoded}/webui-thread?limit=80&direction=latest",
+            Headers([("Authorization", "Bearer tok")]),
+        ),
+        encoded,
+    )
+
+    assert response.status_code == 200
+    body = json.loads(response.body.decode())
+    assert body["sessionKey"] == key
+    assert body["messages"] == []
+    assert body["has_pending_tool_calls"] is False
+    assert body["workspace_scope"]["project_path"] == str(project.resolve())
+
+
+@pytest.mark.asyncio
 async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
     bus: MagicMock, tmp_path: Path
 ) -> None:
