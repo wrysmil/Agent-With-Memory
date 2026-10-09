@@ -108,11 +108,16 @@ function newChatShortcutLabel(): string {
   return isApplePlatform() ? "⌘⇧O" : "Ctrl+Shift+O";
 }
 
+function isDesktopShell(): boolean {
+  return typeof window !== "undefined" && (window as { mira?: unknown }).mira != null;
+}
+
 export function Sidebar(props: SidebarProps) {
   const { t } = useTranslation();
   const [menuPortalContainer, setMenuPortalContainer] =
     useState<HTMLElement | null>(null);
   const collapsed = Boolean(props.collapsed);
+  const hideBrandMark = props.hostChromeInset || isDesktopShell();
   const toggleLabel = t("thread.header.toggleSidebar");
   const newChatShortcut = newChatShortcutLabel();
   const activeActionRef = useRef<HTMLButtonElement>(null);
@@ -154,12 +159,16 @@ export function Sidebar(props: SidebarProps) {
               : "pointer-events-none -ml-0.5",
           )}
         >
-          <img
-            src="/brand/mira_mark.svg"
-            alt=""
-            className="h-8 w-8 select-none object-contain"
-            draggable={false}
-          />
+          {hideBrandMark
+            ? collapsed && <Menu className="h-4 w-4 text-muted-foreground" />
+            : (
+              <img
+                src="/brand/mira_mark.svg"
+                alt=""
+                className="h-8 w-8 select-none object-contain"
+                draggable={false}
+              />
+            )}
         </button>
         {!collapsed && (
           <Button
