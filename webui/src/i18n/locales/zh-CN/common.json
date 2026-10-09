@@ -1416,6 +1416,27 @@
     "closed": "已断开",
     "error": "连接出错"
   },
+  "workbench": {
+    "title": "工作台",
+    "open": "打开工作台",
+    "collapse": "收起工作台",
+    "updatedAt": "更新于 {{time}}",
+    "overview": "概览",
+    "emptyOverview": "暂无摘要",
+    "environment": "环境信息",
+    "local": "本地",
+    "fullAccess": "完全访问",
+    "restrictedAccess": "受限访问",
+    "files": "个文件",
+    "commitPush": "提交或推送",
+    "commitPushHint": "将随工作台只读 API（阶段3）接线",
+    "integrations": "技能与 MCP",
+    "emptyIntegrations": "本次会话未使用 MCP/CLI",
+    "outputs": "产出",
+    "emptyOutputs": "暂无文件改动",
+    "sources": "来源",
+    "emptySources": "暂无网页来源"
+  },
   "thread": {
     "activity": {
       "viewDetails": "查看详情",
@@ -1813,6 +1834,12 @@
       "requests": "本轮 {{count}} 次模型调用",
       "estimated": "包含估算用量"
     }
+  },
+  "askQuestion": {
+    "recommended": "推荐",
+    "otherPlaceholder": "输入其他答案",
+    "noPreference": "无偏好",
+    "submit": "提交回答"
   },
   "recovery": {
     "actionFailed": "恢复操作失败，请重试。",

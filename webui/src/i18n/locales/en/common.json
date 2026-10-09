@@ -1416,6 +1416,27 @@
     "closed": "Disconnected",
     "error": "Connection error"
   },
+  "workbench": {
+    "title": "Workbench",
+    "open": "Open workbench",
+    "collapse": "Collapse workbench",
+    "updatedAt": "Updated {{time}}",
+    "overview": "Overview",
+    "emptyOverview": "No summary yet",
+    "environment": "Environment",
+    "local": "Local",
+    "fullAccess": "Full access",
+    "restrictedAccess": "Restricted",
+    "files": "files",
+    "commitPush": "Commit or push",
+    "commitPushHint": "Wired with the workbench read-only API (phase 3)",
+    "integrations": "Skills & MCP",
+    "emptyIntegrations": "No MCP/CLI used this session",
+    "outputs": "Outputs",
+    "emptyOutputs": "No files changed yet",
+    "sources": "Sources",
+    "emptySources": "No web sources yet"
+  },
   "thread": {
     "activity": {
       "viewDetails": "View details",
@@ -1805,6 +1826,12 @@
       "requests": "{{count}} calls this turn",
       "estimated": "Includes estimated usage"
     }
+  },
+  "askQuestion": {
+    "recommended": "Recommended",
+    "otherPlaceholder": "Type another answer",
+    "noPreference": "No preference",
+    "submit": "Submit answer"
   },
   "recovery": {
     "actionFailed": "Recovery action failed. Try again.",

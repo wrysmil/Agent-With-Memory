@@ -37,6 +37,7 @@ import type {
   OutboundMcpPresetMention,
   OutboundMedia,
   SessionMention,
+  AskQuestionRequest,
   GoalStateWsPayload,
   MessageDeliveryStatus,
   RecoveryState,
@@ -45,6 +46,8 @@ import type {
   UIMessage,
   WorkspaceScopePayload,
 } from "@/lib/types";
+
+const NO_QUESTIONS: AskQuestionRequest[] = [];
 
 interface StreamBuffer {
   /** ID of the assistant message currently receiving deltas (cleared when its segment closes). */
@@ -256,6 +259,9 @@ export function useNanobotStream(
   recoveryState: RecoveryState | null;
   continueRecovery: () => Promise<void>;
   dismissRecovery: () => Promise<void>;
+  /** Unanswered interactive questions pushed by the agent's ``ask_question`` tool. */
+  pendingQuestions: AskQuestionRequest[];
+  answerQuestion: (questionId: string, answer: string) => void;
   send: (
     content: string,
     images?: SendAttachment[],
@@ -288,6 +294,9 @@ export function useNanobotStream(
   const [retryStatus, setRetryStatus] = useState<RetryStatus | null>(null);
   const [goalState, setGoalState] = useState<GoalStateWsPayload | undefined>(undefined);
   const [recoveryState, setRecoveryState] = useState<RecoveryState | null>(null);
+  const [questionsByChat, setQuestionsByChat] = useState<Map<string, AskQuestionRequest[]>>(
+    () => new Map(),
+  );
   const [streamError, setStreamError] = useState<StreamError | null>(null);
   const buffer = useRef<StreamBuffer | null>(null);
   const activeAssistantRef = useRef<ActiveAssistantCursor | null>(null);
@@ -778,6 +787,16 @@ export function useNanobotStream(
         }
         return;
       }
+      if (ev.event === "question_requested") {
+        setQuestionsByChat((prev) => {
+          const list = prev.get(chatId) ?? [];
+          if (list.some((item) => item.question_id === ev.question.question_id)) return prev;
+          const next = new Map(prev);
+          next.set(chatId, [...list, ev.question]);
+          return next;
+        });
+        return;
+      }
       const sideChannelEvent = isSideChannelEvent(ev);
       if (ev.event === "context_compaction") {
         flushPendingStreamEvents({ closeAnswerSegment: true });
@@ -936,6 +955,12 @@ export function useNanobotStream(
         }
         setRunStartedAt(null);
         setRetryStatus(null);
+        setQuestionsByChat((prev) => {
+          if (!prev.get(chatId)?.length) return prev;
+          const next = new Map(prev);
+          next.delete(chatId);
+          return next;
+        });
         // Definitive signal that the turn is fully complete, so stop the
         // loading indicator immediately.
         setIsStreaming(false);
@@ -1394,6 +1419,35 @@ export function useNanobotStream(
     });
   }, [chatId, client, recoveryState]);
 
+  const answerQuestion = useCallback(
+    (questionId: string, answer: string) => {
+      if (!chatId) return;
+      const trimmed = answer.trim();
+      if (!trimmed) return;
+      setQuestionsByChat((prev) => {
+        const list = prev.get(chatId) ?? [];
+        if (!list.some((item) => item.question_id === questionId)) return prev;
+        const next = new Map(prev);
+        next.set(chatId, list.filter((item) => item.question_id !== questionId));
+        return next;
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: trimmed,
+          turnPhase: "user",
+          turnSeq: 0,
+          deliveryStatus: "accepted",
+          createdAt: Date.now(),
+        },
+      ]);
+      client.answerQuestion(chatId, questionId, trimmed);
+    },
+    [chatId, client],
+  );
+
   const continueRecovery = useCallback(
     () => recoveryAction("continue"),
     [recoveryAction],
@@ -1413,6 +1467,8 @@ export function useNanobotStream(
     recoveryState,
     continueRecovery,
     dismissRecovery,
+    pendingQuestions: (chatId && questionsByChat.get(chatId)) || NO_QUESTIONS,
+    answerQuestion,
     send,
     transcribeAudio,
     stop,

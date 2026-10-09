@@ -73,6 +73,7 @@ type SessionUpdateHandler = (
   chatId: string,
   scope?: SessionUpdateScope,
   workspaceScope?: WorkspaceScopePayload,
+  reasoningEffort?: string | null,
 ) => void;
 type SidebarStateUpdateHandler = (state: SidebarStatePayload) => void;
 type RunStatusHandler = (chatId: string, startedAt: number | null) => void;
@@ -1041,6 +1042,26 @@ export class NanobotClient {
     });
   }
 
+  answerQuestion(chatId: string, questionId: string, answer: string): void {
+    this.knownChats.add(chatId);
+    this.queueSend({
+      type: "question_answer",
+      chat_id: chatId,
+      question_id: questionId,
+      answer,
+    });
+  }
+
+  setReasoningEffort(chatId: string, reasoningEffort: string): void {
+    if (this.temporaryChatIds.has(chatId)) return;
+    this.knownChats.add(chatId);
+    this.queueSend({
+      type: "set_reasoning_effort",
+      chat_id: chatId,
+      reasoning_effort: reasoningEffort,
+    });
+  }
+
   setSidebarState(state: SidebarStatePayload): Promise<SidebarStatePayload> {
     return this.requestMutation<SidebarStatePayload>("sidebar.update", { state });
   }
@@ -1214,7 +1235,12 @@ export class NanobotClient {
     }
 
     if (parsed.event === "session_updated") {
-      this.emitSessionUpdate(parsed.chat_id, parsed.scope, parsed.workspace_scope);
+      this.emitSessionUpdate(
+        parsed.chat_id,
+        parsed.scope,
+        parsed.workspace_scope,
+        parsed.reasoning_effort,
+      );
       return;
     }
 
@@ -1266,9 +1292,10 @@ export class NanobotClient {
     chatId: string,
     scope?: SessionUpdateScope,
     workspaceScope?: WorkspaceScopePayload,
+    reasoningEffort?: string | null,
   ): void {
     for (const handler of this.sessionUpdateHandlers) {
-      handler(chatId, scope, workspaceScope);
+      handler(chatId, scope, workspaceScope, reasoningEffort);
     }
   }
 

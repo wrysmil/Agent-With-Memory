@@ -27,6 +27,7 @@ from nanobot.security.workspace_access import (
     WORKSPACE_SCOPE_METADATA_KEY,
     WorkspaceScopeError,
 )
+from nanobot.session.model_selection import SESSION_REASONING_EFFORT_METADATA_KEY
 from nanobot.session.webui_turns import (
     clear_websocket_turn_if_current,
     clear_websocket_turns,
@@ -451,12 +452,18 @@ class WebUICommandRouter:
                 workspace_scope=scope.payload(),
             )
             return
+        if command_type == "set_reasoning_effort":
+            await self._handle_set_reasoning_effort(connection, envelope)
+            return
         if command_type == "transcribe_audio":
             event, payload = await webui_transcription_event(
                 envelope,
                 config_path=self.gateway.settings.config.path,
             )
             await self._transport.webui_send_event(connection, event, **payload)
+            return
+        if command_type == "question_answer":
+            await self._handle_question_answer(connection, envelope)
             return
         if command_type == "message":
             await self._dispatch_message(connection, client_id, envelope)
@@ -466,6 +473,98 @@ class WebUICommandRouter:
             "error",
             detail=f"unknown type: {command_type!r}",
         )
+
+    async def _handle_question_answer(
+        self,
+        connection: ServerConnection,
+        envelope: dict[str, Any],
+    ) -> None:
+        """Resolve a pending ask_question future with the user's answer."""
+        from nanobot.agent.questions import resolve_answer
+
+        question_id = envelope.get("question_id")
+        answer = envelope.get("answer")
+        if (
+            not isinstance(question_id, str)
+            or not question_id
+            or not isinstance(answer, str)
+            or not answer.strip()
+            or len(answer) > 4000
+        ):
+            await self._transport.webui_send_event(
+                connection,
+                "error",
+                detail="invalid_question_answer",
+            )
+            return
+        if not resolve_answer(question_id, answer.strip()):
+            await self._transport.webui_send_event(
+                connection,
+                "error",
+                detail="unknown_question",
+                chat_id=envelope.get("chat_id")
+                if isinstance(envelope.get("chat_id"), str)
+                else None,
+            )
+
+    async def _handle_set_reasoning_effort(
+        self,
+        connection: ServerConnection,
+        envelope: dict[str, Any],
+    ) -> None:
+        chat_id = envelope.get("chat_id")
+        raw_effort = envelope.get("reasoning_effort")
+        sessions = self.gateway.session_manager
+        if not is_valid_webui_chat_id(chat_id) or not isinstance(raw_effort, str) or sessions is None:
+            await self._transport.webui_send_event(
+                connection,
+                "error",
+                detail="invalid_reasoning_effort",
+            )
+            return
+        effort = raw_effort.strip()
+        session = sessions.get_or_create(webui_session_key(chat_id))
+        if effort:
+            try:
+                allowed = self._reasoning_effort_options(session)
+            except Exception:
+                allowed = None
+            if allowed is not None and effort not in allowed:
+                await self._transport.webui_send_event(
+                    connection,
+                    "error",
+                    detail="invalid_reasoning_effort",
+                    chat_id=chat_id,
+                )
+                return
+            session.metadata[SESSION_REASONING_EFFORT_METADATA_KEY] = effort
+        else:
+            session.metadata.pop(SESSION_REASONING_EFFORT_METADATA_KEY, None)
+        sessions.save(session)
+        await self._transport.send_session_updated(chat_id, scope="metadata")
+        await self._transport.webui_send_event(
+            connection,
+            "session_updated",
+            chat_id=chat_id,
+            scope="metadata",
+            reasoning_effort=effort,
+        )
+
+    def _reasoning_effort_options(self, session: Any) -> list[str]:
+        from nanobot.config.loader import load_config
+        from nanobot.session.model_selection import model_preset_from_metadata
+        from nanobot.webui.settings_models import reasoning_effort_values_for
+
+        config = load_config(self.gateway.settings.config.path)
+        try:
+            preset_name = model_preset_from_metadata(session.metadata)
+        except ValueError:
+            preset_name = None
+        try:
+            preset = config.resolve_preset(preset_name)
+        except KeyError:
+            preset = config.resolve_preset(None)
+        return reasoning_effort_values_for(preset.provider, preset.model)
 
     async def _dispatch_message(
         self,

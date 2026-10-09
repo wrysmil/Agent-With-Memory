@@ -2,13 +2,17 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { PanelRightOpen } from "lucide-react";
 
 import { FilePreviewAvailabilityProvider } from "@/components/FilePreviewAvailabilityContext";
 import { FilePreviewPanel } from "@/components/FilePreviewPanel";
 import { SessionHandleLabel } from "@/components/SessionHandleLabel";
+import { SessionWorkbench } from "@/components/workbench/SessionWorkbench";
+import { deriveSessionWorkbench } from "@/components/workbench/session-workbench-model";
 import { PromptNavigator } from "@/components/thread/PromptNavigator";
 import { RecoveryNotice } from "@/components/thread/RecoveryNotice";
 import { SessionInfoPopover } from "@/components/thread/SessionInfoPopover";
+import { AskQuestionCard } from "@/components/thread/AskQuestionCard";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThreadStatusBar } from "@/components/thread/ThreadStatusBar";
 import type {
@@ -41,6 +45,7 @@ import {
 } from "@/lib/mcp-preset-events";
 import type { CanonicalRunSnapshot, StreamError } from "@/lib/nanobot-client";
 import { inferProviderFromModelName, providerDisplayLabel } from "@/lib/provider-brand";
+import { cn } from "@/lib/utils";
 import type {
   ChatSummary,
   RoundUsage,
@@ -417,6 +422,7 @@ interface ThreadShellProps {
   workspaceControls?: WorkspacesPayload["controls"] | null;
   workspaceScopeDisabled?: boolean;
   workspaceError?: string | null;
+  workspaceHostname?: string | null;
   onWorkspaceScopeChange?: (scope: WorkspaceScopePayload) => void;
   settingsSnapshot?: SettingsPayload | null;
   onOpenModelSettings?: () => void;
@@ -719,6 +725,7 @@ export function ThreadShell({
   workspaceControls = null,
   workspaceScopeDisabled = false,
   workspaceError = null,
+  workspaceHostname = null,
   onWorkspaceScopeChange,
   settingsSnapshot = null,
   onOpenModelSettings,
@@ -780,6 +787,13 @@ export function ThreadShell({
   const [filePreviewPath, setFilePreviewPath] = useState<string | null>(null);
   const [filePreviewClosing, setFilePreviewClosing] = useState(false);
   const [filePreviewWidth, setFilePreviewWidth] = useState(FILE_PREVIEW_DEFAULT_WIDTH);
+  const [workbenchOpen, setWorkbenchOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem("mira.workbench.open") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [quotedContext, setQuotedContext] = useState<string | null>(null);
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
   const shellRef = useRef<HTMLElement | null>(null);
@@ -829,6 +843,8 @@ export function ThreadShell({
     recoveryState,
     continueRecovery,
     dismissRecovery,
+    pendingQuestions,
+    answerQuestion,
     send,
     transcribeAudio,
     stop,
@@ -990,6 +1006,10 @@ export function ThreadShell({
   useEffect(() => {
     setLocalModelPreset(null);
   }, [session?.key, sessionModelPreset]);
+  const [sessionReasoningEffort, setSessionReasoningEffort] = useState<string | null>(null);
+  useEffect(() => {
+    setSessionReasoningEffort(null);
+  }, [chatId]);
   const configuredPresetNames = useMemo(
     () => new Set(settings?.model_presets.map((preset) => preset.name) ?? []),
     [settings],
@@ -1024,6 +1044,16 @@ export function ThreadShell({
     () => toModelBadgeInfo(modelName, settings, activeModelPreset),
     [activeModelPreset, modelName, settings],
   );
+  const modelReasoningEffort = sessionReasoningEffort ?? modelBadge.reasoningEffort;
+  const modelReasoningEffortValues = useMemo(
+    () => modelPresetForBadge(settings, activeModelPreset)?.reasoning_effort_values ?? null,
+    [activeModelPreset, settings],
+  );
+  const handleReasoningEffortChange = useCallback((value: string) => {
+    const next = value.trim();
+    setSessionReasoningEffort(next || null);
+    if (chatId) client.setReasoningEffort(chatId, next);
+  }, [chatId, client]);
   const modelBadgeLabel = modelBadge.needsSetup
     ? t("thread.composer.chooseAI", { defaultValue: "Choose your AI" })
     : modelBadge.label;
@@ -1549,6 +1579,9 @@ export function ThreadShell({
 
   const composer = (
     <>
+      {pendingQuestions.length > 0 ? (
+        <AskQuestionCard question={pendingQuestions[0]} onAnswer={answerQuestion} />
+      ) : null}
       {recoveryState ? (
         <RecoveryNotice
           state={recoveryState}
@@ -1683,6 +1716,19 @@ export function ThreadShell({
     />
   ) : undefined;
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("mira.workbench.open", workbenchOpen ? "1" : "0");
+    } catch {
+      // Preference persistence is best-effort.
+    }
+  }, [workbenchOpen]);
+
+  const workbenchModel = useMemo(
+    () => deriveSessionWorkbench(displayMessages, workspaceScope),
+    [displayMessages, workspaceScope],
+  );
+
   const threadHeader = !hideHeader ? (
     <ThreadHeader
       title={title}
@@ -1761,6 +1807,28 @@ export function ThreadShell({
           />
         ) : null}
       </div>
+      {workbenchOpen && session ? (
+        <SessionWorkbench
+          model={workbenchModel}
+          onOpenFilePreview={historyKey ? handleOpenFilePreview : undefined}
+          onCollapse={() => setWorkbenchOpen(false)}
+        />
+      ) : (
+        <button
+          type="button"
+          data-testid="session-workbench-open"
+          aria-label={t("workbench.open", { defaultValue: "Open workbench" })}
+          title={t("workbench.open", { defaultValue: "Open workbench" })}
+          onClick={() => setWorkbenchOpen(true)}
+          className={cn(
+            "absolute right-2 top-11 z-20 grid h-7 w-7 place-items-center rounded-control",
+            "border border-border/60 bg-background/90 text-muted-foreground/80 shadow-sm",
+            "hover:bg-muted/60 hover:text-foreground",
+          )}
+        >
+          <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      )}
       {headerPortalTarget && headerActive
         ? createPortal(threadHeader, headerPortalTarget)
         : null}

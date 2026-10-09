@@ -422,6 +422,7 @@ export interface WorkspaceScopePayload {
 export interface WorkspacesPayload {
   schema_version: number;
   default_access_mode: WebuiDefaultAccessMode;
+  hostname?: string | null;
   default_scope: WorkspaceScopePayload;
   controls: {
     can_change_project: boolean;
@@ -1319,6 +1320,21 @@ interface InboundTurnMetadata {
   turn_seq?: number;
 }
 
+/** One clickable choice inside an interactive ``ask_question`` card. */
+export interface AskQuestionOption {
+  label: string;
+  description?: string;
+  recommended?: boolean;
+}
+
+/** Structured question pushed by the agent's ``ask_question`` tool. */
+export interface AskQuestionRequest {
+  question_id: string;
+  question: string;
+  header?: string;
+  options: AskQuestionOption[];
+}
+
 export type InboundEvent =
   | { event: "ready"; chat_id: string; client_id: string }
   | {
@@ -1327,6 +1343,7 @@ export type InboundEvent =
       temporary?: boolean;
       recovery_state?: RecoveryState;
       usage?: TurnUsage;
+      reasoning_effort?: string | null;
     }
   | {
       event: "message_accepted";
@@ -1447,10 +1464,16 @@ export type InboundEvent =
       goal_state: GoalStateWsPayload;
     }
   | {
+      event: "question_requested";
+      chat_id: string;
+      question: AskQuestionRequest;
+    }
+  | {
       event: "session_updated";
       chat_id: string;
       scope?: "metadata" | "thread" | string;
       workspace_scope?: WorkspaceScopePayload;
+      reasoning_effort?: string | null;
     }
   | {
       event: "sidebar_state_updated";
@@ -1564,6 +1587,7 @@ export type Outbound =
   | { type: "set_sidebar_state"; state: SidebarStatePayload }
   | { type: "discard_temporary_chat"; chat_id: string }
   | { type: "set_workspace_scope"; chat_id: string; workspace_scope: WorkspaceScopePayload }
+  | { type: "question_answer"; chat_id: string; question_id: string; answer: string }
   | { type: "transcribe_audio"; request_id: string; data_url: string; duration_ms?: number }
   | {
       type: "message";
