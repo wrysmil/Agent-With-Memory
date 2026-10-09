@@ -16,6 +16,7 @@ import type { SidebarDeleteItem } from "@/components/ChatList";
 import type { SettingsSectionKey } from "@/components/settings/SettingsView";
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { PaneWorkbench } from "@/components/workbench/PaneWorkbench";
+import { WorkbenchTabBar } from "@/components/workbench/WorkbenchTabBar";
 import {
   MAX_WORKBENCH_PANES,
   addWorkbenchPane,
@@ -2635,7 +2636,23 @@ function Shell({
                 view !== "chat" && "hidden",
               )}
             >
-              <PaneWorkbench
+              <WorkbenchTabBar
+                tabs={sidebarTabPresentations
+                  .filter((presentation) => (
+                    presentation.orderedTab.tab.explicit
+                    || presentation.orderedTab.paneKeys.length > 1
+                  ))
+                  .map((presentation) => ({
+                    tabKey: presentation.orderedTab.tabKey,
+                    rowKey: presentation.rowKey,
+                    title: presentation.title,
+                  }))}
+                activeTabKey={activeTabKey}
+                onSelectTab={onSelectSidebarItem}
+                onNewChat={onNewChat}
+              />
+              <div className="flex min-h-0 flex-1 flex-col">
+                <PaneWorkbench
                 panes={renderedWorkbenchPanes}
                 activePaneKey={renderedActivePaneKey}
                 layout={renderedWorkbenchLayout}
@@ -2762,6 +2779,7 @@ function Shell({
                   );
                 }}
               />
+              </div>
             </div>
             {view !== "chat" && (
               <div className="absolute inset-0 flex flex-col">

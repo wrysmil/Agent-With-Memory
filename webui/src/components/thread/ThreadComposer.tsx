@@ -201,6 +201,7 @@ interface ThreadComposerProps {
   onModelPresetChange?: (name: string) => void;
   modelProvider?: string | null;
   modelProviderLabel?: string | null;
+  modelReasoningEffort?: string | null;
   modelNeedsSetup?: boolean;
   fallbackModelName?: string | null;
   onModelBadgeClick?: () => void;
@@ -902,6 +903,7 @@ export function ThreadComposer({
   onModelPresetChange,
   modelProvider = null,
   modelProviderLabel = null,
+  modelReasoningEffort = null,
   modelNeedsSetup = false,
   fallbackModelName = null,
   onModelBadgeClick,
@@ -2455,6 +2457,7 @@ export function ThreadComposer({
                 onRequestComposerFocus={() => textareaRef.current?.focus()}
                 provider={modelProvider}
                 providerLabel={modelProviderLabel}
+                reasoningEffort={modelReasoningEffort}
                 needsSetup={modelNeedsSetup}
                 attentionRequest={modelSetupAttentionRequest}
                 fallbackModelName={fallbackModelName}

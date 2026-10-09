@@ -10,6 +10,7 @@ import { PromptNavigator } from "@/components/thread/PromptNavigator";
 import { RecoveryNotice } from "@/components/thread/RecoveryNotice";
 import { SessionInfoPopover } from "@/components/thread/SessionInfoPopover";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
+import { ThreadStatusBar } from "@/components/thread/ThreadStatusBar";
 import type {
   ComposerContextUsage,
   ComposerRoundUsage,
@@ -435,6 +436,7 @@ interface ModelBadgeInfo {
   model: string | null;
   provider: string | null;
   providerLabel: string | null;
+  reasoningEffort: string | null;
   needsSetup: boolean;
 }
 
@@ -488,6 +490,7 @@ function toModelBadgeInfo(
     model: toModelBadgeLabel(model),
     provider,
     providerLabel: provider ? providerDisplayLabel(settings?.providers ?? [], provider) : null,
+    reasoningEffort: preset?.reasoning_effort ?? null,
     needsSetup,
   };
 }
@@ -511,6 +514,7 @@ function modelPresetOptionsFromSettings(
         name,
         model: preset.model,
         provider: preset.resolved_provider || preset.provider,
+        reasoningEffort: preset.reasoning_effort ?? null,
       };
     });
 }
@@ -1576,6 +1580,7 @@ export function ThreadShell({
           onModelPresetChange={handleModelPresetChange}
           modelProvider={modelBadge.provider}
           modelProviderLabel={modelBadge.providerLabel}
+          modelReasoningEffort={modelBadge.reasoningEffort}
           modelNeedsSetup={modelBadge.needsSetup}
           fallbackModelName={fallbackModelName}
           onModelBadgeClick={modelBadge.needsSetup ? onOpenModelSettings : undefined}
@@ -1626,6 +1631,7 @@ export function ThreadShell({
           onModelPresetChange={handleModelPresetChange}
           modelProvider={modelBadge.provider}
           modelProviderLabel={modelBadge.providerLabel}
+          modelReasoningEffort={modelBadge.reasoningEffort}
           modelNeedsSetup={modelBadge.needsSetup}
           fallbackModelName={fallbackModelName}
           onModelBadgeClick={modelBadge.needsSetup ? onOpenModelSettings : undefined}
@@ -1748,6 +1754,12 @@ export function ThreadShell({
             onQuoteSelection={session ? handleQuoteSelection : undefined}
           />
         </FilePreviewAvailabilityProvider>
+        {!composerPortalTarget ? (
+          <ThreadStatusBar
+            workspaceScope={workspaceScope}
+            contextUsage={composerContextUsage}
+          />
+        ) : null}
       </div>
       {headerPortalTarget && headerActive
         ? createPortal(threadHeader, headerPortalTarget)
@@ -1759,6 +1771,10 @@ export function ThreadShell({
           data-testid={composerActive ? "active-pane-composer" : undefined}
         >
           {composer}
+          <ThreadStatusBar
+            workspaceScope={workspaceScope}
+            contextUsage={composerContextUsage}
+          />
         </div>,
         composerPortalTarget,
       ) : null}

@@ -1538,6 +1538,14 @@
       "chooseAI": "选择你的 AI",
       "switchModel": "切换本次对话所用模型",
       "manageModels": "管理模型预设",
+      "effort": {
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "超高",
+        "max": "极限",
+        "adaptive": "自适应"
+      },
       "context": {
         "tooltip": "上下文 {{percent}}%",
         "detailsLabel": "打开上下文用量",

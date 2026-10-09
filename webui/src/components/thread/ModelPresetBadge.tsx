@@ -73,10 +73,20 @@ function compactModelName(model?: string | null): string | null {
   return value.split("/").at(-1) || value;
 }
 
+function formatReasoningEffort(
+  t: (key: string, options: { defaultValue: string }) => string,
+  effort?: string | null,
+): string | null {
+  const value = effort?.trim().toLowerCase();
+  if (!value || value === "none") return null;
+  return t(`thread.composer.effort.${value}`, { defaultValue: value });
+}
+
 export interface ModelPresetOption {
   name: string;
   model?: string | null;
   provider?: string | null;
+  reasoningEffort?: string | null;
 }
 
 interface ModelPresetBadgeProps {
@@ -84,6 +94,7 @@ interface ModelPresetBadgeProps {
   modelDetail?: string | null;
   modelPreset?: string | null;
   modelPresets?: ModelPresetOption[];
+  reasoningEffort?: string | null;
   onPresetChange?: (name: string) => void;
   onManageModels?: () => void;
   onRequestComposerFocus?: () => void;
@@ -101,6 +112,7 @@ export function ModelPresetBadge({
   modelDetail,
   modelPreset,
   modelPresets = [],
+  reasoningEffort,
   onPresetChange,
   onManageModels,
   onRequestComposerFocus,
@@ -125,6 +137,9 @@ export function ModelPresetBadge({
     name: activeName,
     model: modelDetail ?? modelPresets[listedIndex]?.model,
     provider: provider || modelPresets[listedIndex]?.provider,
+    reasoningEffort: reasoningEffort
+      ?? modelPresets[listedIndex]?.reasoningEffort
+      ?? null,
   };
   const fallbackPreset = fallbackModelName
     ? modelPresets.find((preset) => preset.model?.trim() === fallbackModelName.trim())
@@ -279,6 +294,7 @@ export function ModelPresetBadge({
       modelDetail={displayModelDetail}
       provider={displayProvider}
       providerLabel={fallbackModelName ? null : providerLabel}
+      reasoningEffort={activePreset.reasoningEffort}
       needsSetup={needsSetup}
       needsAttention={needsSetup && attentionRequest > 0}
       fallbackModelName={fallbackModelName}
@@ -383,6 +399,7 @@ export function ModelPresetBadge({
                         label={preset.name}
                         modelDetail={preset.model}
                         provider={preset.provider}
+                        reasoningEffort={preset.reasoningEffort}
                         isHero={isHero}
                         offset={offset}
                         scale={motion.settling ? 1 : dockScale(offset - motion.remainder)}
@@ -459,7 +476,9 @@ function PresetOption({
   selected: boolean;
   onSelect: (name: string) => void;
 }) {
+  const { t } = useTranslation();
   const detail = compactModelName(preset.model);
+  const effort = formatReasoningEffort(t, preset.reasoningEffort);
   return (
     <button
       type="button"
@@ -485,6 +504,9 @@ function PresetOption({
         {detail && detail !== preset.name ? (
           <span className="truncate text-[12px] text-muted-foreground">{detail}</span>
         ) : null}
+        {effort ? (
+          <span className="shrink-0 text-[12px] text-muted-foreground/85">{effort}</span>
+        ) : null}
       </span>
       {selected ? <Check className="h-4 w-4 shrink-0 text-foreground/80" aria-hidden /> : null}
     </button>
@@ -496,6 +518,7 @@ function PresetPill({
   modelDetail,
   provider,
   providerLabel,
+  reasoningEffort,
   needsSetup = false,
   needsAttention = false,
   fallbackModelName,
@@ -508,6 +531,7 @@ function PresetPill({
   modelDetail?: string | null;
   provider?: string | null;
   providerLabel?: string | null;
+  reasoningEffort?: string | null;
   needsSetup?: boolean;
   needsAttention?: boolean;
   fallbackModelName?: string | null;
@@ -516,11 +540,13 @@ function PresetPill({
   offset?: number;
   scale?: number;
 }) {
+  const { t } = useTranslation();
   const labelRef = useRef<HTMLSpanElement | null>(null);
   const [labelOverflows, setLabelOverflows] = useState(false);
   const inferredProvider = needsSetup
     ? null
     : provider || inferProviderFromModelName(modelDetail || label);
+  const effort = formatReasoningEffort(t, reasoningEffort);
   const title = [...new Set([label, modelDetail, providerLabel].filter(Boolean))].join(" · ");
   const fallbackTitle = fallbackModelName
     ? `${fallbackFromLabel || label} · using ${fallbackModelName}`
@@ -575,6 +601,11 @@ function PresetPill({
       >
         {needsSetup ? <SetupPromptLabel label={label} /> : label}
       </span>
+      {effort ? (
+        <span data-testid="composer-model-effort" className="shrink-0 text-muted-foreground/80">
+          {effort}
+        </span>
+      ) : null}
     </span>
   );
 }
