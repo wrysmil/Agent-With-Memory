@@ -2712,6 +2712,7 @@ function Shell({
                         workspaceScope={activeWorkspaceScope}
                         workspaceDefaultScope={workspaces?.default_scope ?? null}
                         workspaceControls={workspaces?.controls ?? null}
+                        workspaceHostname={workspaces?.hostname ?? null}
                         workspaceScopeDisabled={activeChatRunning}
                         workspaceError={workspaceError}
                         onWorkspaceScopeChange={applyWorkspaceScope}
@@ -2762,6 +2763,7 @@ function Shell({
                       workspaceControls={workspaces?.controls ?? null}
                       workspaceScopeDisabled={paneRunning}
                       workspaceError={context.active ? workspaceError : null}
+                      workspaceHostname={workspaces?.hostname ?? null}
                       onWorkspaceScopeChange={(scope) => {
                         if (paneRunning) return;
                         const next = normalizeWorkspaceScope(scope);

@@ -1587,6 +1587,7 @@ export type Outbound =
   | { type: "set_sidebar_state"; state: SidebarStatePayload }
   | { type: "discard_temporary_chat"; chat_id: string }
   | { type: "set_workspace_scope"; chat_id: string; workspace_scope: WorkspaceScopePayload }
+  | { type: "set_reasoning_effort"; chat_id: string; reasoning_effort: string }
   | { type: "question_answer"; chat_id: string; question_id: string; answer: string }
   | { type: "transcribe_audio"; request_id: string; data_url: string; duration_ms?: number }
   | {

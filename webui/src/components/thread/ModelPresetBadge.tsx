@@ -95,7 +95,9 @@ interface ModelPresetBadgeProps {
   modelPreset?: string | null;
   modelPresets?: ModelPresetOption[];
   reasoningEffort?: string | null;
+  reasoningEffortValues?: readonly string[] | null;
   onPresetChange?: (name: string) => void;
+  onReasoningEffortChange?: (value: string) => void;
   onManageModels?: () => void;
   onRequestComposerFocus?: () => void;
   provider?: string | null;
@@ -113,7 +115,9 @@ export function ModelPresetBadge({
   modelPreset,
   modelPresets = [],
   reasoningEffort,
+  reasoningEffortValues = null,
   onPresetChange,
+  onReasoningEffortChange,
   onManageModels,
   onRequestComposerFocus,
   provider,
@@ -167,6 +171,12 @@ export function ModelPresetBadge({
   const pillStride = pillHeight + PILL_GAP_PX;
   const switchModelLabel = t("thread.composer.switchModel", {
     defaultValue: "Switch model for this chat",
+  });
+  const showEffortDial = Boolean(onReasoningEffortChange)
+    && (reasoningEffortValues?.length ?? 0) > 1;
+  const activeEffort = activePreset.reasoningEffort ?? "";
+  const effortGroupLabel = t("thread.composer.reasoningEffort", {
+    defaultValue: "Reasoning effort",
   });
 
   const selectPreset = (name: string) => {
@@ -446,6 +456,41 @@ export function ModelPresetBadge({
             />
           ))}
         </div>
+        {showEffortDial ? (
+          <div className="mt-1 border-t border-border/55 pt-1.5">
+            <p className="px-2.5 pb-1 text-[11.5px] font-medium text-muted-foreground">
+              {effortGroupLabel}
+            </p>
+            <div
+              role="radiogroup"
+              aria-label={effortGroupLabel}
+              className="flex flex-wrap gap-1 px-2.5 pb-1.5"
+            >
+              {(reasoningEffortValues ?? []).map((value) => {
+                const active = activeEffort === value;
+                return (
+                  <button
+                    key={value || "__default__"}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => onReasoningEffortChange?.(value)}
+                    className={cn(
+                      "h-7 rounded-full border px-2.5 text-[12px] font-medium transition-colors",
+                      active
+                        ? "border-primary/55 bg-primary/10 text-primary"
+                        : "border-transparent bg-muted/60 text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {value === ""
+                      ? t("thread.composer.effort.default", { defaultValue: "Default" })
+                      : formatReasoningEffort(t, value) ?? value}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         {onManageModels ? (
           <div className="mt-1 border-t border-border/55 pt-1">
             <button

@@ -1565,6 +1565,22 @@
       "chooseAI": "Choose your AI",
       "switchModel": "Switch model for this chat",
       "manageModels": "Manage models",
+      "reasoningEffort": "Reasoning effort",
+      "effort": {
+        "default": "Default"
+      },
+      "runtime": {
+        "thisComputer": "This computer",
+        "title": "Runtime environment",
+        "aria": "Runtime environment",
+        "host": "Hostname",
+        "gateway": "Gateway",
+        "sandbox": "Sandbox",
+        "access": "Access",
+        "unknown": "Unknown",
+        "enforced": "Enforced",
+        "notEnforced": "Not enforced"
+      },
       "context": {
         "tooltip": "Context {{percent}}%",
         "detailsLabel": "Open context usage",

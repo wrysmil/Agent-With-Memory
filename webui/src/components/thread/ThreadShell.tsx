@@ -1098,6 +1098,26 @@ export function ThreadShell({
   }, [client, refreshModelSettings]);
 
   useEffect(() => {
+    if (!chatId) return;
+    return client.onChat(chatId, (event) => {
+      if (event.event !== "attached") return;
+      const effort = typeof event.reasoning_effort === "string"
+        ? event.reasoning_effort.trim()
+        : "";
+      setSessionReasoningEffort(effort || null);
+    });
+  }, [chatId, client]);
+
+  useEffect(() => {
+    if (!chatId) return;
+    return client.onSessionUpdate((updatedChatId, scope, _scopePayload, effort) => {
+      if (updatedChatId !== chatId || scope !== "metadata") return;
+      if (typeof effort !== "string") return;
+      setSessionReasoningEffort(effort.trim() || null);
+    });
+  }, [chatId, client]);
+
+  useEffect(() => {
     if (!chatId) {
       setFallbackModelName(null);
       return;
@@ -1613,7 +1633,9 @@ export function ThreadShell({
           onModelPresetChange={handleModelPresetChange}
           modelProvider={modelBadge.provider}
           modelProviderLabel={modelBadge.providerLabel}
-          modelReasoningEffort={modelBadge.reasoningEffort}
+          modelReasoningEffort={modelReasoningEffort}
+          modelReasoningEffortValues={modelReasoningEffortValues}
+          onReasoningEffortChange={handleReasoningEffortChange}
           modelNeedsSetup={modelBadge.needsSetup}
           fallbackModelName={fallbackModelName}
           onModelBadgeClick={modelBadge.needsSetup ? onOpenModelSettings : undefined}
@@ -1639,6 +1661,7 @@ export function ThreadShell({
             workspaceControls?.can_pick_folder ? pickWorkspaceFolder : undefined
           }
           onWorkspaceScopeChange={onWorkspaceScopeChange}
+          runtimeHostname={workspaceHostname}
           pendingQueueKey={temporary ? null : chatId}
           transcriptionProvider={settingsSnapshot?.transcription?.provider}
           ingressLimits={ingressLimits}
@@ -1664,7 +1687,9 @@ export function ThreadShell({
           onModelPresetChange={handleModelPresetChange}
           modelProvider={modelBadge.provider}
           modelProviderLabel={modelBadge.providerLabel}
-          modelReasoningEffort={modelBadge.reasoningEffort}
+          modelReasoningEffort={modelReasoningEffort}
+          modelReasoningEffortValues={modelReasoningEffortValues}
+          onReasoningEffortChange={handleReasoningEffortChange}
           modelNeedsSetup={modelBadge.needsSetup}
           fallbackModelName={fallbackModelName}
           onModelBadgeClick={modelBadge.needsSetup ? onOpenModelSettings : undefined}
@@ -1690,6 +1715,7 @@ export function ThreadShell({
             workspaceControls?.can_pick_folder ? pickWorkspaceFolder : undefined
           }
           onWorkspaceScopeChange={onWorkspaceScopeChange}
+          runtimeHostname={workspaceHostname}
           transcriptionProvider={settingsSnapshot?.transcription?.provider}
           ingressLimits={ingressLimits}
         />

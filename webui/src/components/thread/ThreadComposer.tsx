@@ -64,6 +64,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  RuntimeEnvChip,
   WorkspaceAccessMenu,
   WorkspaceProjectPicker,
 } from "@/components/thread/WorkspaceControls";
@@ -202,6 +203,9 @@ interface ThreadComposerProps {
   modelProvider?: string | null;
   modelProviderLabel?: string | null;
   modelReasoningEffort?: string | null;
+  modelReasoningEffortValues?: readonly string[] | null;
+  onReasoningEffortChange?: (value: string) => void;
+  runtimeHostname?: string | null;
   modelNeedsSetup?: boolean;
   fallbackModelName?: string | null;
   onModelBadgeClick?: () => void;
@@ -904,6 +908,9 @@ export function ThreadComposer({
   modelProvider = null,
   modelProviderLabel = null,
   modelReasoningEffort = null,
+  modelReasoningEffortValues = null,
+  onReasoningEffortChange,
+  runtimeHostname = null,
   modelNeedsSetup = false,
   fallbackModelName = null,
   onModelBadgeClick,
@@ -977,11 +984,11 @@ export function ThreadComposer({
     [pendingQueueKey],
   );
   const projectPickerAvailable =
-    isHero
-    && !!workspaceDefaultScope
+    !!workspaceDefaultScope
     && !!onWorkspaceScopeChange
     && workspaceControls?.can_change_project !== false;
   const showProjectPicker = projectPickerAvailable && !workspaceControlsHidden;
+  const showContextTabs = showProjectPicker || !!runtimeHostname;
 
   useEffect(() => {
     secondEnterPromptIdRef.current = null;
@@ -2236,6 +2243,32 @@ export function ThreadComposer({
           onChoose={chooseMentionCandidate}
         />
       ) : null}
+      {showContextTabs ? (
+        <div
+          data-testid="composer-context-tabs"
+          className={cn(
+            "mx-auto mb-1.5 flex min-w-0 items-center gap-1 px-1",
+            isHero ? "max-w-[58rem]" : "max-w-[49.5rem]",
+          )}
+        >
+          {showProjectPicker ? (
+            <WorkspaceProjectPicker
+              isHero={isHero}
+              variant="tab"
+              disabled={interactionDisabled || workspaceScopeDisabled}
+              scope={workspaceScope}
+              defaultScope={workspaceDefaultScope}
+              controls={workspaceControls}
+              error={workspaceError}
+              onPickFolder={onPickWorkspaceFolder}
+              onChange={onWorkspaceScopeChange}
+            />
+          ) : null}
+          {runtimeHostname ? (
+            <RuntimeEnvChip hostname={runtimeHostname} scope={workspaceScope} />
+          ) : null}
+        </div>
+      ) : null}
       <div
         ref={surfaceRef}
         className={cn(
@@ -2385,10 +2418,7 @@ export function ThreadComposer({
           className={cn(
             "thread-composer-footer flex flex-nowrap items-center motion-safe:transition-[padding-bottom] motion-safe:[transition-duration:220ms] motion-safe:ease-in-out",
             isHero
-              ? cn(
-                  "gap-x-1.5 px-3 sm:px-4",
-                  showProjectPicker ? "pb-1.5" : "pb-3.5",
-                )
+              ? "gap-x-1.5 px-3 pb-3.5 sm:px-4"
               : "gap-x-2 px-2.5 pb-2 sm:px-3",
           )}
         >
@@ -2458,6 +2488,8 @@ export function ThreadComposer({
                 provider={modelProvider}
                 providerLabel={modelProviderLabel}
                 reasoningEffort={modelReasoningEffort}
+                reasoningEffortValues={modelReasoningEffortValues}
+                onReasoningEffortChange={onReasoningEffortChange}
                 needsSetup={modelNeedsSetup}
                 attentionRequest={modelSetupAttentionRequest}
                 fallbackModelName={fallbackModelName}
@@ -2551,29 +2583,6 @@ export function ThreadComposer({
             </Button>
           </div>
         </div>
-        {projectPickerAvailable ? (
-          <div
-            className="composer-workspace-drawer"
-            data-composer-workspace-drawer=""
-            data-state={showProjectPicker ? "open" : "closed"}
-            aria-hidden={showProjectPicker ? undefined : true}
-          >
-            <div className="composer-workspace-drawer-clip">
-              <div className="composer-workspace-drawer-content">
-                <WorkspaceProjectPicker
-                  isHero={isHero}
-                  disabled={interactionDisabled || workspaceScopeDisabled || !showProjectPicker}
-                  scope={workspaceScope}
-                  defaultScope={workspaceDefaultScope}
-                  controls={workspaceControls}
-                  error={workspaceError}
-                  onPickFolder={onPickWorkspaceFolder}
-                  onChange={onWorkspaceScopeChange}
-                />
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
     </form>
   );

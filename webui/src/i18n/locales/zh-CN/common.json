@@ -1564,7 +1564,21 @@
       "chooseAI": "选择你的 AI",
       "switchModel": "切换本次对话所用模型",
       "manageModels": "管理模型预设",
+      "reasoningEffort": "推理强度",
+      "runtime": {
+        "thisComputer": "此计算机",
+        "title": "运行环境",
+        "aria": "运行环境",
+        "host": "主机名",
+        "gateway": "网关",
+        "sandbox": "沙箱",
+        "access": "访问权限",
+        "unknown": "未知",
+        "enforced": "已启用强制隔离",
+        "notEnforced": "未启用强制隔离"
+      },
       "effort": {
+        "default": "默认",
         "low": "低",
         "medium": "中",
         "high": "高",
