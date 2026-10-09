@@ -9,95 +9,104 @@
   }
 }
 
-/* Design tokens — HSL form, sourced from shadcn/ui's "neutral" palette. */
+/* Design tokens — HSL form. Neutral gray tiers, blue-only interaction accent,
+   small radii and flat (non-glass) surfaces, mirroring the Hope Agent client. */
 @layer base {
   :root {
     color-scheme: light;
     --background: 0 0% 100%;
-    --foreground: 240 3% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 3% 12%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 3% 12%;
-    --primary: 240 4% 16%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 40 8% 90.5%;
-    --input: 40 8% 90.5%;
-    --ring: 0 0% 3.9%;
-    --inline-token-highlight: #ef8e30;
+    --foreground: 0 0% 7%;
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 7%;
+    --popover: 0 0% 98%;
+    --popover-foreground: 0 0% 7%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 93%;
+    --secondary-foreground: 0 0% 7%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 34%;
+    --accent: 0 0% 93%;
+    --accent-foreground: 0 0% 7%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 203 100% 42%;
+    /* Tier below --background: the window shell behind panels. */
+    --surface-app: 210 20% 98%;
+    /* Tiered sidebar/inspector surface, separated by a hairline. */
+    --surface-panel: 0 0% 99%;
+    --border-soft: 220 17% 90%;
+    --inline-token-highlight: #006fd6;
     --usage-token: 29 86% 56%;
     --session-handle-lightness: 0.5;
     --session-handle-chroma: 0.12;
-    --temporary-control-active: #ef8e30;
-    --temporary-accent: 24 95% 53%;
-    --temporary-foreground: 17 88% 32%;
-    --temporary-border: 17 88% 40%;
-    --radius: 0.4375rem;
+    --temporary-control-active: #006fd6;
+    --temporary-accent: 203 100% 42%;
+    --temporary-foreground: 204 78% 30%;
+    --temporary-border: 203 55% 46%;
+    --radius: 0.5rem;
     /* Shared shape scale: marks, compact content, controls, and progressively larger surfaces. */
     --radius-mark: 0.25rem;
-    --radius-compact: 0.5rem;
+    --radius-compact: 0.375rem;
     --radius-control: 0.75rem;
-    --radius-floating: 1.125rem;
-    --radius-panel: 1.375rem;
-    --radius-modal: 1.375rem;
-    --radius-prominent: 1.75rem;
+    --radius-floating: 0.75rem;
+    --radius-panel: 0.5rem;
+    --radius-modal: 0.75rem;
+    --radius-prominent: 1rem;
     --radius-pill: 9999px;
-    --sidebar: 40 8% 96.8%;
-    --sidebar-foreground: 0 0% 3.9%;
-    --sidebar-selected: 40 1% 89.4%;
-    --sidebar-accent: 0 0% 95.8%;
-    --sidebar-accent-foreground: 0 0% 9%;
-    --sidebar-border: 40 8% 90.5%;
+    --sidebar: 225 20% 96%;
+    --sidebar-foreground: 0 0% 7%;
+    --sidebar-selected: 0 0% 93%;
+    --sidebar-accent: 0 0% 95%;
+    --sidebar-accent-foreground: 0 0% 7%;
+    --sidebar-border: var(--border-soft);
     --settings-canvas: var(--background);
-    --settings-surface: 60 6% 96.7%;
+    --settings-surface: var(--surface-panel);
     --scrollbar-thumb: hsl(var(--muted-foreground) / 0.26);
     --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.42);
   }
 
   .dark {
     color-scheme: dark;
-    --background: 0 0% 19%;
-    --foreground: 240 4% 96%;
-    --card: 0 0% 22%;
-    --card-foreground: 240 4% 96%;
-    --popover: var(--card);
-    --popover-foreground: 240 4% 96%;
-    --primary: 240 5% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: var(--card);
+    --background: 0 0% 7%;
+    --foreground: 0 0% 96%;
+    --card: 0 0% 13%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 13%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 7%;
+    --secondary: 0 0% 17%;
     --secondary-foreground: 0 0% 98%;
-    --muted: var(--card);
-    --muted-foreground: 0 0% 65%;
-    --accent: 0 0% 25%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 70%;
+    --accent: 0 0% 17%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 28%;
-    --input: var(--border);
-    --ring: 0 0% 83.1%;
-    --inline-token-highlight: #ef8e30;
+    --border: 0 0% 22%;
+    --input: 0 0% 20%;
+    --ring: 209 100% 72%;
+    --surface-app: 0 0% 7%;
+    --surface-panel: 0 0% 10%;
+    --border-soft: 0 0% 20%;
+    --inline-token-highlight: #70b6ff;
     --session-handle-lightness: 0.75;
     --session-handle-chroma: 0.11;
-    --temporary-control-active: #ef8e30;
-    --temporary-accent: 24 95% 53%;
-    --temporary-foreground: 32 98% 73%;
-    --temporary-border: 27 96% 61%;
-    --sidebar: var(--card);
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-selected: 0 0% 29.8%;
-    --sidebar-accent: var(--background);
+    --temporary-control-active: #70b6ff;
+    --temporary-accent: 209 100% 72%;
+    --temporary-foreground: 209 100% 82%;
+    --temporary-border: 209 70% 55%;
+    --sidebar: 0 0% 12%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-selected: 0 0% 16%;
+    --sidebar-accent: 0 0% 15%;
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: var(--border);
+    --sidebar-border: var(--border-soft);
     --settings-canvas: var(--background);
-    --settings-surface: var(--card);
+    --settings-surface: var(--surface-panel);
     --scrollbar-thumb: hsl(var(--muted-foreground) / 0.28);
     --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.44);
   }
@@ -147,7 +156,7 @@
   }
 
   ::selection {
-    @apply bg-primary/15;
+    background-color: hsl(var(--ring) / 0.22);
   }
 }
 
@@ -194,13 +203,13 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background-color: rgb(236 141 49);
+    background-color: rgb(0 111 214);
     opacity: 0;
     transition: opacity 180ms ease-out;
   }
 
   .composer-model-badge[data-fallback="true"] {
-    border-color: rgb(236 141 49 / 0.38);
+    border-color: rgb(0 111 214 / 0.38);
   }
 
   .composer-model-badge[data-fallback="true"]::before {
@@ -240,50 +249,23 @@
     overflow: hidden;
   }
 
-  .host-window-shell,
-  .host-sidebar-glass {
-    --host-glass-spot: hsl(var(--background) / 0.42);
-    --host-glass-start: hsl(var(--sidebar) / 0.5);
-    --host-glass-end: hsl(var(--sidebar) / 0.3);
-    background:
-      radial-gradient(
-        circle at 18% 0%,
-        var(--host-glass-spot),
-        transparent 34rem
-      ),
-      linear-gradient(
-        180deg,
-        var(--host-glass-start),
-        var(--host-glass-end)
-      );
-    background-attachment: fixed, fixed;
-    -webkit-backdrop-filter: saturate(185%) blur(34px);
-    backdrop-filter: saturate(185%) blur(34px);
+  /* Host chrome is flat in the Hope Agent idiom: solid tiers + hairline dividers,
+     no glass blur. Class names kept because App.tsx toggles them per window mode. */
+  .host-window-shell {
+    background: hsl(var(--surface-app));
   }
 
   .host-sidebar-glass {
-    background: hsl(var(--sidebar) / 0.94);
-    -webkit-backdrop-filter: saturate(145%) blur(18px);
-    backdrop-filter: saturate(145%) blur(18px);
-    box-shadow: 14px 0 32px -30px rgb(0 0 0 / 0.12);
+    background: hsl(var(--sidebar));
+    border-right: 1px solid hsl(var(--border-soft));
   }
 
-  .dark .host-window-shell,
-  .dark .host-sidebar-glass {
-    --host-glass-spot: hsl(var(--foreground) / 0.06);
-    --host-glass-start: hsl(var(--sidebar) / 0.48);
-    --host-glass-end: hsl(var(--sidebar) / 0.3);
+  .dark .host-window-shell {
+    background: hsl(var(--surface-app));
   }
 
   .dark .host-sidebar-glass {
-    background: hsl(var(--sidebar) / 0.96);
-    box-shadow: 14px 0 34px -30px rgb(0 0 0 / 0.34);
-  }
-
-  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .host-sidebar-glass {
-      background: hsl(var(--sidebar) / 0.92);
-    }
+    background: hsl(var(--sidebar));
   }
 
   html.native-host * {

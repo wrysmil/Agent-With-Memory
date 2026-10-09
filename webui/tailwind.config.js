@@ -21,10 +21,10 @@ export default {
     extend: {
       fontFamily: {
         sans: [
-          "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
           '"Segoe UI"',
+          "system-ui",
           "Roboto",
           '"Helvetica Neue"',
           "Arial",
