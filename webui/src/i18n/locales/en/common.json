@@ -1417,6 +1417,11 @@
     "error": "Connection error"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "View details",
+      "hideDetails": "Hide",
+      "sourceCount": "{{count}} sources"
+    },
     "compaction": {
       "cancelled": "Context compaction cancelled",
       "empty": "Nothing to compact.",

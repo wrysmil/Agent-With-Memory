@@ -1417,6 +1417,11 @@
     "error": "连接出错"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "查看详情",
+      "hideDetails": "收起",
+      "sourceCount": "{{count}} 个来源"
+    },
     "compaction": {
       "cancelled": "上下文压缩已取消",
       "empty": "无需压缩上下文",
@@ -1762,7 +1767,7 @@
     "activityThoughtFor": "思考了 {{duration}}",
     "activityWorkingFor": "处理中 {{duration}}",
     "activityWorked": "已处理",
-    "activityWorkedFor": "处理了 {{duration}}",
+    "activityWorkedFor": "已处理 {{duration}}",
     "retryConnection": "连接失败",
     "retryTimeout": "模型响应超时",
     "retryRateLimit": "请求频率受限",
