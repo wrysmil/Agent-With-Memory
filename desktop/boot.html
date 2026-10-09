@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mira</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #0a0a0a;
+        font-family:
+          system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        max-width: 520px;
+        padding: 0 24px;
+        text-align: center;
+      }
+      .mark {
+        width: 88px;
+        height: 88px;
+        animation: breathe 1.8s ease-in-out infinite;
+      }
+      @keyframes breathe {
+        0%,
+        100% {
+          transform: scale(0.97);
+          opacity: 0.85;
+        }
+        50% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 650;
+        margin: 0;
+        letter-spacing: 0.2px;
+      }
+      p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: rgba(10, 10, 10, 0.62);
+        white-space: pre-wrap;
+      }
+      button {
+        display: none;
+        border: 1px solid rgba(10, 10, 10, 0.12);
+        background: #fafafa;
+        color: #0a0a0a;
+        border-radius: 10px;
+        padding: 8px 22px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f0f0f0;
+      }
+      button.visible {
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <svg class="mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="miraBootGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#14b8a6" />
+            <stop offset="1" stop-color="#6366f1" />
+          </linearGradient>
+        </defs>
+        <rect x="32" y="32" width="448" height="448" rx="104" fill="url(#miraBootGrad)" />
+        <circle cx="240" cy="280" r="118" fill="none" stroke="#ffffff" stroke-opacity="0.92" stroke-width="24" />
+        <circle cx="240" cy="280" r="42" fill="#ffffff" />
+        <circle cx="352" cy="164" r="26" fill="#ffffff" />
+      </svg>
+      <h1>Mira</h1>
+      <p id="status">正在启动…</p>
+      <button id="retry" type="button">重试</button>
+    </div>
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var msg = q.get("msg");
+        if (msg && msg !== "smoke") document.getElementById("status").textContent = msg;
+        if (q.get("retry") === "1") {
+          var btn = document.getElementById("retry");
+          btn.classList.add("visible");
+          btn.addEventListener("click", function () {
+            if (window.mira && window.mira.retryBoot) window.mira.retryBoot();
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
