@@ -50,7 +50,17 @@ function splitCmdLine(line) {
   return { cmd: parts[0], args: parts.slice(1) };
 }
 
-function defaultGatewayCmd() {
+function repoVenvGatewayCmd(repoRoot) {
+  const exe =
+    process.platform === "win32"
+      ? path.join(repoRoot, ".venv", "Scripts", "nanobot.exe")
+      : path.join(repoRoot, ".venv", "bin", "nanobot");
+  return fs.existsSync(exe) ? { cmd: exe, args: ["gateway"] } : null;
+}
+
+function defaultGatewayCmd(repoRoot) {
+  const venv = repoVenvGatewayCmd(repoRoot);
+  if (venv) return venv;
   try {
     execFileSync(process.platform === "win32" ? "where" : "which", ["nanobot"], { stdio: "ignore" });
     return { cmd: "nanobot", args: ["gateway"] };
@@ -63,10 +73,10 @@ function defaultGatewayCmd() {
 }
 
 function spawnGateway() {
+  const repoRoot = app.isPackaged ? NANOBOT_HOME : path.join(__dirname, "..");
   const spec = process.env.MIRA_GATEWAY_CMD
     ? splitCmdLine(process.env.MIRA_GATEWAY_CMD)
-    : defaultGatewayCmd();
-  const repoRoot = app.isPackaged ? NANOBOT_HOME : path.join(__dirname, "..");
+    : defaultGatewayCmd(repoRoot);
   gatewayProc = spawn(spec.cmd, spec.args, {
     cwd: repoRoot,
     env: { ...process.env, PYTHONIOENCODING: "utf-8" },
