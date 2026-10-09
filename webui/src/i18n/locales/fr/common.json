@@ -1,12 +1,12 @@
 {
   "app": {
-    "brand": "nanobot",
+    "brand": "Mira",
     "loading": {
-      "connecting": "Connexion à nanobot…",
-      "boot": "Chargement de nanobot…"
+      "connecting": "Connexion à Mira…",
+      "boot": "Chargement de Mira…"
     },
     "error": {
-      "title": "Impossible de joindre nanobot",
+      "title": "Impossible de joindre Mira",
       "gatewayHint": "Assurez-vous que la gateway est en cours d’exécution (`nanobot gateway`) et que cette page est ouverte sur la même machine."
     },
     "auth": {
@@ -24,8 +24,8 @@
     },
     "system": {
       "section": "Système",
-      "restartHint": "Redémarrez nanobot pour appliquer les changements d’exécution.",
-      "restart": "Redémarrer nanobot",
+      "restartHint": "Redémarrez Mira pour appliquer les changements d’exécution.",
+      "restart": "Redémarrer Mira",
       "restarting": "Redémarrage...",
       "restartEngine": "Redémarrer le moteur",
       "restartingEngine": "Redémarrage du moteur..."
@@ -34,11 +34,11 @@
       "completed": "Redémarrage terminé en {{seconds}} s."
     },
     "documentTitle": {
-      "base": "nanobot",
-      "chat": "{{title}} · nanobot"
+      "base": "Mira",
+      "chat": "{{title}} · Mira"
     },
     "meta": {
-      "description": "Interface web nanobot — discutez avec votre espace de travail nanobot."
+      "description": "Interface web Mira — discutez avec votre espace de travail Mira."
     },
     "pairing": {
       "title": "Associer un utilisateur du chat",
@@ -134,7 +134,7 @@
       "language": "Langue",
       "provider": "Fournisseur",
       "model": "Modèle",
-      "restart": "Redémarrer nanobot",
+      "restart": "Redémarrer Mira",
       "configPath": "Chemin de config",
       "activePreset": "Préréglage actif",
       "gateway": "Passerelle",
@@ -209,7 +209,7 @@
       "selectedModelValue": "Défini par le modèle sélectionné.",
       "brandLogos": "Affiche les logos de fournisseurs tiers et CLI dans les Réglages.",
       "browserNotifications": "Notifier uniquement lorsque cette page est en arrière-plan. Désactivé par défaut.",
-      "cliAppsCatalog": "Installe uniquement les adaptateurs CLI d’applications que nanobot peut exécuter localement ; les applications natives restent inchangées.",
+      "cliAppsCatalog": "Installe uniquement les adaptateurs CLI d’applications que Mira peut exécuter localement ; les applications natives restent inchangées.",
       "cliAppsFilter": "Recherchez par application, catégorie ou capacité.",
       "logs": "Ouvre le dossier des journaux du moteur natif.",
       "diagnostics": "Exporte un petit rapport d’exécution pour le support.",
@@ -258,11 +258,11 @@
       "loadError": "Impossible de charger les réglages",
       "unsaved": "Modifications non enregistrées.",
       "upToDate": "À jour.",
-      "savedRestart": "Enregistré. Redémarrez nanobot pour appliquer.",
+      "savedRestart": "Enregistré. Redémarrez Mira pour appliquer.",
       "restartAfterSaving": "Enregistrez les changements, puis redémarrez quand vous êtes prêt.",
       "savedRestartApply": "Enregistré. Redémarrez quand vous êtes prêt.",
       "imageProviderRestart": "Changements du fournisseur d’image enregistrés. Redémarrez quand vous êtes prêt.",
-      "hostRestartAfterSaving": "En enregistrant, nanobot redémarrera son moteur.",
+      "hostRestartAfterSaving": "En enregistrant, Mira redémarrera son moteur.",
       "hostRestartPending": "Enregistré. Le moteur redémarrera lorsqu’il sera prêt.",
       "hostApiUnavailable": "Les actions de l’hôte ne sont disponibles que dans l’app native.",
       "logsOpened": "Dossier des journaux ouvert.",
@@ -286,7 +286,7 @@
       "exporting": "Exportation..."
     },
     "byok": {
-      "description": "Utilisez vos propres clés de fournisseur. Nanobot lit ces valeurs depuis la configuration actuelle et seuls les fournisseurs configurés peuvent être utilisés dans les préréglages de modèle.",
+      "description": "Utilisez vos propres clés de fournisseur. Mira lit ces valeurs depuis la configuration actuelle et seuls les fournisseurs configurés peuvent être utilisés dans les préréglages de modèle.",
       "configured": "Configuré",
       "notConfigured": "Non configuré",
       "configuredSection": "Configurés",
@@ -534,7 +534,7 @@
       "saveCustom": "Enregistrer MCP",
       "configImport": "Importer mcp.json",
       "importConfig": "Importer",
-      "restartRequired": "Redémarrez nanobot pour connecter les outils MCP mis à jour.",
+      "restartRequired": "Redémarrez Mira pour connecter les outils MCP mis à jour.",
       "toolsFound": "{{count}} outils",
       "loading": "Chargement des préréglages MCP...",
       "empty": "Aucun préréglage MCP ne correspond à ce filtre.",
@@ -562,14 +562,14 @@
       "preparingSignIn": "Préparation d’une connexion sécurisée…",
       "openSignInToContinue": "Ouvrez la page de connexion pour continuer.",
       "finishSignInInBrowser": "Terminez la connexion dans la fenêtre du navigateur.",
-      "manualCallbackRequired": "Terminez la connexion, puis collez l’URL de rappel dans nanobot.",
+      "manualCallbackRequired": "Terminez la connexion, puis collez l’URL de rappel dans Mira.",
       "manualCallbackHelp": "Après avoir autorisé l’accès, la page localhost ne se chargera pas. Copiez son URL complète depuis la barre d’adresse et collez-la ici.",
       "finishingConnection": "Finalisation de la connexion…",
       "activatingTools": "Activation des outils…",
       "connected": "Connecté.",
       "connectionFailed": "Échec de la connexion.",
       "connectionCancelled": "Connexion annulée.",
-      "reloadFailed": "Connexion réussie, mais nanobot n’a pas pu activer les outils. Essayez de redémarrer nanobot.",
+      "reloadFailed": "Connexion réussie, mais Mira n’a pas pu activer les outils. Essayez de redémarrer Mira.",
       "oauthFailed": "Connexion impossible. Essayez de vous reconnecter.",
       "statusMissingDependency": "Dépendance requise",
       "statusComingSoon": "Bientôt disponible",
@@ -642,15 +642,15 @@
     },
     "observability": {
       "title": "Observabilité",
-      "configured": "Les identifiants de traçage sont disponibles pour nanobot.",
-      "environment": "Définissez LANGFUSE_SECRET_KEY et LANGFUSE_PUBLIC_KEY, puis redémarrez nanobot.",
+      "configured": "Les identifiants de traçage sont disponibles pour Mira.",
+      "environment": "Définissez LANGFUSE_SECRET_KEY et LANGFUSE_PUBLIC_KEY, puis redémarrez Mira.",
       "enable": "Activer le traçage"
     },
     "legal": {
       "thirdPartyBrands": "Les noms, logos et marques de produits appartiennent à leurs propriétaires respectifs. Leur utilisation sert uniquement à l'identification et n'implique aucune approbation."
     },
     "apps": {
-      "description": "Ajoutez des outils à nanobot, puis utilisez-les avec @ dans le chat.",
+      "description": "Ajoutez des outils à Mira, puis utilisez-les avec @ dans le chat.",
       "cliLabel": "Application",
       "mcpLabel": "MCP",
       "channelLabel": "Canal",
@@ -673,21 +673,21 @@
       "browseApps": "Parcourir les applications",
       "browseIntegrations": "Parcourir les outils MCP",
       "emptyIntegrationsHint": "Ajoutez un serveur MCP personnalisé ci-dessous.",
-      "restartRequired": "Redémarrez nanobot pour appliquer les applications et outils MCP mis à jour."
+      "restartRequired": "Redémarrez Mira pour appliquer les applications et outils MCP mis à jour."
     },
     "channels": {
-      "description": "Connectez nanobot aux applications de discussion. L'installation du support ajoute seulement le paquet d'intégration ; la plupart des canaux nécessitent encore des jetons ou des réglages d'espace de travail.",
+      "description": "Connectez Mira aux applications de discussion. L'installation du support ajoute seulement le paquet d'intégration ; la plupart des canaux nécessitent encore des jetons ou des réglages d'espace de travail.",
       "caption": "{{enabled}} activés · {{total}} canaux",
       "searchPlaceholder": "Rechercher des canaux",
       "backToChannels": "Tous les canaux",
       "catalog": "Canaux",
       "loading": "Chargement des canaux...",
       "empty": "Aucun canal ne correspond à ce filtre.",
-      "restartRequired": "Redémarrez nanobot pour appliquer le support de canal mis à jour.",
+      "restartRequired": "Redémarrez Mira pour appliquer le support de canal mis à jour.",
       "requires": "Requiert : {{requirements}}",
       "setUp": "Configurer",
       "setupGuide": "Guide de configuration",
-      "setupSummary": "L'activation n'active que le support nanobot. Ajoutez les identifiants de la plateforme, puis redémarrez nanobot.",
+      "setupSummary": "L'activation n'active que le support Mira. Ajoutez les identifiants de la plateforme, puis redémarrez Mira.",
       "configKeys": "Clés de configuration",
       "enable": "Activer le canal",
       "disable": "Désactiver le canal",
@@ -750,7 +750,7 @@
       "missingDependency": "Support manquant",
       "installSupport": "Installer le support",
       "installConfirmTitle": "Installer le support pour {{name}} ?",
-      "installConfirmDescription": "nanobot ajoutera ce dont {{name}} a besoin, puis l'activera. Continuer ?",
+      "installConfirmDescription": "Mira ajoutera ce dont {{name}} a besoin, puis l'activera. Continuer ?",
       "installConfirmAction": "Installer et activer",
       "websocketRequired": "Requis pour la WebUI",
       "channelDisabled": "Canal désactivé",
@@ -894,7 +894,7 @@
       "signedInAs": "Connecté en tant que {{account}}",
       "signInHelp": "Connectez-vous depuis cet appareil ; aucune clé API n’est enregistrée dans la configuration.",
       "remoteSignInHelp": "Sélectionnez Se connecter pour ouvrir xAI sur votre ordinateur, puis collez le code d’autorisation affiché après la connexion.",
-      "codexRemoteSignInHelp": "Connectez-vous dans ce navigateur, puis recollez dans nanobot l’URL complète de rappel localhost.",
+      "codexRemoteSignInHelp": "Connectez-vous dans ce navigateur, puis recollez dans Mira l’URL complète de rappel localhost.",
       "signInRequired": "Connexion requise",
       "signInBeforeSaving": "Connectez-vous à ce fournisseur avant d’enregistrer le préréglage.",
       "signedIn": "Connecté",
@@ -902,9 +902,9 @@
       "proxyLabel": "Proxy réseau",
       "proxySaveBeforeSignIn": "Enregistrez les modifications du proxy avant de vous connecter.",
       "saveProxy": "Enregistrer le proxy",
-      "localCodeHelp": "Terminez la connexion dans votre navigateur. nanobot termine généralement automatiquement ; sinon, collez le code d’autorisation ci-dessous.",
+      "localCodeHelp": "Terminez la connexion dans votre navigateur. Mira termine généralement automatiquement ; sinon, collez le code d’autorisation ci-dessous.",
       "remoteCodeHelp": "Sélectionnez Se connecter pour ouvrir xAI sur votre ordinateur. Après la connexion, collez ci-dessous le code d’autorisation affiché par xAI.",
-      "localCallbackHelp": "Terminez la connexion dans votre navigateur. nanobot termine généralement automatiquement ; sinon, copiez l’URL complète de rappel localhost depuis la barre d’adresse et collez-la ci-dessous.",
+      "localCallbackHelp": "Terminez la connexion dans votre navigateur. Mira termine généralement automatiquement ; sinon, copiez l’URL complète de rappel localhost depuis la barre d’adresse et collez-la ci-dessous.",
       "remoteCallbackHelp": "Ouvrez ChatGPT dans ce navigateur et terminez la connexion. Lorsque la page localhost ne se charge pas, copiez l’URL complète de la barre d’adresse et collez-la ci-dessous.",
       "authorizationCode": "Code d’autorisation",
       "callbackUrl": "URL complète de rappel",
@@ -947,7 +947,7 @@
       "deleteConfirmAction": "Supprimer la compétence",
       "instructionsTitle": "Instructions de la compétence",
       "setupRequired": "Configuration requise",
-      "setupDescription": "Installez la dépendance manquante sur la machine qui exécute nanobot, puis vérifiez à nouveau.",
+      "setupDescription": "Installez la dépendance manquante sur la machine qui exécute Mira, puis vérifiez à nouveau.",
       "copySetupCommand": "Copier la commande de configuration",
       "checkAgain": "Vérifier à nouveau",
       "marketplaceSearchFailed": "Impossible de rechercher dans les catalogues de compétences.",
@@ -1104,7 +1104,7 @@
       "mdModalDiffCurrent": "MEMORY.md actuel",
       "mdModalDiffCurrentPlaceholder": "(MEMORY.md n'existe pas ou est vide)",
       "masterToggleTitle": "Extraction et recherche automatiques de mémoire",
-      "masterToggleDescription": "Une fois activé, nanobot extrait les faits des conversations et retrouve les souvenirs au tour suivant. Effet immédiat — sans redémarrage.",
+      "masterToggleDescription": "Une fois activé, Mira extrait les faits des conversations et retrouve les souvenirs au tour suivant. Effet immédiat — sans redémarrage.",
       "masterToggleAria": "Activer l'extraction de mémoire",
       "masterToggleOn": "Activé",
       "masterToggleOff": "Désactivé"
@@ -1461,7 +1461,7 @@
       "imageQuickActions": {
         "icon": {
           "title": "Créer une icône d’app",
-          "prompt": "Générez une icône d’application 1:1 propre pour nanobot : robot sympathique, style vectoriel simple, palette douce bleu et blanc, sans texte."
+          "prompt": "Générez une icône d’application 1:1 propre pour Mira : robot sympathique, style vectoriel simple, palette douce bleu et blanc, sans texte."
         },
         "sticker": {
           "title": "Créer un sticker",
@@ -1617,7 +1617,7 @@
             "description": "Annuler le tour actif de l’agent pour cette discussion."
           },
           "restart": {
-            "title": "Redémarrer nanobot",
+            "title": "Redémarrer Mira",
             "description": "Redémarrer le processus du bot sur place."
           },
           "status": {
@@ -1697,14 +1697,14 @@
         "label": "Applications",
         "cliGroup": "Applications CLI",
         "mcpGroup": "Services MCP",
-        "sessionGroup": "Conversations Nanobot",
+        "sessionGroup": "Conversations Mira",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Utiliser @{{name}} comme application CLI locale",
         "mcpDescription": "Utiliser @{{name}} comme serveur MCP",
         "cliTitle": "Application CLI : {{name}}",
         "mcpTitle": "Serveur MCP : {{name}}",
-        "sessionBadge": "Conversation Nanobot",
+        "sessionBadge": "Conversation Mira",
         "sessionDescription": "Référencer @{{name}} comme discussion précédente"
       },
       "workspace": {
@@ -1826,7 +1826,7 @@
     "close": "Fermer l’aperçu du fichier",
     "loading": "Chargement de l’aperçu...",
     "failed": "Impossible de prévisualiser ce fichier.",
-    "routeMissing": "L’aperçu du fichier nécessite le dernier gateway. Redémarrez nanobot gateway puis réessayez.",
+    "routeMissing": "L’aperçu du fichier nécessite le dernier gateway. Redémarrez Mira gateway puis réessayez.",
     "resize": "Redimensionner l’aperçu du fichier",
     "truncated": "L’aperçu est tronqué car le fichier est volumineux."
   },

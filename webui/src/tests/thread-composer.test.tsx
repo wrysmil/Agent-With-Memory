@@ -1855,7 +1855,7 @@ describe("ThreadComposer", () => {
       target: { value: "参考 @收费", selectionStart: 6 },
     });
 
-    expect(screen.getByRole("group", { name: "Nanobot conversations" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Mira conversations" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /@收费设计/i })).toBeInTheDocument();
     fireEvent.keyDown(input, { key: "Tab" });
 

@@ -627,7 +627,7 @@ describe("App layout", () => {
     expect(within(screen.getByTestId("thread-header")).getByText(
       "first private message",
     )).toBeInTheDocument();
-    await waitFor(() => expect(document.title).toBe("first private message · nanobot"));
+    await waitFor(() => expect(document.title).toBe("first private message · Mira"));
     expect(screen.queryByRole("button", { name: "Temporary chat" })).not.toBeInTheDocument();
 
     fireEvent.click(within(sidebar).getByRole("button", {
@@ -1010,7 +1010,7 @@ describe("App layout", () => {
       "aria-current",
       "page",
     );
-    expect(document.title).toBe("Skills · nanobot");
+    expect(document.title).toBe("Skills · Mira");
 
     fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
     expect(await screen.findByText(HERO_GREETING_PATTERN)).toBeInTheDocument();
@@ -1390,7 +1390,7 @@ describe("App layout", () => {
       "aria-current",
       "page",
     );
-    expect(document.title).toBe("Automations · nanobot");
+    expect(document.title).toBe("Automations · Mira");
 
     const searchInput = within(automationsMain as HTMLElement).getByPlaceholderText(
       "Search task, message, linked chat, or schedule",
@@ -1614,7 +1614,7 @@ describe("App layout", () => {
     expect(screen.queryByText("近期无问题")).not.toBeInTheDocument();
     expect(screen.queryByText("Workspace automations")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "刷新" })).not.toBeInTheDocument();
-    expect(document.title).toBe("自动任务 · nanobot");
+    expect(document.title).toBe("自动任务 · Mira");
   });
 
   it("uses the shared sidebar controls and rail on the native host", async () => {
@@ -2296,7 +2296,7 @@ describe("App layout", () => {
     render(<App />);
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
-    await waitFor(() => expect(document.title).toBe("Active after reload · nanobot"));
+    await waitFor(() => expect(document.title).toBe("Active after reload · Mira"));
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(
       within(sidebar).getByRole("button", { name: /^Active after reload$/ }),
@@ -2558,7 +2558,7 @@ describe("App layout", () => {
       await screen.findByRole("navigation", { name: "Settings sections" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Overview" })).not.toBeInTheDocument();
-    expect(document.title).toBe("Settings · nanobot");
+    expect(document.title).toBe("Settings · Mira");
     expect(screen.getByTestId("overview-logo-openai")).toBeInTheDocument();
     expect(screen.getByTestId("overview-logo-brave")).toBeInTheDocument();
     expect(screen.getByTestId("overview-logo-openrouter")).toBeInTheDocument();
@@ -2629,7 +2629,7 @@ describe("App layout", () => {
     expect(screen.queryByText("Ant Ling")).not.toBeInTheDocument();
     expect(
       screen.queryByText(
-        "Bring your own provider keys. Nanobot reads these values from the current config and only configured providers can be used in model presets.",
+        "Bring your own provider keys. Mira reads these values from the current config and only configured providers can be used in model presets.",
       ),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("azure_openai")).not.toBeInTheDocument();
@@ -2713,7 +2713,7 @@ describe("App layout", () => {
       screen.queryByText("Used for schedules and time-aware replies."),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Restart nanobot to apply runtime changes."),
+      screen.queryByText("Restart Mira to apply runtime changes."),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Bot name")).not.toBeInTheDocument();
     expect(screen.queryByText("Bot icon")).not.toBeInTheDocument();
@@ -2767,12 +2767,12 @@ describe("App layout", () => {
     expect(systemSection).not.toBeNull();
     const system = within(systemSection as HTMLElement);
     const timezoneLabel = system.getByText("Timezone");
-    const restartButton = system.getByRole("button", { name: "Restart nanobot" });
+    const restartButton = system.getByRole("button", { name: "Restart Mira" });
     expect(
       timezoneLabel.compareDocumentPosition(restartButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      system.queryByText("Restart nanobot to apply runtime changes."),
+      system.queryByText("Restart Mira to apply runtime changes."),
     ).not.toBeInTheDocument();
   });
 
@@ -2857,7 +2857,7 @@ describe("App layout", () => {
     fireEvent.click(appsButton);
 
     expect(await screen.findByRole("heading", { name: "Apps" })).toBeInTheDocument();
-    expect(screen.queryByText("Add tools to nanobot, then @ them in chat.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Add tools to Mira, then @ them in chat.")).not.toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Sidebar navigation" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Settings sections" })).not.toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Apps" })).toHaveAttribute(
@@ -2880,7 +2880,7 @@ describe("App layout", () => {
       "duration-200",
       "motion-reduce:animate-none",
     );
-    expect(document.title).toBe("Apps · nanobot");
+    expect(document.title).toBe("Apps · Mira");
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Skills" }));
 
@@ -2900,7 +2900,7 @@ describe("App layout", () => {
       "data-active-id",
       "utility:skills",
     );
-    expect(document.title).toBe("Skills · nanobot");
+    expect(document.title).toBe("Skills · Mira");
   });
 
   it("returns from settings to the blank start page when no session was active", async () => {
@@ -3035,7 +3035,7 @@ describe("App layout", () => {
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "New topic" }));
-    await waitFor(() => expect(document.title).toBe("nanobot"));
+    await waitFor(() => expect(document.title).toBe("Mira"));
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
     expect(
@@ -3043,7 +3043,7 @@ describe("App layout", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to chat" }));
 
-    await waitFor(() => expect(document.title).toBe("nanobot"));
+    await waitFor(() => expect(document.title).toBe("Mira"));
     expect(screen.getByText(HERO_GREETING_PATTERN)).toBeInTheDocument();
   });
 
