@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Lightbulb, Check, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import type { Article, Suggestion } from "./types";
 import { canAcceptSuggestion } from "./article-model";
 
@@ -49,7 +48,7 @@ export function SuggestionPanel({
   return (
     <div>
       <div className="mb-3 flex items-center gap-1.5 text-[12px] font-medium text-foreground">
-        <Lightbulb className="h-3.5 w-3.5 text-primary" />
+        <Lightbulb className="h-3.5 w-3.5 text-accent-foreground" />
         {t("creative.suggestions_title", { defaultValue: "AI 建议" })}
       </div>
       <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
@@ -59,7 +58,7 @@ export function SuggestionPanel({
       </p>
 
       {result ? (
-        <p className="mb-2 rounded-control bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700">
+        <p className="mb-2 rounded-control bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
           {result}
         </p>
       ) : null}
@@ -87,8 +86,8 @@ export function SuggestionPanel({
               </pre>
             </div>
             <div>
-              <span className="text-[10px] font-medium text-primary">建议</span>
-              <pre className="max-h-[100px] overflow-auto rounded bg-primary/5 p-2 text-[11px] leading-relaxed text-foreground">
+              <span className="text-[10px] font-medium text-accent-foreground">建议</span>
+              <pre className="max-h-[100px] overflow-auto rounded bg-accent p-2 text-[11px] leading-relaxed text-foreground">
                 {s.after}
               </pre>
             </div>
@@ -107,11 +106,9 @@ export function SuggestionPanel({
       {accepted.map((s, idx) => (
         <div
           key={idx}
-          className={cn(
-            "mb-2 rounded-control border border-emerald-500/20 bg-emerald-500/5 p-2.5",
-          )}
+          className="mb-2 rounded-control border border-accent-foreground/20 bg-accent p-2.5"
         >
-          <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+          <p className="text-[11px] text-accent-foreground">
             已采用：{s.label}
           </p>
           <Button

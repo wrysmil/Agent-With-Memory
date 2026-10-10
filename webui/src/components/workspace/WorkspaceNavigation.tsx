@@ -7,7 +7,6 @@ import {
   Bot,
   CalendarClock,
   Feather,
-  Home,
   MessagesSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -28,7 +27,9 @@ import type {
   WorkspaceView,
 } from "@/components/workspace/contracts";
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/workspace/BrandMark";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface NavItem {
   view: WorkspaceView;
@@ -36,11 +37,10 @@ interface NavItem {
    *  English accessible names (Apps/Skills/Automations/Agents/Settings). */
   labelKey: string;
   labelDefault: string;
-  icon: typeof Home;
+  icon: typeof MessagesSquare;
 }
 
 const PRIMARY_ITEMS: NavItem[] = [
-  { view: "home", labelKey: "sidebar.home", labelDefault: "Home", icon: Home },
   { view: "chat", labelKey: "workspace.nav.assistant", labelDefault: "Assistant", icon: MessagesSquare },
   { view: "creative", labelKey: "workspace.nav.creative", labelDefault: "Creative", icon: Feather },
 ];
@@ -60,7 +60,7 @@ const SETTINGS_ITEM: NavItem = {
 };
 
 /**
- * Global 知序 text navigation. It owns the sidebar landmark, the selection
+ * Global 知序 icon navigation. It owns the sidebar landmark, the selection
  * highlight, the nav entries and the collapse control. The chat-context column
  * and the connection status are injected by the caller through slots so the
  * live shell keeps owning ChatList callbacks while the preview injects
@@ -110,8 +110,9 @@ export function WorkspaceNavigation({
       (item.view === "creative" && activeView === "article");
     const Icon = item.icon;
     return (
+      <Tooltip key={item.view}>
+      <TooltipTrigger asChild>
       <button
-        key={item.view}
         type="button"
         aria-label={label}
         aria-current={active ? "page" : undefined}
@@ -119,22 +120,20 @@ export function WorkspaceNavigation({
         ref={active ? activeRailRef : undefined}
         onClick={() => navigateTo(item.view)}
         className={cn(
-          "host-no-drag flex min-h-10 w-full items-center gap-3 rounded-control px-3 py-2 text-[13px] transition-colors",
+          "host-no-drag flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl transition-colors duration-150",
           SIDEBAR_SELECTION_ACTION_ITEM_CLASS,
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           active
-            ? "bg-primary/10 font-medium text-primary"
+            ? "bg-accent font-medium text-sidebar-foreground"
             : "text-sidebar-foreground/85 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/[0.06]",
-          collapsed && "justify-center px-0",
         )}
       >
-        <Icon className="h-4 w-4 shrink-0" aria-hidden />
-        {collapsed ? (
-          <span className="sr-only">{label}</span>
-        ) : (
-          <span className="truncate">{label}</span>
-        )}
+        <Icon className={cn("h-[19px] w-[19px] shrink-0", active && "text-accent-foreground")} strokeWidth={1.65} aria-hidden />
+        <span className="sr-only">{label}</span>
       </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
     );
   };
 
@@ -146,6 +145,7 @@ export function WorkspaceNavigation({
         hostChromeInset ? "bg-transparent" : "bg-sidebar",
       )}
     >
+      <TooltipProvider delayDuration={150}>
       <SidebarSelectionHighlight
         targetRef={newChatActive ? activeActionRef : activeRailRef}
         activeId={selectionActiveId}
@@ -155,49 +155,36 @@ export function WorkspaceNavigation({
         <div
           data-testid="sidebar-rail"
           className={cn(
-            "workspace-navigation-rail flex min-h-0 shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain border-r border-sidebar-border pb-3",
-            collapsed ? "w-16 items-center" : "w-[224px]",
+            "workspace-navigation-rail flex w-16 min-h-0 shrink-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain border-r border-sidebar-border pb-3",
             topInset,
           )}
         >
           <div
             className={cn(
-              "flex shrink-0 items-center gap-3 px-4 pb-3",
-              collapsed && "justify-center px-0",
+              "flex shrink-0 items-center justify-center pb-4",
             )}
           >
-            <span
-              aria-hidden
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-mark bg-primary text-sm font-semibold text-primary-foreground"
-            >
-              知
-            </span>
-            {!collapsed && (
-              <span className="truncate text-[18px] font-semibold tracking-wide text-sidebar-foreground">
-                {t("workspace.brand", { defaultValue: "知序" })}
-              </span>
-            )}
+            <BrandMark className="h-10 w-10" />
+            <span className="sr-only">{t("workspace.brand", { defaultValue: "知序" })}</span>
           </div>
-          {preview && !collapsed ? (
-            <p
+          {preview ? (
+            <span
               data-preview-badge
-              className="mx-3 mb-1 rounded-control border border-border/60 bg-background/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-muted-foreground"
+              className="sr-only"
             >
               {t("workspace.preview.badge", { defaultValue: "界面预览 · 示例内容" })}
-            </p>
+            </span>
           ) : null}
-          <div className={cn("flex shrink-0 flex-col gap-1", collapsed ? "w-full px-2" : "px-3")}>{PRIMARY_ITEMS.map(renderItem)}</div>
-          <div className="min-h-4 flex-1" />
-          <div className={cn("flex shrink-0 flex-col gap-1 border-t border-sidebar-border pt-3", collapsed ? "w-full px-2" : "px-3")}>
+          <div className="flex shrink-0 flex-col gap-2">{PRIMARY_ITEMS.map(renderItem)}</div>
+          <div className="my-1 h-px w-7 bg-sidebar-border" />
+          <div className="flex shrink-0 flex-col gap-2">
             {CAPABILITY_ITEMS.map(renderItem)}
+          </div>
+          <div className="min-h-8 flex-1" />
+          <div className="flex shrink-0 flex-col items-center gap-2">
             {renderItem(SETTINGS_ITEM)}
           </div>
-          <div
-            className={cn(
-              "mt-1 shrink-0 border-t border-sidebar-border pt-2",
-              collapsed ? "flex justify-center px-0" : "px-2",
-            )}
-          >
+          {activeView === "chat" ? <div className="shrink-0">
             <RailToggleButton
               collapsed={collapsed}
               label={
@@ -207,19 +194,20 @@ export function WorkspaceNavigation({
               }
               onClick={onToggleCollapsed}
             />
-          </div>
+          </div> : null}
           {!collapsed && !showChatColumn && connectionStatus ? (
-            <div className="workspace-navigation-status host-no-drag shrink-0 px-4 pt-1 text-[11px] leading-relaxed text-muted-foreground">
+            <div className="sr-only">
               {connectionStatus}
             </div>
           ) : null}
         </div>
         {showChatColumn ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background/50">
             {chatSlot}
           </div>
         ) : null}
       </SidebarSelectionHighlight>
+      </TooltipProvider>
     </nav>
   );
 }
@@ -237,13 +225,13 @@ function RailToggleButton({
     <Button
       type="button"
       variant={null}
-      size={collapsed ? "icon" : null}
+      size="icon"
       aria-label={label}
       title={label}
       onClick={onClick}
       className={cn(
-        "host-no-drag flex items-center justify-center gap-2 rounded-xl text-muted-foreground/85 hover:bg-sidebar-foreground/[0.06] hover:text-sidebar-foreground",
-        collapsed ? "h-9 w-9" : "h-8 w-full px-2.5 text-[12.5px] font-medium",
+        "host-no-drag flex cursor-pointer items-center justify-center gap-2 rounded-control text-muted-foreground hover:bg-sidebar-foreground/[0.06] hover:text-sidebar-foreground",
+        "h-10 w-10",
       )}
     >
       {collapsed ? (
@@ -251,7 +239,7 @@ function RailToggleButton({
       ) : (
         <>
           <PanelLeftClose className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="truncate">{label}</span>
+          <span className="sr-only">{label}</span>
         </>
       )}
     </Button>

@@ -6,12 +6,14 @@ import {
 } from "@/workspace/routes";
 
 describe("workspace route parsing", () => {
-  it("defaults empty hashes to the workspace home", () => {
-    expect(parseWorkspaceHash("")).toMatchObject({ view: "home" });
-    expect(parseWorkspaceHash("#/")).toMatchObject({ view: "home" });
+  it("opens a new assistant conversation for empty and legacy home links", () => {
+    for (const hash of ["", "#/", "#/home", "#/unknown"]) {
+      expect(parseWorkspaceHash(hash)).toMatchObject({ view: "chat", chatKey: null });
+    }
+    expect(workspaceRouteHash({ view: "home" })).toBe("#/new");
   });
 
-  it("keeps the existing new chat route separate from home", () => {
+  it("keeps the existing new chat route", () => {
     expect(parseWorkspaceHash("#/new")).toMatchObject({
       view: "chat",
       chatKey: null,
@@ -49,7 +51,7 @@ describe("workspace route parsing", () => {
       view: "article",
       articleId: "demo-1",
     });
-    expect(parseWorkspaceHash("#/article/%")).toMatchObject({ view: "home" });
+    expect(parseWorkspaceHash("#/article/%")).toMatchObject({ view: "chat", chatKey: null });
   });
 
   it("round trips new workspace routes", () => {

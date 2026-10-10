@@ -3,6 +3,14 @@
  * backend: the preview never issues a business request, so the rows below are
  * hardcoded illustrations for the chat column and per-page placeholders.
  */
+import type { WorkspaceScopePayload } from "@/lib/types";
+
+export const PREVIEW_DEFAULT_SCOPE: WorkspaceScopePayload = {
+  project_path: "D:/workspace",
+  access_mode: "restricted",
+  restrict_to_workspace: true,
+};
+
 export interface PreviewSessionRow {
   key: string;
   title: string;

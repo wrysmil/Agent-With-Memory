@@ -1,4 +1,17 @@
 {
+  "creative": {
+    "headline": "今天，想写点什么？",
+    "hero_description": "一段代码、一次实践、一个新理解，都可以是一篇文章的开始。",
+    "topic_label": "文章主题",
+    "input_hint": "以你的素材与观点为起点",
+    "template_heading": "从熟悉的方式开始",
+    "template_hint": "模板只是起点",
+    "library_heading": "我的文章",
+    "new_article": "写一篇新文章",
+    "sample_label": "示例",
+    "material_count": "{{count}} 份素材",
+    "continue_writing": "继续写作"
+  },
   "app": {
     "brand": "Mira",
     "loading": {

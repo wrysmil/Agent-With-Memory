@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, Suspense, lazy } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageSquareMore } from "lucide-react";
+import { MessageSquareMore, Plus, Search } from "lucide-react";
 
-import { WorkspaceHome } from "@/components/workspace/WorkspaceHome";
 import { WorkspaceNavigation } from "@/components/workspace/WorkspaceNavigation";
+import { ChatList } from "@/components/ChatList";
 import type {
   WorkspaceRoute,
   WorkspaceView,
@@ -15,7 +15,8 @@ import {
   PreviewCapabilities,
   type CapabilityKind,
 } from "@/preview/PreviewCapabilities";
-import { previewCapabilityCopy, previewSessions } from "@/preview/fixtures";
+import { PREVIEW_DEFAULT_SCOPE, previewCapabilityCopy, previewSessions } from "@/preview/fixtures";
+import type { ChatSummary, SidebarProjectEntry, WorkspaceScopePayload } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const CreativeWorkspace = lazy(() => import("@/components/creative/CreativeWorkspace"));
@@ -31,7 +32,18 @@ export default function PreviewApp() {
   const [route, setRoute] = useState<WorkspaceRoute>(() =>
     parseWorkspaceHash(window.location.hash),
   );
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => window.matchMedia("(max-width: 767px)").matches);
+  const [workspaceScope, setWorkspaceScope] = useState(PREVIEW_DEFAULT_SCOPE);
+  const [projects, setProjects] = useState<SidebarProjectEntry[]>([]);
+
+  const selectWorkspace = useCallback((scope: WorkspaceScopePayload) => {
+    setWorkspaceScope(scope);
+    if (scope.project_path !== PREVIEW_DEFAULT_SCOPE.project_path) {
+      setProjects((current) => current.some((project) => project.path === scope.project_path)
+        ? current
+        : [...current, { key: scope.project_path, path: scope.project_path, name: scope.project_name || scope.project_path.split(/[\\/]/).at(-1) || scope.project_path }]);
+    }
+  }, []);
 
   useEffect(() => {
     const sync = () => setRoute(parseWorkspaceHash(window.location.hash));
@@ -48,17 +60,12 @@ export default function PreviewApp() {
     }
   }, []);
 
-  const openView = useCallback(
-    (view: WorkspaceView) => navigate({ view }),
-    [navigate],
-  );
-
   return (
     <div className="flex h-[100dvh] w-full overflow-hidden bg-background text-foreground">
       <div
         className={cn(
           "shrink-0 border-r border-sidebar-border",
-          collapsed ? "w-16" : "w-[224px]",
+          route.view === "chat" && !collapsed ? "w-[312px]" : "w-16",
         )}
       >
         <WorkspaceNavigation
@@ -78,21 +85,16 @@ export default function PreviewApp() {
               })}
             </span>
           }
-          chatNavigation={<PreviewChatColumn />}
+          chatNavigation={<PreviewChatColumn activeKey={route.chatKey} onNavigate={navigate}
+            projects={projects} onSelectWorkspace={selectWorkspace} />}
         />
       </div>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {route.view === "home" ? (
-          <WorkspaceHome
-            preview
-            onSubmitTask={() => openView("chat")}
-            onOpenAssistant={() => openView("chat")}
-            onOpenCreative={() => openView("creative")}
-            onOpenCapability={openView}
-          />
-        ) : route.view === "chat" ? (
-          <PreviewThread />
+        {route.view === "chat" ? (
+          <PreviewThread key={route.chatKey ?? "new"} chatKey={route.chatKey}
+            workspaceScope={workspaceScope} onWorkspaceScopeChange={selectWorkspace}
+            onManageModels={() => navigate({ view: "settings", settingsSection: "models" })} />
         ) : route.view === "settings" ? (
           <PreviewSettings />
         ) : route.view === "apps" ||
@@ -101,9 +103,14 @@ export default function PreviewApp() {
           route.view === "automations" ? (
           <PreviewCapabilities kind={route.view as CapabilityKind} />
         ) : route.view === "creative" || route.view === "article" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex h-14 items-center justify-end border-b border-border px-6">
+            <span className="text-[11px] text-muted-foreground">{t("workspace.preview.badge")}</span>
+          </div>
           <Suspense fallback={null}>
             <CreativeWorkspace />
           </Suspense>
+          </div>
         ) : (
           <PlaceholderPage view={route.view} />
         )}
@@ -112,30 +119,61 @@ export default function PreviewApp() {
   );
 }
 
-function PreviewChatColumn() {
+function PreviewChatColumn({ activeKey, onNavigate, projects, onSelectWorkspace }: {
+  activeKey?: string | null;
+  onNavigate: (route: WorkspaceRoute) => void;
+  projects: SidebarProjectEntry[];
+  onSelectWorkspace: (scope: WorkspaceScopePayload) => void;
+}) {
   const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const [pinnedKeys, setPinnedKeys] = useState<string[]>([]);
+  const [archivedKeys, setArchivedKeys] = useState<string[]>([]);
+  const [titleOverrides, setTitleOverrides] = useState<Record<string, string>>({});
+  const [sessions, setSessions] = useState<ChatSummary[]>(() => previewSessions.map((row) => ({
+    ...row, channel: "websocket", chatId: row.key, createdAt: null, updatedAt: null,
+  })));
+  const toggleKey = (key: string, setter: (update: (current: string[]) => string[]) => void) =>
+    setter((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-1 px-3 pt-3 pb-1">
         <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-sidebar-foreground">
           {t("sidebar.recent")}
         </span>
+        <button type="button" onClick={() => onNavigate({ view: "chat", chatKey: null })}
+          aria-label={t("sidebar.newChat")} title={t("sidebar.newChat")}
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-control text-muted-foreground hover:bg-muted">
+          <Plus className="h-4 w-4" aria-hidden />
+        </button>
       </div>
-      <div className="flex flex-col gap-0.5 px-2 py-1">
-        {previewSessions.map((row) => (
-          <div
-            key={row.key}
-            aria-current="false"
-            className="flex flex-col gap-0.5 rounded-xl px-3 py-2 text-sidebar-foreground/85"
-          >
-            <span className="truncate text-[13px] font-medium">{row.title}</span>
-            <span className="truncate text-xs text-muted-foreground/80">
-              {row.preview}
-            </span>
-          </div>
-        ))}
+      <div className="relative mx-3 my-3">
+        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label={t("sidebar.searchAria")}
+          placeholder={t("sidebar.searchPlaceholder")} className="h-9 w-full rounded-control border border-border/70 bg-card pl-8 pr-3 text-xs" />
       </div>
-      <div className="min-h-0 flex-1" />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ChatList sessions={sessions.filter((row) => (titleOverrides[row.key] || row.title || "").includes(query))}
+          activeKey={activeKey ?? null} projectEntries={projects}
+          defaultWorkspacePath={PREVIEW_DEFAULT_SCOPE.project_path}
+          onSelect={(key) => {
+            const scope = sessions.find((session) => session.key === key)?.workspaceScope;
+            onSelectWorkspace(scope ?? PREVIEW_DEFAULT_SCOPE);
+            onNavigate({ view: "chat", chatKey: key });
+          }}
+          onNewChatInProject={(path, name) => {
+            const scope = { ...PREVIEW_DEFAULT_SCOPE, project_path: path, project_name: name };
+            onSelectWorkspace(scope);
+            onNavigate({ view: "chat", chatKey: null });
+          }}
+          onRequestDelete={(key) => setSessions((current) => current.filter((row) => row.key !== key))}
+          onTogglePin={(key) => toggleKey(key, setPinnedKeys)}
+          onToggleArchive={(key) => toggleKey(key, setArchivedKeys)}
+          onRequestRename={(key, label) => setTitleOverrides((current) => ({ ...current, [key]: label }))}
+          pinnedKeys={pinnedKeys} archivedKeys={archivedKeys} titleOverrides={titleOverrides}
+          emptyLabel={t("sidebar.noSearchResults")} />
+      </div>
+      <p className="border-t border-border px-4 py-3 text-[11px] text-muted-foreground">{t("workspace.preview.badge")}</p>
     </div>
   );
 }

@@ -309,9 +309,7 @@ describe("App layout", () => {
     runStatusHandlers.clear();
     sessionUpdateHandlers.clear();
     sidebarStateUpdateHandlers.clear();
-    // Empty hash now resolves to the workbench home, so this chat-oriented
-    // layout suite starts on the new-topic route (equivalent to the previous
-    // default chat view) unless a case overrides the hash itself.
+    // Start on the explicit new-topic route unless a case overrides the hash.
     window.history.replaceState(null, "", "/#/new");
     Reflect.deleteProperty(window, "nanobotHost");
     setNavigatorPlatform("Linux x86_64");
@@ -1641,7 +1639,7 @@ describe("App layout", () => {
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const flowSidebar = screen.getByTestId("host-sidebar-flow");
-    expect(flowSidebar).toHaveStyle({ width: "472px" });
+    expect(flowSidebar).toHaveStyle({ width: "312px" });
     expect(screen.getByTestId("sidebar-brand-row")).toHaveClass("pt-8");
     expect(screen.getByTestId("sidebar-brand-row")).not.toHaveClass("pt-3");
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
@@ -1660,7 +1658,7 @@ describe("App layout", () => {
       within(screen.getByRole("navigation", { name: "Sidebar navigation" }))
         .getByRole("button", { name: "Toggle sidebar" }),
     );
-    await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "472px" }));
+    await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "312px" }));
   });
 
   it("aligns native settings navigation below the titlebar without extra top padding", async () => {
@@ -3790,7 +3788,7 @@ describe("App layout", () => {
     expect(within(rail).queryByText("Existing chat")).not.toBeInTheDocument();
 
     fireEvent.click(within(rail).getByRole("button", { name: "Toggle sidebar" }));
-    await waitFor(() => expect(sidebarAside.style.width).toBe("472px"));
+    await waitFor(() => expect(sidebarAside.style.width).toBe("312px"));
 
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));

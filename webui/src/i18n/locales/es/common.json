@@ -1,4 +1,17 @@
 {
+  "creative": {
+    "headline": "¿Qué te gustaría escribir hoy?",
+    "hero_description": "Código, una experiencia práctica, una idea nueva: cada artículo comienza con algo.",
+    "topic_label": "Tema del artículo",
+    "input_hint": "Empieza con tus materiales e ideas",
+    "template_heading": "Empieza con un formato conocido",
+    "template_hint": "Una plantilla es solo el punto de partida",
+    "library_heading": "Mis artículos",
+    "new_article": "Escribir un nuevo artículo",
+    "sample_label": "Ejemplo",
+    "material_count": "{{count}} materiales",
+    "continue_writing": "Seguir escribiendo"
+  },
   "app": {
     "brand": "Mira",
     "loading": {

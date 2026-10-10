@@ -1,4 +1,17 @@
 {
+  "creative": {
+    "headline": "What would you like to write today?",
+    "hero_description": "A piece of code, a hands-on project, a new insight — every article begins somewhere.",
+    "topic_label": "Article topic",
+    "input_hint": "Start with your own materials and ideas",
+    "template_heading": "Start with a familiar format",
+    "template_hint": "A template is only a starting point",
+    "library_heading": "My articles",
+    "new_article": "Write a new article",
+    "sample_label": "Sample",
+    "material_count": "{{count}} materials",
+    "continue_writing": "Continue writing"
+  },
   "app": {
     "brand": "Mira",
     "loading": {

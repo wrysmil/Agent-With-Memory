@@ -6,7 +6,7 @@ import type { WorkspaceNavigationProps } from "@/components/workspace/contracts"
 
 function renderNav(overrides: Partial<WorkspaceNavigationProps> = {}) {
   const props: WorkspaceNavigationProps = {
-    activeView: "home",
+    activeView: "chat",
     collapsed: false,
     preview: false,
     onNavigate: vi.fn(),
@@ -22,7 +22,6 @@ function renderNav(overrides: Partial<WorkspaceNavigationProps> = {}) {
 }
 
 const NAV_ITEMS = [
-  "Home",
   "Assistant",
   "Creative",
   "Agents",
@@ -44,6 +43,7 @@ describe("WorkspaceNavigation", () => {
         screen.getByRole("button", { name: label }),
       ).toBeInTheDocument();
     }
+    expect(screen.queryByRole("button", { name: "Home" })).not.toBeInTheDocument();
   });
 
   it("marks the active view item with aria-current=page", () => {
@@ -52,7 +52,7 @@ describe("WorkspaceNavigation", () => {
       screen.getByRole("button", { name: "Creative" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
-      screen.getByRole("button", { name: "Home" }),
+      screen.getByRole("button", { name: "Assistant" }),
     ).not.toHaveAttribute("aria-current");
   });
 
@@ -74,7 +74,7 @@ describe("WorkspaceNavigation", () => {
     const chatColumn = <div data-testid="chat-slot">chat column</div>;
     const { rerender } = render(
       <WorkspaceNavigation
-        activeView="home"
+        activeView="creative"
         collapsed={false}
         preview
         onNavigate={vi.fn()}
@@ -98,7 +98,7 @@ describe("WorkspaceNavigation", () => {
   });
 
   it("shows the preview badge only in preview mode and calls the collapse toggle", () => {
-    const preview = renderNav({ preview: true });
+    const preview = renderNav({ preview: true, activeView: "creative" });
     expect(
       preview.container.querySelector("[data-preview-badge]"),
     ).not.toBeNull();

@@ -1,4 +1,17 @@
 {
+  "creative": {
+    "headline": "Apa yang ingin Anda tulis hari ini?",
+    "hero_description": "Kode, pengalaman praktik, wawasan baru — setiap artikel dimulai dari sesuatu.",
+    "topic_label": "Topik artikel",
+    "input_hint": "Mulai dari bahan dan ide Anda",
+    "template_heading": "Mulai dengan format yang familier",
+    "template_hint": "Templat hanyalah titik awal",
+    "library_heading": "Artikel saya",
+    "new_article": "Tulis artikel baru",
+    "sample_label": "Contoh",
+    "material_count": "{{count}} bahan",
+    "continue_writing": "Lanjutkan menulis"
+  },
   "app": {
     "brand": "Mira",
     "loading": {

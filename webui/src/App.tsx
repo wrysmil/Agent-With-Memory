@@ -8,14 +8,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Eye, EyeOff, Moon, ShieldCheck, Sun, X } from "lucide-react";
+import { Eye, EyeOff, Moon, PanelLeftOpen, ShieldCheck, Sun, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   parseWorkspaceHash,
   settingsSectionForView,
   workspaceRouteHash,
 } from "@/workspace/routes";
-import { WorkspaceHome } from "@/components/workspace/WorkspaceHome";
 import { channelUiPresentation } from "@/channel-plugins/registry";
 import { Sidebar } from "@/components/Sidebar";
 import { PROJECTS_SECTION_KEY, type SidebarDeleteItem } from "@/components/ChatList";
@@ -120,7 +119,7 @@ const LEGACY_COMPLETED_RUNS_STORAGE_KEY = "nanobot-webui.sidebar.completed-runs.
 const RESTART_STARTED_KEY = "nanobot-webui.restartStartedAt";
 const RESTART_ROUTE_KEY = "nanobot-webui.restartRoute";
 const RESTART_ROUTE_TTL_MS = 5 * 60 * 1000;
-const SIDEBAR_WIDTH = 224;
+const SIDEBAR_WIDTH = 64;
 const SIDEBAR_RAIL_WIDTH = 64;
 const SIDEBAR_CHAT_WIDTH = 248;
 const MOBILE_SIDEBAR_WIDTH = `min(${SIDEBAR_WIDTH + SIDEBAR_CHAT_WIDTH}px, calc(100vw - 0.75rem))`;
@@ -182,13 +181,11 @@ function SurfaceLoadingFallback() {
 }
 
 function defaultShellRoute(): ShellRoute {
-  return { view: "home", activeKey: null, settingsSection: "overview" };
+  return { view: "chat", activeKey: null, settingsSection: "overview" };
 }
 
 /**
- * The blank new-topic destination. Distinct from `defaultShellRoute()` (the
- * workbench home landing): "New chat", ending a temporary chat, and recovering
- * from a vanished session all return here rather than to the home view.
+ * The blank new-topic destination, also used as the default landing page.
  */
 function newChatRoute(): ShellRoute {
   return { view: "chat", activeKey: null, settingsSection: "overview" };
@@ -1991,7 +1988,7 @@ function Shell({
 
   const onOpenHome = useCallback(() => {
     setSessionSearchOpen(false);
-    navigate({ view: "home", activeKey: null, settingsSection: "overview" });
+    navigate({ view: "chat", activeKey: null, settingsSection: "overview" });
     setMobileSidebarOpen(false);
   }, [navigate]);
 
@@ -2006,14 +2003,6 @@ function Shell({
     navigate({ view: "creative", activeKey: null, settingsSection: "overview" });
     setMobileSidebarOpen(false);
   }, [navigate]);
-
-  const onWorkspaceSubmitTask = useCallback(
-    (text: string) => {
-      setComposerDraftSeed({ text, token: Date.now() });
-      navigate({ view: "chat", activeKey: null, settingsSection: "overview" });
-    },
-    [navigate],
-  );
 
   const onDraftSeedConsumed = useCallback(() => {
     setComposerDraftSeed(null);
@@ -2872,24 +2861,19 @@ function Shell({
               />
               </div>
             </div>
-            {view === "home" ? (
-              <div className="absolute inset-0 flex flex-col">
-                <WorkspaceHome
-                  preview={false}
-                  onSubmitTask={onWorkspaceSubmitTask}
-                  onOpenAssistant={onOpenAssistant}
-                  onOpenCreative={onOpenCreative}
-                  onOpenCapability={(capabilityView) => {
-                    if (capabilityView === "apps") onOpenApps();
-                    else if (capabilityView === "skills") onOpenSkills();
-                    else if (capabilityView === "automations") onOpenAutomations();
-                    else if (capabilityView === "agents") onOpenAgents();
-                  }}
-                />
-              </div>
-            ) : null}
             {(view === "creative" || view === "article") ? (
               <div className="absolute inset-0 overflow-y-auto bg-background">
+                <header className={cn("flex h-14 items-center gap-3 border-b border-border px-5 sm:px-8", showHostChrome && "mt-10")}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 lg:hidden"
+                    aria-label={t("thread.header.toggleSidebar")} onClick={toggleSidebar}>
+                    <PanelLeftOpen className="h-4 w-4" aria-hidden />
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{t("workspace.home.creativeTitle")}</span>
+                  <Button variant="ghost" size="icon" className="ml-auto h-8 w-8"
+                    aria-label={t("thread.header.toggleTheme")} onClick={toggle}>
+                    {theme === "dark" ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />}
+                  </Button>
+                </header>
                 <Suspense fallback={null}>
                   <CreativeWorkspace />
                 </Suspense>

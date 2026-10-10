@@ -23,8 +23,8 @@ function isSettingsSectionKey(value: string | null): value is SettingsSectionKey
   return value !== null && SETTINGS_SECTION_KEYS.includes(value as SettingsSectionKey);
 }
 
-function homeRoute(): WorkspaceRoute {
-  return { view: "home" };
+function assistantRoute(): WorkspaceRoute {
+  return { view: "chat", chatKey: null };
 }
 
 function decodeRouteSegment(encoded: string): string | null {
@@ -41,11 +41,12 @@ const CAPABILITY_VIEWS = ["apps", "automations", "skills", "agents"] as const;
 /**
  * Pure hash parser shared by the live App and the static preview. It never
  * throws on malformed input — anything unrecognized falls back to the
- * workbench home so a bad deep link cannot blank the shell.
+ * assistant so a bad deep link cannot blank the shell. Legacy home links also
+ * resolve to a new conversation.
  */
 export function parseWorkspaceHash(rawHash: string): WorkspaceRoute {
   const hash = rawHash.startsWith("#") ? rawHash.slice(1) : rawHash;
-  if (!hash || hash === "/" || hash === "/home") return homeRoute();
+  if (!hash || hash === "/" || hash === "/home") return assistantRoute();
 
   const [path, query = ""] = hash.split("?", 2);
   const params = new URLSearchParams(query);
@@ -67,25 +68,26 @@ export function parseWorkspaceHash(rawHash: string): WorkspaceRoute {
 
   if (path.startsWith("/article/")) {
     const articleId = decodeRouteSegment(path.slice("/article/".length));
-    return articleId ? { view: "article", articleId } : homeRoute();
+    return articleId ? { view: "article", articleId } : assistantRoute();
   }
 
   if (path.startsWith("/temporary/")) {
     const chatId = decodeRouteSegment(path.slice("/temporary/".length));
     return chatId
       ? { view: "chat", chatKey: `websocket:${chatId}`, temporary: true }
-      : homeRoute();
+      : assistantRoute();
   }
 
   if (path.startsWith("/chat/")) {
     const key = decodeRouteSegment(path.slice("/chat/".length));
-    return key ? { view: "chat", chatKey: key } : homeRoute();
+    return key ? { view: "chat", chatKey: key } : assistantRoute();
   }
 
-  return homeRoute();
+  return assistantRoute();
 }
 
 export function workspaceRouteHash(route: WorkspaceRoute): string {
+  if (route.view === "home") return "#/new";
   if (route.view === "chat") {
     if (route.temporary && route.chatKey?.startsWith("websocket:")) {
       return `#/temporary/${encodeURIComponent(route.chatKey.slice("websocket:".length))}`;

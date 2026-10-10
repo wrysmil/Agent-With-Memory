@@ -1,4 +1,17 @@
 {
+  "creative": {
+    "headline": "今日は何を書きますか？",
+    "hero_description": "コード、実践、新しい気づき。どれも記事の出発点になります。",
+    "topic_label": "記事のテーマ",
+    "input_hint": "自分の資料とアイデアから始めましょう",
+    "template_heading": "使い慣れた形式から始める",
+    "template_hint": "テンプレートは出発点です",
+    "library_heading": "自分の記事",
+    "new_article": "新しい記事を書く",
+    "sample_label": "サンプル",
+    "material_count": "資料 {{count}} 件",
+    "continue_writing": "執筆を続ける"
+  },
   "app": {
     "brand": "Mira",
     "loading": {

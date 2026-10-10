@@ -1757,7 +1757,7 @@ function AddProjectButton({
           title={label}
           className={cn(
             "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md",
-            "text-muted-foreground/70 opacity-0 transition-opacity",
+            "cursor-pointer text-muted-foreground/70 opacity-75 transition-opacity",
             "hover:bg-sidebar-accent hover:text-sidebar-foreground",
             "focus-visible:opacity-100 group-hover/projects:opacity-100 data-[state=open]:opacity-100",
           )}

@@ -44,9 +44,13 @@ describe("PreviewApp isolation", () => {
     restore = null;
   });
 
-  it("renders the navigation shell and home view with transports disabled", () => {
+  it("opens the assistant with transports disabled and no home entry", () => {
     expect(() => render(<PreviewApp />)).not.toThrow();
     expect(screen.getByRole("navigation")).toBeInTheDocument();
     expect(screen.getByText("知序")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Home" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Message input" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose project" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add project" })).toBeInTheDocument();
   });
 });

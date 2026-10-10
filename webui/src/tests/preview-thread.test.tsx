@@ -23,7 +23,7 @@ describe("PreviewThread", () => {
   it("renders the seeded demo conversation without touching the network", async () => {
     const restore = forbidTransports();
     try {
-      render(<PreviewThread />);
+      render(<PreviewThread chatKey="demo-1" />);
       expect(
         screen.getByText("帮我把这周的记忆整理成一篇周回顾。"),
       ).toBeInTheDocument();
@@ -37,9 +37,9 @@ describe("PreviewThread", () => {
     const restore = forbidTransports();
     try {
       render(<PreviewThread />);
-      const input = screen.getByTestId("preview-input");
+      const input = screen.getByRole("textbox", { name: "Message input" });
       fireEvent.change(input, { target: { value: "再追加一条演示消息" } });
-      fireEvent.click(screen.getByTestId("preview-send"));
+      fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
       expect(screen.getByText("再追加一条演示消息")).toBeInTheDocument();
       expect(

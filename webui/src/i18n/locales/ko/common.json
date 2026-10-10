@@ -1,4 +1,17 @@
 {
+  "creative": {
+    "headline": "오늘은 무엇을 쓰고 싶으세요?",
+    "hero_description": "코드, 실전 경험, 새로운 깨달음. 모두 글의 출발점이 됩니다.",
+    "topic_label": "글 주제",
+    "input_hint": "나의 자료와 생각에서 시작하세요",
+    "template_heading": "익숙한 형식으로 시작하기",
+    "template_hint": "템플릿은 시작점일 뿐입니다",
+    "library_heading": "내 글",
+    "new_article": "새 글 쓰기",
+    "sample_label": "예시",
+    "material_count": "자료 {{count}}개",
+    "continue_writing": "이어서 쓰기"
+  },
   "app": {
     "brand": "Mira",
     "loading": {

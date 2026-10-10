@@ -1,4 +1,17 @@
 {
+  "creative": {
+    "headline": "Hôm nay bạn muốn viết gì?",
+    "hero_description": "Một đoạn mã, một trải nghiệm thực tế, một ý tưởng mới — đều có thể mở đầu một bài viết.",
+    "topic_label": "Chủ đề bài viết",
+    "input_hint": "Bắt đầu từ tài liệu và ý tưởng của bạn",
+    "template_heading": "Bắt đầu với một định dạng quen thuộc",
+    "template_hint": "Mẫu chỉ là điểm khởi đầu",
+    "library_heading": "Bài viết của tôi",
+    "new_article": "Viết bài mới",
+    "sample_label": "Ví dụ",
+    "material_count": "{{count}} tài liệu",
+    "continue_writing": "Tiếp tục viết"
+  },
   "app": {
     "brand": "Mira",
     "loading": {
