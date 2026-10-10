@@ -40,19 +40,23 @@ _MAX_ANSWER_CHARS = 4000
         ),
         options=ArraySchema(
             ObjectSchema(
-                label=StringSchema(
-                    "Short option label the user clicks (a few words).",
-                    min_length=1,
-                    max_length=120,
-                ),
-                description=StringSchema(
-                    "Optional one-line explanation of the option.",
-                    max_length=500,
-                    nullable=True,
-                ),
-                recommended=BooleanSchema(
-                    description="Mark this option as the recommended default (at most one)."
-                ),
+                {
+                    "label": StringSchema(
+                        "Short option label the user clicks (a few words).",
+                        min_length=1,
+                        max_length=120,
+                    ),
+                    # Passed as a properties dict: a bare `description=` kwarg
+                    # would bind to ObjectSchema's root description, not the field.
+                    "description": StringSchema(
+                        "Optional one-line explanation of the option.",
+                        max_length=500,
+                        nullable=True,
+                    ),
+                    "recommended": BooleanSchema(
+                        description="Mark this option as the recommended default (at most one)."
+                    ),
+                },
                 required=["label"],
             ),
             description="2-8 distinct answer options shown as a numbered list.",
