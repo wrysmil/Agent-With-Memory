@@ -129,6 +129,19 @@
     overflow: hidden;
   }
 
+  html:lang(zh) body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
+  }
+
+  :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+
+  textarea {
+    line-height: 1.75;
+  }
+
   * {
     scrollbar-color: var(--scrollbar-thumb) transparent;
     scrollbar-width: thin;
@@ -309,6 +322,9 @@
   /* CJK-friendly line-height: prose paragraphs default to 1.625 which is
      tight for Chinese/Japanese/Korean characters. Bump to 1.8 for better
      readability when the browser detects a CJK primary font. */
+  :root {
+    --cjk-line-height: 1.625;
+  }
   :lang(zh),
   :lang(zh-CN),
   :lang(zh-TW),
@@ -316,9 +332,6 @@
   :lang(ja),
   :lang(ko) {
     --cjk-line-height: 1.8;
-  }
-  :root {
-    --cjk-line-height: 1.625;
   }
 
   /* L→R sheen clipped to live activity labels. The highlight lives inside
@@ -962,4 +975,39 @@
 /* Disable resize handle on the editor — keeps settings rows aligned */
 textarea.no-resize {
   resize: none;
+}
+
+/* Shared Web/Electron rail: status stays in flow; short windows retain access
+   to every capability instead of hiding controls behind the native shell. */
+.workspace-navigation-rail > * {
+  flex-shrink: 0;
+}
+
+.workspace-navigation-status {
+  overflow-wrap: anywhere;
+}
+
+.workspace-navigation-status > * {
+  flex-wrap: wrap;
+  font-size: 11px;
+  column-gap: 6px;
+}
+
+.workspace-navigation button:focus-visible {
+  outline-offset: -2px;
+}
+
+html.native-host .workspace-navigation-rail {
+  scrollbar-width: thin;
+}
+
+html.native-host .workspace-navigation-rail::-webkit-scrollbar {
+  display: block;
+  width: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-navigation button {
+    transition: none;
+  }
 }

@@ -96,7 +96,7 @@ export function WorkspaceNavigation({
         })
       : chatNavigation;
 
-  const topInset = hostChromeInset ? "pt-8" : "pt-2";
+  const topInset = hostChromeInset ? "pt-12" : "pt-4";
 
   const navigateTo = useCallback(
     (view: WorkspaceView) => onNavigate({ view } satisfies WorkspaceRoute),
@@ -119,7 +119,7 @@ export function WorkspaceNavigation({
         ref={active ? activeRailRef : undefined}
         onClick={() => navigateTo(item.view)}
         className={cn(
-          "host-no-drag flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] transition-colors",
+          "host-no-drag flex min-h-10 w-full items-center gap-3 rounded-control px-3 py-2 text-[13px] transition-colors",
           SIDEBAR_SELECTION_ACTION_ITEM_CLASS,
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
           active
@@ -142,7 +142,7 @@ export function WorkspaceNavigation({
     <nav
       aria-label={t("sidebar.navigation")}
       className={cn(
-        "h-full w-full min-w-0 text-sidebar-foreground",
+        "workspace-navigation h-full w-full min-w-0 text-sidebar-foreground",
         hostChromeInset ? "bg-transparent" : "bg-sidebar",
       )}
     >
@@ -155,14 +155,14 @@ export function WorkspaceNavigation({
         <div
           data-testid="sidebar-rail"
           className={cn(
-            "flex shrink-0 flex-col gap-1 border-r border-sidebar-border pb-3",
+            "workspace-navigation-rail flex min-h-0 shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain border-r border-sidebar-border pb-3",
             collapsed ? "w-16 items-center" : "w-[224px]",
             topInset,
           )}
         >
           <div
             className={cn(
-              "flex items-center gap-2 px-2 pb-2",
+              "flex shrink-0 items-center gap-3 px-4 pb-3",
               collapsed && "justify-center px-0",
             )}
           >
@@ -173,7 +173,7 @@ export function WorkspaceNavigation({
               知
             </span>
             {!collapsed && (
-              <span className="truncate text-[15px] font-semibold tracking-wide text-sidebar-foreground">
+              <span className="truncate text-[18px] font-semibold tracking-wide text-sidebar-foreground">
                 {t("workspace.brand", { defaultValue: "知序" })}
               </span>
             )}
@@ -181,20 +181,20 @@ export function WorkspaceNavigation({
           {preview && !collapsed ? (
             <p
               data-preview-badge
-              className="mx-2 mb-1 rounded-mark bg-amber-500/15 px-2 py-1 text-xs text-amber-700 dark:text-amber-300"
+              className="mx-3 mb-1 rounded-control border border-border/60 bg-background/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-muted-foreground"
             >
               {t("workspace.preview.badge", { defaultValue: "界面预览 · 示例内容" })}
             </p>
           ) : null}
-          <div className="flex flex-col gap-0.5">{PRIMARY_ITEMS.map(renderItem)}</div>
-          <div className="min-h-0 flex-1" />
-          <div className="flex flex-col gap-0.5 border-t border-sidebar-border pt-2">
+          <div className={cn("flex shrink-0 flex-col gap-1", collapsed ? "w-full px-2" : "px-3")}>{PRIMARY_ITEMS.map(renderItem)}</div>
+          <div className="min-h-4 flex-1" />
+          <div className={cn("flex shrink-0 flex-col gap-1 border-t border-sidebar-border pt-3", collapsed ? "w-full px-2" : "px-3")}>
             {CAPABILITY_ITEMS.map(renderItem)}
             {renderItem(SETTINGS_ITEM)}
           </div>
           <div
             className={cn(
-              "mt-1 border-t border-sidebar-border pt-2",
+              "mt-1 shrink-0 border-t border-sidebar-border pt-2",
               collapsed ? "flex justify-center px-0" : "px-2",
             )}
           >
@@ -208,17 +208,15 @@ export function WorkspaceNavigation({
               onClick={onToggleCollapsed}
             />
           </div>
+          {!collapsed && !showChatColumn && connectionStatus ? (
+            <div className="workspace-navigation-status host-no-drag shrink-0 px-4 pt-1 text-[11px] leading-relaxed text-muted-foreground">
+              {connectionStatus}
+            </div>
+          ) : null}
         </div>
         {showChatColumn ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {chatSlot}
-          </div>
-        ) : null}
-        {!collapsed && !showChatColumn && connectionStatus ? (
-          <div className="absolute inset-y-0 right-0 flex w-[224px] flex-col justify-end">
-            <div className="flex items-center gap-1 bg-sidebar/55 px-2.5 py-3 text-xs">
-              {connectionStatus}
-            </div>
           </div>
         ) : null}
       </SidebarSelectionHighlight>
