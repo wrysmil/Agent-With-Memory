@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "サイドバーのナビゲーション",
     "collapse": "サイドバーを閉じる",
-    "newChat": "新しいトピック",
+    "home": "ホーム",
+    "newChat": "新しいチャット",
     "searchAria": "検索",
     "searchPlaceholder": "検索",
     "searchResults": "検索結果",
@@ -176,7 +177,8 @@
       "transcriptionProviderStatus": "プロバイダー状態",
       "transcriptionModel": "モデル",
       "transcriptionLanguage": "言語",
-      "voiceLimits": "制限"
+      "voiceLimits": "制限",
+      "workspacePathHint": "プロジェクトを指定しないチャットがこのディレクトリを使います。プロジェクトフォルダはサイドバーの「プロジェクト」で管理します。"
     },
     "help": {
       "theme": "ライト表示とダーク表示を切り替えます。",
@@ -251,7 +253,8 @@
       "restartingEngine": "再起動中",
       "checking": "確認中",
       "running": "実行中",
-      "needsSetup": "設定が必要"
+      "needsSetup": "設定が必要",
+      "workspaceSettings": "ワークスペース設定"
     },
     "status": {
       "loading": "設定を読み込んでいます...",
@@ -335,7 +338,7 @@
       "webSearch": "Web 検索",
       "imageGeneration": "画像生成",
       "voiceInput": "音声入力",
-      "workspace": "ワークスペース"
+      "workspace": "デフォルトのワークスペース"
     },
     "usage": {
       "title": "トークンアクティビティ",
@@ -1344,6 +1347,7 @@
     "showMore": "さらに {{count}} 件表示",
     "collapsed": "{{count}} 件のトピックを折りたたみ中",
     "showLess": "折りたたむ",
+    "expandGroup": "展開",
     "actions": "「{{title}}」のトピック操作",
     "newInProject": "「{{project}}」で新しいトピックを開始",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "削除",
     "newChat": "新しいトピック",
     "groups": {
+      "newChatInProject": "プロジェクト内で新規チャット",
+      "reveal": "ファイルマネージャーで表示",
+      "removeProject": "プロジェクトを削除",
       "pinned": "ピン留め",
       "all": "トピック",
       "projects": "プロジェクト",
+      "addProject": "プロジェクトを追加",
       "today": "今日",
       "yesterday": "昨日",
       "earlier": "以前",
-      "archived": "アーカイブ済み"
+      "archived": "アーカイブ済み",
+      "emptyProject": "まだチャットはありません",
+      "toggleProjects": "プロジェクトを開閉",
+      "projectsHint": "各プロジェクトはこのコンピューターのフォルダです。"
     }
   },
   "deleteConfirm": {
@@ -1417,6 +1428,11 @@
     "error": "接続エラー"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "詳細を見る",
+      "hideDetails": "隠す",
+      "sourceCount": "{{count}} 件のソース"
+    },
     "compaction": {
       "cancelled": "コンテキストの圧縮をキャンセルしました",
       "empty": "圧縮するコンテキストはありません。",
@@ -1518,6 +1534,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "追加",
+        "add": "追加",
+        "files": "ファイルとフォルダ",
+        "filesDesc": "このメッセージに画像やファイルを添付",
+        "project": "プロジェクトで作業",
+        "projectDesc": "この会話用のフォルダを選択",
+        "goal": "ゴール",
+        "goalDesc": "この依頼を長期ゴールとして進める",
+        "plan": "プランモード",
+        "planDesc": "作業前に実行計画を作成させる",
+        "draw": "画像生成",
+        "drawDesc": "image-generation スキルで画像を生成",
+        "skills": "スキル",
+        "noSkills": "スキルがインストールされていません",
+        "plugins": "プラグイン",
+        "noPlugins": "プラグインがインストールされていません",
+        "mcp": "MCP",
+        "noMcp": "MCP サーバーが設定されていません",
+        "agents": "エージェント",
+        "noAgents": "利用可能なエージェントがありません",
+        "agentInsert": "エージェント「{{name}}」にこのタスクを実行させて："
+      },
       "placeholderThread": "メッセージを入力…",
       "placeholderHero": "何を考えていますか？",
       "placeholderOpening": "新しいトピックを開いています…",
@@ -1539,6 +1578,28 @@
       "chooseAI": "AI を選択",
       "switchModel": "この会話で使うモデルを切り替える",
       "manageModels": "モデルを管理",
+      "reasoningEffort": "推論強度",
+      "effort": {
+        "default": "デフォルト",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "超高",
+        "max": "最大",
+        "adaptive": "アダプティブ"
+      },
+      "runtime": {
+        "thisComputer": "このコンピューター",
+        "title": "実行環境",
+        "aria": "実行環境",
+        "host": "ホスト名",
+        "gateway": "ゲートウェイ",
+        "sandbox": "サンドボックス",
+        "access": "アクセス権限",
+        "unknown": "不明",
+        "enforced": "強制隔離が有効",
+        "notEnforced": "強制隔離は無効"
+      },
       "context": {
         "tooltip": "コンテキスト {{percent}}%",
         "detailsLabel": "コンテキスト使用量を開く",
@@ -1820,6 +1881,12 @@
     "next": "次の画像",
     "close": "プレビューを閉じる"
   },
+  "askQuestion": {
+    "recommended": "推奨",
+    "otherPlaceholder": "別の回答を入力",
+    "noPreference": "指定なし",
+    "submit": "回答を送信"
+  },
   "filePreview": {
     "aria": "ファイルプレビュー",
     "breadcrumb": "ファイルパス",
@@ -1837,6 +1904,31 @@
     "copied": "コピーしました"
   },
   "workbench": {
+    "title": "ワークベンチ",
+    "open": "ワークベンチを開く",
+    "collapse": "ワークベンチをたたむ",
+    "updatedAt": "更新 {{time}}",
+    "overview": "概要",
+    "emptyOverview": "まだ概要がありません",
+    "environment": "環境",
+    "local": "ローカル",
+    "fullAccess": "完全アクセス",
+    "restrictedAccess": "制限あり",
+    "files": "個のファイル",
+    "commitPush": "コミットまたはプッシュ",
+    "commitPushHint": "ワークベンチの読み取り専用APIで利用できます",
+    "integrations": "スキルと MCP",
+    "emptyIntegrations": "このセッションでは MCP/CLI を使っていません",
+    "outputs": "出力",
+    "emptyOutputs": "まだ変更されたファイルはありません",
+    "sources": "参照",
+    "emptySources": "まだウェブの参照はありません",
+    "fileTree": "ファイル",
+    "treeLoading": "読み込み中…",
+    "treeEmpty": "プロジェクトは空です",
+    "treeEmptyFolder": "空のフォルダー",
+    "treeRetry": "このフォルダーを読み込めませんでした。再試行",
+    "treeTruncated": "一部の項目のみ表示しています",
     "aria": "会話ワークベンチ",
     "panes": "ペイン",
     "tabAria": "グループ：{{title}}",
@@ -1902,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "既定のワークスペース",
+      "clickToAdd": "フォルダをクリックして追加",
+      "changeFolder": "フォルダを変更",
+      "picking": "選択中…",
+      "projectName": "プロジェクト名",
+      "create": "作成",
+      "cancel": "キャンセル",
+      "defaultProject": "デフォルトのワークスペース（プロジェクトなし）",
       "manual": "パスを貼り付け",
       "manualPlaceholder": "/Users/name/project",
       "usePath": "パスを使用",

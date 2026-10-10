@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "侧边栏导航",
     "collapse": "收起侧边栏",
-    "newChat": "新建话题",
+    "home": "首页",
+    "newChat": "新聊天",
     "searchAria": "搜索",
     "searchPlaceholder": "搜索",
     "searchResults": "搜索结果",
@@ -391,7 +392,8 @@
       "transcriptionProviderStatus": "提供商状态",
       "transcriptionModel": "模型",
       "transcriptionLanguage": "语言",
-      "voiceLimits": "限制"
+      "voiceLimits": "限制",
+      "workspacePathHint": "未选择项目的对话使用该目录；项目文件夹在侧栏「项目」中单独管理。"
     },
     "help": {
       "theme": "在浅色和深色外观之间切换。",
@@ -625,7 +627,8 @@
       "restartingEngine": "正在重启",
       "checking": "检查中",
       "running": "运行中",
-      "needsSetup": "需要设置"
+      "needsSetup": "需要设置",
+      "workspaceSettings": "工作区设置"
     },
     "status": {
       "loading": "正在加载设置...",
@@ -709,7 +712,7 @@
       "webSearch": "网络搜索",
       "imageGeneration": "图片生成",
       "voiceInput": "语音识别",
-      "workspace": "工作区"
+      "workspace": "默认工作区"
     },
     "usage": {
       "title": "Token 用量",
@@ -1344,6 +1347,7 @@
     "showMore": "再显示 {{count}} 个",
     "collapsed": "已折叠 {{count}} 个话题",
     "showLess": "收起",
+    "expandGroup": "展开显示",
     "actions": "“{{title}}” 的话题操作",
     "newInProject": "在 {{project}} 中开始新话题",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "删除",
     "newChat": "新建话题",
     "groups": {
+      "newChatInProject": "在项目中新建会话",
+      "reveal": "在资源管理器中打开",
+      "removeProject": "移除项目",
       "pinned": "置顶",
       "all": "话题",
       "projects": "项目",
+      "addProject": "添加项目",
       "today": "今天",
       "yesterday": "昨天",
       "earlier": "更早",
-      "archived": "已归档"
+      "archived": "已归档",
+      "emptyProject": "暂无聊天",
+      "toggleProjects": "折叠或展开项目",
+      "projectsHint": "每个项目对应本机上的一个文件夹。"
     }
   },
   "deleteConfirm": {
@@ -1435,7 +1446,44 @@
     "outputs": "产出",
     "emptyOutputs": "暂无文件改动",
     "sources": "来源",
-    "emptySources": "暂无网页来源"
+    "emptySources": "暂无网页来源",
+    "fileTree": "文件",
+    "treeLoading": "正在加载…",
+    "treeEmpty": "项目为空",
+    "treeEmptyFolder": "空文件夹",
+    "treeRetry": "读取失败，点击重试",
+    "treeTruncated": "仅显示前面的条目",
+    "aria": "会话工作台",
+    "panes": "窗格",
+    "tabAria": "分组：{{title}}",
+    "panesInTab": "{{title}} 中的窗格",
+    "collapseTabGroup": "折叠 {{title}} 中的窗格",
+    "expandTabGroup": "展开 {{title}} 中的窗格",
+    "dropPane": "将 {{pane}} 移入 {{tab}}",
+    "createGroup": "创建分组",
+    "moveTo": "移动到",
+    "renameGroupTitle": "重命名分组",
+    "renameGroupDescription": "为这个分组命名。",
+    "renameGroupPlaceholder": "分组名称",
+    "dissolveTab": "解散分组",
+    "layout": "窗格布局",
+    "addPane": "添加窗格",
+    "paneLimit": "最多 {{count}} 个窗格",
+    "deleteConversations": "删除所有对话",
+    "movePane": "移动 {{title}} 窗格",
+    "movePaneHint": "拖动换位 · 也可以使用方向键",
+    "resizePaneBoundary": "调整窗格边界 {{index}}",
+    "promotePane": "将 {{title}} 设为主窗格",
+    "paneActions": "{{title}} 窗格操作",
+    "detachPane": "移出",
+    "composerAria": "向 {{title}} 发送消息",
+    "layouts": {
+      "columns": "列布局",
+      "rows": "行布局",
+      "grid": "网格",
+      "bsp": "BSP",
+      "main-stack": "主窗格与堆栈"
+    }
   },
   "thread": {
     "activity": {
@@ -1544,6 +1592,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "添加",
+        "add": "添加",
+        "files": "文件和文件夹",
+        "filesDesc": "为这条消息上传图片或文件",
+        "project": "在项目中工作",
+        "projectDesc": "为当前会话选择一个项目文件夹",
+        "goal": "目标",
+        "goalDesc": "将这条请求作为长期目标持续推进",
+        "plan": "计划模式",
+        "planDesc": "先产出执行计划，再开始动手",
+        "draw": "绘图",
+        "drawDesc": "使用 image-generation 技能生成图片",
+        "skills": "技能",
+        "noSkills": "未安装技能",
+        "plugins": "插件",
+        "noPlugins": "未安装插件",
+        "mcp": "MCP",
+        "noMcp": "未配置 MCP 服务",
+        "agents": "智能体",
+        "noAgents": "暂无可用智能体",
+        "agentInsert": "让智能体「{{name}}」完成这个任务："
+      },
       "placeholderThread": "输入消息…",
       "placeholderHero": "问任何问题...",
       "placeholderOpening": "正在打开新话题…",
@@ -1890,39 +1961,6 @@
     "copy": "复制",
     "copied": "已复制"
   },
-  "workbench": {
-    "aria": "会话工作台",
-    "panes": "窗格",
-    "tabAria": "分组：{{title}}",
-    "panesInTab": "{{title}} 中的窗格",
-    "collapseTabGroup": "折叠 {{title}} 中的窗格",
-    "expandTabGroup": "展开 {{title}} 中的窗格",
-    "dropPane": "将 {{pane}} 移入 {{tab}}",
-    "createGroup": "创建分组",
-    "moveTo": "移动到",
-    "renameGroupTitle": "重命名分组",
-    "renameGroupDescription": "为这个分组命名。",
-    "renameGroupPlaceholder": "分组名称",
-    "dissolveTab": "解散分组",
-    "layout": "窗格布局",
-    "addPane": "添加窗格",
-    "paneLimit": "最多 {{count}} 个窗格",
-    "deleteConversations": "删除所有对话",
-    "movePane": "移动 {{title}} 窗格",
-    "movePaneHint": "拖动换位 · 也可以使用方向键",
-    "resizePaneBoundary": "调整窗格边界 {{index}}",
-    "promotePane": "将 {{title}} 设为主窗格",
-    "paneActions": "{{title}} 窗格操作",
-    "detachPane": "移出",
-    "composerAria": "向 {{title}} 发送消息",
-    "layouts": {
-      "columns": "列布局",
-      "rows": "行布局",
-      "grid": "网格",
-      "bsp": "BSP",
-      "main-stack": "主窗格与堆栈"
-    }
-  },
   "common": {
     "dismiss": "关闭",
     "close": "关闭",
@@ -1956,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "默认工作区",
+      "clickToAdd": "点击添加文件夹",
+      "changeFolder": "更换文件夹",
+      "picking": "正在选择…",
+      "projectName": "项目名称",
+      "create": "创建",
+      "cancel": "取消",
+      "defaultProject": "默认工作区（不关联项目）",
       "manual": "粘贴路径",
       "manualPlaceholder": "/Users/name/project",
       "usePath": "使用路径",

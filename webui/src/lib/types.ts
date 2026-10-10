@@ -457,6 +457,13 @@ export interface SidebarViewState {
   sort: SidebarSortMode;
 }
 
+export interface SidebarProjectEntry {
+  key: string;
+  path: string;
+  name: string;
+  added_at?: string;
+}
+
 export interface SidebarStatePayload {
   schema_version: number;
   pinned_keys: string[];
@@ -464,6 +471,9 @@ export interface SidebarStatePayload {
   session_order: string[];
   title_overrides: Record<string, string>;
   project_name_overrides: Record<string, string>;
+  pinned_project_keys: string[];
+  hidden_project_keys: string[];
+  project_entries: SidebarProjectEntry[];
   tags_by_key: Record<string, string[]>;
   collapsed_groups: Record<string, boolean>;
   workbench: WorkbenchState;
@@ -1570,6 +1580,23 @@ export interface FilePreviewPayload {
   language: string;
   content: string;
   size: number;
+  truncated: boolean;
+}
+
+export interface SessionDirectoryEntry {
+  name: string;
+  path: string;
+  display_path: string;
+  is_dir: boolean;
+  size: number;
+}
+
+export interface SessionDirectoryPayload {
+  path: string;
+  display_path: string;
+  project_path: string;
+  parent_path: string | null;
+  entries: SessionDirectoryEntry[];
   truncated: boolean;
 }
 

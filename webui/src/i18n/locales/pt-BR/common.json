@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "Navegação da barra lateral",
     "collapse": "Recolher barra lateral",
-    "newChat": "Novo tópico",
+    "home": "Início",
+    "newChat": "Novo chat",
     "searchAria": "Buscar",
     "searchPlaceholder": "Buscar",
     "searchResults": "Resultados",
@@ -229,7 +230,8 @@
       "transcriptionProviderStatus": "Status do provedor",
       "transcriptionModel": "Modelo",
       "transcriptionLanguage": "Idioma",
-      "voiceLimits": "Limites"
+      "voiceLimits": "Limites",
+      "workspacePathHint": "Chats sem projeto usam esta pasta. As pastas de projeto ficam em Projetos na barra lateral."
     },
     "help": {
       "theme": "Alterna entre aparência clara e escura.",
@@ -463,7 +465,8 @@
       "restartingEngine": "Reiniciando",
       "checking": "Verificando",
       "running": "Em execução",
-      "needsSetup": "Requer configuração"
+      "needsSetup": "Requer configuração",
+      "workspaceSettings": "Configurações do espaço de trabalho"
     },
     "status": {
       "loading": "Carregando configurações...",
@@ -547,7 +550,7 @@
       "webSearch": "Busca na web",
       "imageGeneration": "Geração de imagens",
       "voiceInput": "Entrada de voz",
-      "workspace": "Espaço de trabalho"
+      "workspace": "Espaço de trabalho padrão"
     },
     "usage": {
       "title": "Atividade de tokens",
@@ -1344,6 +1347,7 @@
     "showMore": "Mostrar mais {{count}}",
     "collapsed": "{{count}} tópicos ocultos",
     "showLess": "Mostrar menos",
+    "expandGroup": "Expandir",
     "actions": "Ações do tópico {{title}}",
     "newInProject": "Iniciar um novo tópico em {{project}}",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "Excluir",
     "newChat": "Novo tópico",
     "groups": {
+      "newChatInProject": "Novo chat no projeto",
+      "reveal": "Mostrar no gerenciador de arquivos",
+      "removeProject": "Remover projeto",
       "pinned": "Fixadas",
       "all": "Tópicos",
       "projects": "Projetos",
+      "addProject": "Adicionar projeto",
       "today": "Hoje",
       "yesterday": "Ontem",
       "earlier": "Anteriores",
-      "archived": "Arquivadas"
+      "archived": "Arquivadas",
+      "emptyProject": "Nenhum chat ainda",
+      "toggleProjects": "Mostrar ou ocultar projetos",
+      "projectsHint": "Cada projeto é uma pasta neste computador."
     }
   },
   "deleteConfirm": {
@@ -1417,6 +1428,11 @@
     "error": "Erro de conexão"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "Ver detalhes",
+      "hideDetails": "Ocultar",
+      "sourceCount": "{{count}} fontes"
+    },
     "compaction": {
       "cancelled": "Compactação do contexto cancelada",
       "empty": "Não há contexto para compactar.",
@@ -1518,6 +1534,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "Adicionar",
+        "add": "Adicionar",
+        "files": "Arquivos e pastas",
+        "filesDesc": "Anexar imagens ou arquivos a esta mensagem",
+        "project": "Trabalhar em um projeto",
+        "projectDesc": "Escolher uma pasta para esta conversa",
+        "goal": "Objetivo",
+        "goalDesc": "Tratar esta solicitação como um objetivo de longo prazo",
+        "plan": "Modo plano",
+        "planDesc": "Solicitar um plano de execução antes de trabalhar",
+        "draw": "Desenho",
+        "drawDesc": "Gerar uma imagem com a skill image-generation",
+        "skills": "Habilidades",
+        "noSkills": "Nenhuma habilidade instalada",
+        "plugins": "Plugins",
+        "noPlugins": "Nenhum plugin instalado",
+        "mcp": "MCP",
+        "noMcp": "Nenhum servidor MCP configurado",
+        "agents": "Agentes",
+        "noAgents": "Nenhum agente disponível",
+        "agentInsert": "Execute isto com o agente \"{{name}}\": "
+      },
       "placeholderThread": "Digite sua mensagem…",
       "placeholderHero": "Pergunte qualquer coisa...",
       "placeholderOpening": "Abrindo um novo tópico…",
@@ -1539,6 +1578,28 @@
       "chooseAI": "Escolha sua IA",
       "switchModel": "Alternar o modelo desta conversa",
       "manageModels": "Gerenciar modelos",
+      "reasoningEffort": "Esforço de raciocínio",
+      "effort": {
+        "default": "Padrão",
+        "low": "Baixo",
+        "medium": "Médio",
+        "high": "Alto",
+        "xhigh": "Muito alto",
+        "max": "Máximo",
+        "adaptive": "Adaptativo"
+      },
+      "runtime": {
+        "thisComputer": "Este computador",
+        "title": "Ambiente de execução",
+        "aria": "Ambiente de execução",
+        "host": "Nome do host",
+        "gateway": "Gateway",
+        "sandbox": "Sandbox",
+        "access": "Acesso",
+        "unknown": "Desconhecido",
+        "enforced": "Isolamento aplicado",
+        "notEnforced": "Isolamento não aplicado"
+      },
       "context": {
         "tooltip": "Contexto {{percent}}%",
         "detailsLabel": "Abrir uso do contexto",
@@ -1820,6 +1881,12 @@
     "next": "Próxima imagem",
     "close": "Fechar pré-visualização"
   },
+  "askQuestion": {
+    "recommended": "Recomendado",
+    "otherPlaceholder": "Digitar outra resposta",
+    "noPreference": "Sem preferência",
+    "submit": "Enviar resposta"
+  },
   "filePreview": {
     "aria": "Pré-visualização de arquivo",
     "breadcrumb": "Caminho do arquivo",
@@ -1837,6 +1904,31 @@
     "copied": "Copiado"
   },
   "workbench": {
+    "title": "Bancada de trabalho",
+    "open": "Abrir a bancada de trabalho",
+    "collapse": "Recolher a bancada de trabalho",
+    "updatedAt": "Atualizado {{time}}",
+    "overview": "Visão geral",
+    "emptyOverview": "Ainda não há resumo",
+    "environment": "Ambiente",
+    "local": "Local",
+    "fullAccess": "Acesso total",
+    "restrictedAccess": "Restrito",
+    "files": "arquivos",
+    "commitPush": "Commit ou push",
+    "commitPushHint": "Disponível com a API somente leitura da bancada",
+    "integrations": "Habilidades e MCP",
+    "emptyIntegrations": "Nenhum MCP/CLI usado nesta sessão",
+    "outputs": "Saídas",
+    "emptyOutputs": "Ainda não há arquivos alterados",
+    "sources": "Fontes",
+    "emptySources": "Ainda não há fontes da web",
+    "fileTree": "Arquivos",
+    "treeLoading": "Carregando…",
+    "treeEmpty": "O projeto está vazio",
+    "treeEmptyFolder": "Pasta vazia",
+    "treeRetry": "Não foi possível ler esta pasta — tentar novamente",
+    "treeTruncated": "Mostrando apenas os primeiros itens",
     "aria": "Área de conversas",
     "panes": "Painéis",
     "tabAria": "Grupo: {{title}}",
@@ -1902,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "Espaço de trabalho padrão",
+      "clickToAdd": "Clique para adicionar uma pasta",
+      "changeFolder": "Alterar pasta",
+      "picking": "Escolhendo...",
+      "projectName": "Nome do projeto",
+      "create": "Criar",
+      "cancel": "Cancelar",
+      "defaultProject": "Espaço de trabalho padrão (sem projeto)",
       "manual": "Colar caminho",
       "manualPlaceholder": "/Users/nome/projeto",
       "usePath": "Usar caminho",

@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "Navigation de la barre latérale",
     "collapse": "Réduire la barre latérale",
-    "newChat": "Nouveau sujet",
+    "home": "Accueil",
+    "newChat": "Nouvelle discussion",
     "searchAria": "Rechercher",
     "searchPlaceholder": "Rechercher",
     "searchResults": "Résultats",
@@ -176,7 +177,8 @@
       "transcriptionProviderStatus": "État du fournisseur",
       "transcriptionModel": "Modèle",
       "transcriptionLanguage": "Langue",
-      "voiceLimits": "Limites"
+      "voiceLimits": "Limites",
+      "workspacePathHint": "Les discussions sans projet utilisent ce dossier. Les dossiers de projet sont dans Projets de la barre latérale."
     },
     "help": {
       "theme": "Basculer entre l’apparence claire et sombre.",
@@ -251,7 +253,8 @@
       "restartingEngine": "Redémarrage",
       "checking": "Vérification",
       "running": "En cours",
-      "needsSetup": "Configuration requise"
+      "needsSetup": "Configuration requise",
+      "workspaceSettings": "Paramètres de l'espace de travail"
     },
     "status": {
       "loading": "Chargement des réglages...",
@@ -335,7 +338,7 @@
       "webSearch": "Recherche web",
       "imageGeneration": "Génération d’images",
       "voiceInput": "Saisie vocale",
-      "workspace": "Espace de travail"
+      "workspace": "Espace de travail par défaut"
     },
     "usage": {
       "title": "Activité des tokens",
@@ -1344,6 +1347,7 @@
     "showMore": "Afficher {{count}} de plus",
     "collapsed": "{{count}} sujets masqués",
     "showLess": "Afficher moins",
+    "expandGroup": "Développer",
     "actions": "Actions du sujet {{title}}",
     "newInProject": "Démarrer un nouveau sujet dans {{project}}",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "Supprimer",
     "newChat": "Nouveau sujet",
     "groups": {
+      "newChatInProject": "Nouvelle discussion dans le projet",
+      "reveal": "Afficher dans l'explorateur de fichiers",
+      "removeProject": "Retirer le projet",
       "pinned": "Épinglés",
       "all": "Sujets",
       "projects": "Projets",
+      "addProject": "Ajouter un projet",
       "today": "Aujourd’hui",
       "yesterday": "Hier",
       "earlier": "Plus anciens",
-      "archived": "Archivés"
+      "archived": "Archivés",
+      "emptyProject": "Aucune discussion pour le moment",
+      "toggleProjects": "Afficher ou masquer les projets",
+      "projectsHint": "Chaque projet est un dossier de cet ordinateur."
     }
   },
   "deleteConfirm": {
@@ -1417,6 +1428,11 @@
     "error": "Erreur de connexion"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "Voir les détails",
+      "hideDetails": "Masquer",
+      "sourceCount": "{{count}} sources"
+    },
     "compaction": {
       "cancelled": "Compression du contexte annulée",
       "empty": "Aucun contexte à compresser.",
@@ -1518,6 +1534,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "Ajouter",
+        "add": "Ajouter",
+        "files": "Fichiers et dossiers",
+        "filesDesc": "Joindre des images ou fichiers à ce message",
+        "project": "Travailler dans un projet",
+        "projectDesc": "Choisir un dossier pour cette conversation",
+        "goal": "Objectif",
+        "goalDesc": "Traiter cette demande comme un objectif de longue durée",
+        "plan": "Mode plan",
+        "planDesc": "Demander un plan d'exécution avant de travailler",
+        "draw": "Dessin",
+        "drawDesc": "Générer une image avec la compétence image-generation",
+        "skills": "Compétences",
+        "noSkills": "Aucune compétence installée",
+        "plugins": "Extensions",
+        "noPlugins": "Aucune extension installée",
+        "mcp": "MCP",
+        "noMcp": "Aucun serveur MCP configuré",
+        "agents": "Agents",
+        "noAgents": "Aucun agent disponible",
+        "agentInsert": "Exécuter ceci avec l'agent « {{name}} » : "
+      },
       "placeholderThread": "Saisissez votre message…",
       "placeholderHero": "Qu’avez-vous en tête ?",
       "placeholderOpening": "Ouverture d’un nouveau sujet…",
@@ -1539,6 +1578,28 @@
       "chooseAI": "Choisissez votre IA",
       "switchModel": "Changer le modèle de cette conversation",
       "manageModels": "Gérer les modèles",
+      "reasoningEffort": "Effort de raisonnement",
+      "effort": {
+        "default": "Par défaut",
+        "low": "Faible",
+        "medium": "Moyen",
+        "high": "Élevé",
+        "xhigh": "Très élevé",
+        "max": "Maximal",
+        "adaptive": "Adaptatif"
+      },
+      "runtime": {
+        "thisComputer": "Cet ordinateur",
+        "title": "Environnement d'exécution",
+        "aria": "Environnement d'exécution",
+        "host": "Nom d'hôte",
+        "gateway": "Passerelle",
+        "sandbox": "Bac à sable",
+        "access": "Accès",
+        "unknown": "Inconnu",
+        "enforced": "Isolation appliquée",
+        "notEnforced": "Isolation non appliquée"
+      },
       "context": {
         "tooltip": "Contexte {{percent}} %",
         "detailsLabel": "Ouvrir l’utilisation du contexte",
@@ -1820,6 +1881,12 @@
     "next": "Image suivante",
     "close": "Fermer l’aperçu"
   },
+  "askQuestion": {
+    "recommended": "Recommandé",
+    "otherPlaceholder": "Saisir une autre réponse",
+    "noPreference": "Aucune préférence",
+    "submit": "Envoyer la réponse"
+  },
   "filePreview": {
     "aria": "Aperçu du fichier",
     "breadcrumb": "Chemin du fichier",
@@ -1837,6 +1904,31 @@
     "copied": "Copié"
   },
   "workbench": {
+    "title": "Espace de travail",
+    "open": "Ouvrir l’espace de travail",
+    "collapse": "Réduire l’espace de travail",
+    "updatedAt": "Mis à jour {{time}}",
+    "overview": "Aperçu",
+    "emptyOverview": "Pas encore de résumé",
+    "environment": "Environnement",
+    "local": "Local",
+    "fullAccess": "Accès complet",
+    "restrictedAccess": "Restreint",
+    "files": "fichiers",
+    "commitPush": "Commit ou push",
+    "commitPushHint": "Disponible avec l’API en lecture seule de l’espace de travail",
+    "integrations": "Compétences et MCP",
+    "emptyIntegrations": "Aucun MCP/CLI utilisé dans cette session",
+    "outputs": "Sorties",
+    "emptyOutputs": "Aucun fichier modifié pour le moment",
+    "sources": "Sources",
+    "emptySources": "Aucune source web pour le moment",
+    "fileTree": "Fichiers",
+    "treeLoading": "Chargement…",
+    "treeEmpty": "Le projet est vide",
+    "treeEmptyFolder": "Dossier vide",
+    "treeRetry": "Impossible de lire ce dossier — réessayer",
+    "treeTruncated": "Seuls les premiers éléments sont affichés",
     "aria": "Espace de conversations",
     "panes": "Volets",
     "tabAria": "Groupe : {{title}}",
@@ -1902,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "Espace de travail par défaut",
+      "clickToAdd": "Cliquez pour ajouter un dossier",
+      "changeFolder": "Changer de dossier",
+      "picking": "Selection en cours...",
+      "projectName": "Nom du projet",
+      "create": "Creer",
+      "cancel": "Annuler",
+      "defaultProject": "Espace de travail par défaut (sans projet)",
       "manual": "Coller un chemin",
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Utiliser le chemin",

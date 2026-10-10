@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "Sidebar navigation",
     "collapse": "Collapse sidebar",
-    "newChat": "New topic",
+    "home": "Home",
+    "newChat": "New chat",
     "searchAria": "Search",
     "searchPlaceholder": "Search",
     "searchResults": "Results",
@@ -391,7 +392,8 @@
       "transcriptionProviderStatus": "Provider status",
       "transcriptionModel": "Model",
       "transcriptionLanguage": "Language",
-      "voiceLimits": "Limits"
+      "voiceLimits": "Limits",
+      "workspacePathHint": "Chats without a project use this folder. Project folders live under Projects in the sidebar."
     },
     "help": {
       "theme": "Switch between light and dark appearance.",
@@ -625,7 +627,8 @@
       "restartingEngine": "Restarting",
       "checking": "Checking",
       "running": "Running",
-      "needsSetup": "Needs setup"
+      "needsSetup": "Needs setup",
+      "workspaceSettings": "Workspace settings"
     },
     "status": {
       "loading": "Loading settings...",
@@ -709,7 +712,7 @@
       "webSearch": "Web search",
       "imageGeneration": "Image generation",
       "voiceInput": "Voice input",
-      "workspace": "Workspace"
+      "workspace": "Default workspace"
     },
     "usage": {
       "title": "Token activity",
@@ -1344,6 +1347,7 @@
     "showMore": "Show {{count}} more",
     "collapsed": "{{count}} hidden topics",
     "showLess": "Show less",
+    "expandGroup": "Expand",
     "actions": "Topic actions for {{title}}",
     "newInProject": "Start a new topic in {{project}}",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "Delete",
     "newChat": "New topic",
     "groups": {
+      "newChatInProject": "New chat in project",
+      "reveal": "Reveal in file manager",
+      "removeProject": "Remove project",
       "pinned": "Pinned",
       "all": "Topics",
       "projects": "Projects",
+      "addProject": "Add project",
       "today": "Today",
       "yesterday": "Yesterday",
       "earlier": "Earlier",
-      "archived": "Archived"
+      "archived": "Archived",
+      "emptyProject": "No chats yet",
+      "toggleProjects": "Toggle projects",
+      "projectsHint": "Each project is a folder on this computer."
     }
   },
   "deleteConfirm": {
@@ -1435,7 +1446,44 @@
     "outputs": "Outputs",
     "emptyOutputs": "No files changed yet",
     "sources": "Sources",
-    "emptySources": "No web sources yet"
+    "emptySources": "No web sources yet",
+    "fileTree": "Files",
+    "treeLoading": "Loading…",
+    "treeEmpty": "This project is empty",
+    "treeEmptyFolder": "Empty",
+    "treeRetry": "Could not read this folder — retry",
+    "treeTruncated": "Showing the first items only",
+    "aria": "Conversation workbench",
+    "panes": "Panes",
+    "tabAria": "Group: {{title}}",
+    "panesInTab": "Panes in {{title}}",
+    "collapseTabGroup": "Collapse panes in {{title}}",
+    "expandTabGroup": "Expand panes in {{title}}",
+    "dropPane": "Move {{pane}} into {{tab}}",
+    "createGroup": "Create group",
+    "moveTo": "Move to",
+    "renameGroupTitle": "Rename group",
+    "renameGroupDescription": "Give this group a name.",
+    "renameGroupPlaceholder": "Group name",
+    "dissolveTab": "Dissolve group",
+    "layout": "Pane layout",
+    "addPane": "Add pane",
+    "paneLimit": "Maximum {{count}} panes",
+    "deleteConversations": "Delete all chats",
+    "movePane": "Move {{title}} pane",
+    "movePaneHint": "Drag to move · Arrow keys also work",
+    "resizePaneBoundary": "Resize pane boundary {{index}}",
+    "promotePane": "Make {{title}} the primary pane",
+    "paneActions": "{{title}} pane actions",
+    "detachPane": "Remove",
+    "composerAria": "Message {{title}}",
+    "layouts": {
+      "columns": "Columns",
+      "rows": "Rows",
+      "grid": "Grid",
+      "bsp": "BSP",
+      "main-stack": "Main and stack"
+    }
   },
   "thread": {
     "activity": {
@@ -1544,6 +1592,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "Add",
+        "add": "Add",
+        "files": "Files and folders",
+        "filesDesc": "Attach images or files to this message",
+        "project": "Work in a project",
+        "projectDesc": "Pick a folder for this conversation",
+        "goal": "Goal",
+        "goalDesc": "Treat this request as a long-running goal",
+        "plan": "Plan mode",
+        "planDesc": "Ask for an execution plan before doing the work",
+        "draw": "Draw",
+        "drawDesc": "Generate an image with the image-generation skill",
+        "skills": "Skills",
+        "noSkills": "No skills installed",
+        "plugins": "Plugins",
+        "noPlugins": "No plugins installed",
+        "mcp": "MCP",
+        "noMcp": "No MCP servers configured",
+        "agents": "Agents",
+        "noAgents": "No agents available",
+        "agentInsert": "Run this with the agent \"{{name}}\": "
+      },
       "placeholderThread": "Type your message…",
       "placeholderHero": "Ask anything...",
       "placeholderOpening": "Opening a new topic…",
@@ -1567,7 +1638,13 @@
       "manageModels": "Manage models",
       "reasoningEffort": "Reasoning effort",
       "effort": {
-        "default": "Default"
+        "default": "Default",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max",
+        "adaptive": "Adaptive"
       },
       "runtime": {
         "thisComputer": "This computer",
@@ -1884,39 +1961,6 @@
     "copy": "Copy",
     "copied": "Copied"
   },
-  "workbench": {
-    "aria": "Conversation workbench",
-    "panes": "Panes",
-    "tabAria": "Group: {{title}}",
-    "panesInTab": "Panes in {{title}}",
-    "collapseTabGroup": "Collapse panes in {{title}}",
-    "expandTabGroup": "Expand panes in {{title}}",
-    "dropPane": "Move {{pane}} into {{tab}}",
-    "createGroup": "Create group",
-    "moveTo": "Move to",
-    "renameGroupTitle": "Rename group",
-    "renameGroupDescription": "Give this group a name.",
-    "renameGroupPlaceholder": "Group name",
-    "dissolveTab": "Dissolve group",
-    "layout": "Pane layout",
-    "addPane": "Add pane",
-    "paneLimit": "Maximum {{count}} panes",
-    "deleteConversations": "Delete all chats",
-    "movePane": "Move {{title}} pane",
-    "movePaneHint": "Drag to move · Arrow keys also work",
-    "resizePaneBoundary": "Resize pane boundary {{index}}",
-    "promotePane": "Make {{title}} the primary pane",
-    "paneActions": "{{title}} pane actions",
-    "detachPane": "Remove",
-    "composerAria": "Message {{title}}",
-    "layouts": {
-      "columns": "Columns",
-      "rows": "Rows",
-      "grid": "Grid",
-      "bsp": "BSP",
-      "main-stack": "Main and stack"
-    }
-  },
   "common": {
     "dismiss": "Dismiss",
     "close": "Close",
@@ -1950,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "Default workspace",
+      "clickToAdd": "Click to add a folder",
+      "changeFolder": "Change folder",
+      "picking": "Choosing...",
+      "projectName": "Project name",
+      "create": "Create",
+      "cancel": "Cancel",
+      "defaultProject": "Default workspace (no project)",
       "manual": "Paste path",
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Use Path",

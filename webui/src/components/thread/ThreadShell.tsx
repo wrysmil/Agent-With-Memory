@@ -2,16 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { PanelRightOpen } from "lucide-react";
+import { PanelRight } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { FilePreviewAvailabilityProvider } from "@/components/FilePreviewAvailabilityContext";
 import { FilePreviewPanel } from "@/components/FilePreviewPanel";
 import { SessionHandleLabel } from "@/components/SessionHandleLabel";
 import { SessionWorkbench } from "@/components/workbench/SessionWorkbench";
 import { deriveSessionWorkbench } from "@/components/workbench/session-workbench-model";
-import { PromptNavigator } from "@/components/thread/PromptNavigator";
 import { RecoveryNotice } from "@/components/thread/RecoveryNotice";
-import { SessionInfoPopover } from "@/components/thread/SessionInfoPopover";
 import { AskQuestionCard } from "@/components/thread/AskQuestionCard";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThreadStatusBar } from "@/components/thread/ThreadStatusBar";
@@ -33,6 +32,8 @@ import {
   fetchSettings,
   listSlashCommands,
 } from "@/lib/api";
+import { listAgents } from "@/lib/agents/api";
+import type { AgentProfile } from "@/lib/agents/types";
 import {
   CLI_APPS_CHANGED_EVENT,
   installedCliAppsFromPayload,
@@ -45,7 +46,6 @@ import {
 } from "@/lib/mcp-preset-events";
 import type { CanonicalRunSnapshot, StreamError } from "@/lib/nanobot-client";
 import { inferProviderFromModelName, providerDisplayLabel } from "@/lib/provider-brand";
-import { cn } from "@/lib/utils";
 import type {
   ChatSummary,
   RoundUsage,
@@ -427,6 +427,7 @@ interface ThreadShellProps {
   settingsSnapshot?: SettingsPayload | null;
   onOpenModelSettings?: () => void;
   skills?: SkillSummary[];
+  onWorkbenchOpenChange?: (open: boolean) => void;
 }
 
 function toModelBadgeLabel(modelName: string | null): string | null {
@@ -709,7 +710,6 @@ export function ThreadShell({
   onToggleTheme = () => {},
   hideSidebarToggleForHostChrome = false,
   hideSidebarToggle = false,
-  hideThemeButton = false,
   hideHeaderTitle = false,
   inlineHandle = false,
   hideHeader = false,
@@ -730,6 +730,7 @@ export function ThreadShell({
   settingsSnapshot = null,
   onOpenModelSettings,
   skills = [],
+  onWorkbenchOpenChange,
 }: ThreadShellProps) {
   const { t } = useTranslation();
   const chatId = session?.chatId ?? null;
@@ -767,6 +768,18 @@ export function ThreadShell({
   const [fallbackModelName, setFallbackModelName] = useState<string | null>(null);
   const [booting, setBooting] = useState(false);
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
+  const [composerAgents, setComposerAgents] = useState<AgentProfile[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listAgents(getToken())
+      .then((response) => {
+        if (alive) setComposerAgents(response.agents.filter((agent) => !agent.hidden));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [getToken]);
   const cliApps = useInstalledSettingItems({
     getToken,
     eventName: CLI_APPS_CHANGED_EVENT,
@@ -1648,6 +1661,7 @@ export function ThreadShell({
           mcpPresets={mcpPresets}
           sessions={mentionSessions}
           skills={skills}
+          agents={composerAgents}
           onStop={stop}
           onTranscribeAudio={transcribeAudio}
           goalState={currentGoalState}
@@ -1702,6 +1716,7 @@ export function ThreadShell({
           mcpPresets={mcpPresets}
           sessions={mentionSessions}
           skills={skills}
+          agents={composerAgents}
           surfaceRef={composerSurfaceRef}
           onTranscribeAudio={transcribeAudio}
           goalState={currentGoalState}
@@ -1732,16 +1747,6 @@ export function ThreadShell({
       <HeroGreeting text={t(heroGreetingKey)} />
     </div>
   );
-  const sessionInfoAction = historyKey ? (
-    <SessionInfoPopover sessionKey={historyKey} token={token} title={title} />
-  ) : undefined;
-  const promptNavigatorAction = historyKey ? (
-    <PromptNavigator
-      messages={displayMessages}
-      onJumpToPrompt={(promptId) => viewportRef.current?.jumpToUserPrompt(promptId)}
-    />
-  ) : undefined;
-
   useEffect(() => {
     try {
       window.localStorage.setItem("mira.workbench.open", workbenchOpen ? "1" : "0");
@@ -1750,10 +1755,35 @@ export function ThreadShell({
     }
   }, [workbenchOpen]);
 
+  const onWorkbenchOpenChangeRef = useRef(onWorkbenchOpenChange);
+  onWorkbenchOpenChangeRef.current = onWorkbenchOpenChange;
+  useEffect(() => {
+    onWorkbenchOpenChangeRef.current?.(workbenchOpen);
+    return () => {
+      onWorkbenchOpenChangeRef.current?.(false);
+    };
+  }, [workbenchOpen]);
+
   const workbenchModel = useMemo(
     () => deriveSessionWorkbench(displayMessages, workspaceScope),
     [displayMessages, workspaceScope],
   );
+
+  const workbenchAction = session ? (
+    <Button
+      variant="ghost"
+      size="icon"
+      type="button"
+      aria-label={t("workbench.open", { defaultValue: "Open workbench" })}
+      aria-pressed={workbenchOpen}
+      onClick={() => setWorkbenchOpen((open) => !open)}
+      className={`host-no-drag h-8 w-8 shrink-0 rounded-full text-muted-foreground/85 hover:bg-accent/40 hover:text-foreground ${
+        workbenchOpen ? "bg-accent/40 text-foreground" : ""
+      }`}
+    >
+      <PanelRight className="h-4 w-4" />
+    </Button>
+  ) : null;
 
   const threadHeader = !hideHeader ? (
     <ThreadHeader
@@ -1764,12 +1794,11 @@ export function ThreadShell({
       onToggleTheme={onToggleTheme}
       hideSidebarToggleForHostChrome={hideSidebarToggleForHostChrome}
       hideSidebarToggle={hideSidebarToggle}
-      hideThemeButton={hideThemeButton}
+      hideThemeButton
       hideTitle={hideHeaderTitle}
       actions={headerActions}
+      workbenchAction={workbenchAction}
       minimal={!session && !loading}
-      promptNavigatorAction={promptNavigatorAction}
-      sessionInfoAction={sessionInfoAction}
       temporaryChatEnabled={temporaryChatEnabled}
       temporaryChatDisabled={booting || turnActive}
       onTemporaryChatEnabledChange={
@@ -1838,23 +1867,10 @@ export function ThreadShell({
           model={workbenchModel}
           onOpenFilePreview={historyKey ? handleOpenFilePreview : undefined}
           onCollapse={() => setWorkbenchOpen(false)}
+          sessionKey={historyKey ?? null}
+          getToken={getToken}
         />
-      ) : (
-        <button
-          type="button"
-          data-testid="session-workbench-open"
-          aria-label={t("workbench.open", { defaultValue: "Open workbench" })}
-          title={t("workbench.open", { defaultValue: "Open workbench" })}
-          onClick={() => setWorkbenchOpen(true)}
-          className={cn(
-            "absolute right-2 top-11 z-20 grid h-7 w-7 place-items-center rounded-control",
-            "border border-border/60 bg-background/90 text-muted-foreground/80 shadow-sm",
-            "hover:bg-muted/60 hover:text-foreground",
-          )}
-        >
-          <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
-        </button>
-      )}
+      ) : null}
       {headerPortalTarget && headerActive
         ? createPortal(threadHeader, headerPortalTarget)
         : null}

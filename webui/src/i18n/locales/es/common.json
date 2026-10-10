@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "Navegación de la barra lateral",
     "collapse": "Contraer barra lateral",
-    "newChat": "Nuevo tema",
+    "home": "Inicio",
+    "newChat": "Nueva conversación",
     "searchAria": "Buscar",
     "searchPlaceholder": "Buscar",
     "searchResults": "Resultados",
@@ -176,7 +177,8 @@
       "transcriptionProviderStatus": "Estado del proveedor de transcripción",
       "transcriptionModel": "Modelo",
       "transcriptionLanguage": "Idioma",
-      "voiceLimits": "Límites"
+      "voiceLimits": "Límites",
+      "workspacePathHint": "Los chats sin proyecto usan esta carpeta. Las carpetas de proyecto están en Proyectos de la barra lateral."
     },
     "help": {
       "theme": "Cambia entre apariencia clara y oscura.",
@@ -251,7 +253,8 @@
       "restartingEngine": "Reiniciando",
       "checking": "Comprobando",
       "running": "En ejecución",
-      "needsSetup": "Requiere configuración"
+      "needsSetup": "Requiere configuración",
+      "workspaceSettings": "Ajustes del espacio de trabajo"
     },
     "status": {
       "loading": "Cargando ajustes...",
@@ -335,7 +338,7 @@
       "webSearch": "Búsqueda web",
       "imageGeneration": "Generación de imágenes",
       "voiceInput": "Entrada de voz",
-      "workspace": "Espacio de trabajo"
+      "workspace": "Espacio de trabajo predeterminado"
     },
     "usage": {
       "title": "Actividad de tokens",
@@ -1344,6 +1347,7 @@
     "showMore": "Mostrar {{count}} más",
     "collapsed": "{{count}} temas ocultos",
     "showLess": "Mostrar menos",
+    "expandGroup": "Expandir",
     "actions": "Acciones del tema {{title}}",
     "newInProject": "Iniciar un tema nuevo en {{project}}",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "Eliminar",
     "newChat": "Nuevo tema",
     "groups": {
+      "newChatInProject": "Nuevo chat en el proyecto",
+      "reveal": "Mostrar en el explorador de archivos",
+      "removeProject": "Quitar proyecto",
       "pinned": "Fijados",
       "all": "Temas",
       "projects": "Proyectos",
+      "addProject": "Añadir proyecto",
       "today": "Hoy",
       "yesterday": "Ayer",
       "earlier": "Anteriores",
-      "archived": "Archivados"
+      "archived": "Archivados",
+      "emptyProject": "Aún no hay chats",
+      "toggleProjects": "Mostrar u ocultar proyectos",
+      "projectsHint": "Cada proyecto es una carpeta de este equipo."
     }
   },
   "deleteConfirm": {
@@ -1417,6 +1428,11 @@
     "error": "Error de conexión"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "Ver detalles",
+      "hideDetails": "Ocultar",
+      "sourceCount": "{{count}} fuentes"
+    },
     "compaction": {
       "cancelled": "Compresión de contexto cancelada",
       "empty": "No hay contexto que comprimir.",
@@ -1518,6 +1534,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "Añadir",
+        "add": "Añadir",
+        "files": "Archivos y carpetas",
+        "filesDesc": "Adjuntar imágenes o archivos a este mensaje",
+        "project": "Trabajar en un proyecto",
+        "projectDesc": "Elegir una carpeta para esta conversación",
+        "goal": "Objetivo",
+        "goalDesc": "Tratar esta solicitud como un objetivo de largo plazo",
+        "plan": "Modo plan",
+        "planDesc": "Solicitar un plan de ejecución antes de trabajar",
+        "draw": "Dibujo",
+        "drawDesc": "Generar una imagen con la habilidad image-generation",
+        "skills": "Habilidades",
+        "noSkills": "Sin habilidades instaladas",
+        "plugins": "Complementos",
+        "noPlugins": "Sin complementos instalados",
+        "mcp": "MCP",
+        "noMcp": "Sin servidores MCP configurados",
+        "agents": "Agentes",
+        "noAgents": "Sin agentes disponibles",
+        "agentInsert": "Ejecuta esto con el agente \"{{name}}\": "
+      },
       "placeholderThread": "Escribe tu mensaje…",
       "placeholderHero": "¿Qué tienes en mente?",
       "placeholderOpening": "Abriendo un nuevo tema…",
@@ -1539,6 +1578,28 @@
       "chooseAI": "Elige tu IA",
       "switchModel": "Cambiar el modelo de este chat",
       "manageModels": "Gestionar modelos",
+      "reasoningEffort": "Esfuerzo de razonamiento",
+      "effort": {
+        "default": "Predeterminado",
+        "low": "Bajo",
+        "medium": "Medio",
+        "high": "Alto",
+        "xhigh": "Muy alto",
+        "max": "Máximo",
+        "adaptive": "Adaptativo"
+      },
+      "runtime": {
+        "thisComputer": "Esta computadora",
+        "title": "Entorno de ejecución",
+        "aria": "Entorno de ejecución",
+        "host": "Nombre de host",
+        "gateway": "Puerta de enlace",
+        "sandbox": "Sandbox",
+        "access": "Acceso",
+        "unknown": "Desconocido",
+        "enforced": "Aislamiento aplicado",
+        "notEnforced": "Aislamiento no aplicado"
+      },
       "context": {
         "tooltip": "Contexto {{percent}}%",
         "detailsLabel": "Abrir uso del contexto",
@@ -1820,6 +1881,12 @@
     "next": "Imagen siguiente",
     "close": "Cerrar vista previa"
   },
+  "askQuestion": {
+    "recommended": "Recomendado",
+    "otherPlaceholder": "Escribir otra respuesta",
+    "noPreference": "Sin preferencia",
+    "submit": "Enviar respuesta"
+  },
   "filePreview": {
     "aria": "Vista previa de archivo",
     "breadcrumb": "Ruta del archivo",
@@ -1837,6 +1904,31 @@
     "copied": "Copiado"
   },
   "workbench": {
+    "title": "Panel de trabajo",
+    "open": "Abrir el panel de trabajo",
+    "collapse": "Plegar el panel de trabajo",
+    "updatedAt": "Actualizado {{time}}",
+    "overview": "Resumen",
+    "emptyOverview": "Aún no hay resumen",
+    "environment": "Entorno",
+    "local": "Local",
+    "fullAccess": "Acceso completo",
+    "restrictedAccess": "Restringido",
+    "files": "archivos",
+    "commitPush": "Commit o push",
+    "commitPushHint": "Disponible con la API de solo lectura del panel",
+    "integrations": "Habilidades y MCP",
+    "emptyIntegrations": "No se usó MCP/CLI en esta sesión",
+    "outputs": "Resultados",
+    "emptyOutputs": "Aún no hay archivos modificados",
+    "sources": "Fuentes",
+    "emptySources": "Aún no hay fuentes web",
+    "fileTree": "Archivos",
+    "treeLoading": "Cargando…",
+    "treeEmpty": "El proyecto está vacío",
+    "treeEmptyFolder": "Carpeta vacía",
+    "treeRetry": "No se pudo leer esta carpeta — reintentar",
+    "treeTruncated": "Solo se muestran los primeros elementos",
     "aria": "Área de conversaciones",
     "panes": "Paneles",
     "tabAria": "Grupo: {{title}}",
@@ -1902,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "Espacio de trabajo predeterminado",
+      "clickToAdd": "Haz clic para anadir una carpeta",
+      "changeFolder": "Cambiar carpeta",
+      "picking": "Elegiendo...",
+      "projectName": "Nombre del proyecto",
+      "create": "Crear",
+      "cancel": "Cancelar",
+      "defaultProject": "Espacio de trabajo predeterminado (sin proyecto)",
       "manual": "Pegar ruta",
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Usar ruta",

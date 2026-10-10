@@ -12,10 +12,11 @@ import { Eye, EyeOff, Moon, ShieldCheck, Sun, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { channelUiPresentation } from "@/channel-plugins/registry";
 import { Sidebar } from "@/components/Sidebar";
-import type { SidebarDeleteItem } from "@/components/ChatList";
+import { PROJECTS_SECTION_KEY, type SidebarDeleteItem } from "@/components/ChatList";
 import type { SettingsSectionKey } from "@/components/settings/SettingsView";
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { PaneWorkbench } from "@/components/workbench/PaneWorkbench";
+import { SESSION_WORKBENCH_RAIL_WIDTH } from "@/components/workbench/SessionWorkbench";
 import { WorkbenchTabBar } from "@/components/workbench/WorkbenchTabBar";
 import {
   MAX_WORKBENCH_PANES,
@@ -83,7 +84,11 @@ import {
   isNativeRuntime,
   toRuntimeSurface,
 } from "@/lib/runtime";
-import { projectNameFromPath, scopeWithAccessMode } from "@/lib/workspace";
+import {
+  normalizeWorkspacePath,
+  projectNameFromPath,
+  scopeWithAccessMode,
+} from "@/lib/workspace";
 import {
   createTemporaryChatSession,
   deriveTemporaryChatTitle,
@@ -110,7 +115,7 @@ const RESTART_STARTED_KEY = "nanobot-webui.restartStartedAt";
 const RESTART_ROUTE_KEY = "nanobot-webui.restartRoute";
 const RESTART_ROUTE_TTL_MS = 5 * 60 * 1000;
 const SIDEBAR_WIDTH = 272;
-const SIDEBAR_RAIL_WIDTH = 56;
+const SIDEBAR_RAIL_WIDTH = 48;
 const MOBILE_SIDEBAR_WIDTH = `min(${SIDEBAR_WIDTH}px, calc(100vw - 0.75rem))`;
 const TOKEN_REFRESH_MARGIN_MS = 30_000;
 const TOKEN_REFRESH_MIN_DELAY_MS = 5_000;
@@ -1620,8 +1625,48 @@ function Shell({
       }));
       setWorkspaceError(null);
       setMobileSidebarOpen(false);
+      const projectKey = normalizeWorkspacePath(trimmed);
+      const entryName = projectName || projectNameFromPath(trimmed);
+      void updateSidebarState((current) => {
+        const hiddenKeys = current.hidden_project_keys.filter(
+          (key) => key !== projectKey,
+        );
+        const registered = current.project_entries.some(
+          (entry) => entry.key === projectKey,
+        );
+        const sectionCollapsed = Boolean(current.collapsed_groups[PROJECTS_SECTION_KEY]);
+        if (
+          registered
+          && hiddenKeys.length === current.hidden_project_keys.length
+          && !sectionCollapsed
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          hidden_project_keys: hiddenKeys,
+          // A project the user just created must not stay hidden behind a collapsed section.
+          collapsed_groups: sectionCollapsed
+            ? { ...current.collapsed_groups, [PROJECTS_SECTION_KEY]: false }
+            : current.collapsed_groups,
+          project_entries: registered
+            ? current.project_entries
+            : [...current.project_entries, {
+                key: projectKey,
+                path: trimmed,
+                name: entryName,
+                added_at: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+              }],
+        };
+      });
     },
-    [activeWorkspaceScope, navigate, onNewChat, workspaces?.default_scope],
+    [
+      activeWorkspaceScope,
+      navigate,
+      onNewChat,
+      updateSidebarState,
+      workspaces?.default_scope,
+    ],
   );
 
   const onSelectChat = useCallback(
@@ -1785,6 +1830,38 @@ function Shell({
       });
     },
     [pendingProjectRename, updateSidebarState],
+  );
+
+  const onTogglePinProject = useCallback(
+    (projectKey: string) => {
+      if (!projectKey) return;
+      void updateSidebarState((current) => ({
+        ...current,
+        pinned_project_keys: current.pinned_project_keys.includes(projectKey)
+          ? current.pinned_project_keys.filter((key) => key !== projectKey)
+          : [projectKey, ...current.pinned_project_keys],
+      }));
+    },
+    [updateSidebarState],
+  );
+
+  const onRemoveProject = useCallback(
+    (projectKey: string) => {
+      if (!projectKey) return;
+      void updateSidebarState((current) => ({
+        ...current,
+        hidden_project_keys: current.hidden_project_keys.includes(projectKey)
+          ? current.hidden_project_keys
+          : [...current.hidden_project_keys, projectKey],
+        pinned_project_keys: current.pinned_project_keys.filter(
+          (key) => key !== projectKey,
+        ),
+        project_entries: current.project_entries.filter(
+          (entry) => entry.key !== projectKey,
+        ),
+      }));
+    },
+    [updateSidebarState],
   );
 
   const onToggleArchive = useCallback(
@@ -2315,6 +2392,12 @@ function Shell({
     workbenchPaneSessions,
   ]);
   const renderedActivePaneKey = activeKey ?? renderedWorkbenchPanes[0].key;
+  const [paneWorkbenchOpen, setPaneWorkbenchOpen] = useState<Record<string, boolean>>({});
+  const onPaneWorkbenchOpenChange = useCallback((paneKey: string, open: boolean) => {
+    setPaneWorkbenchOpen((current) => (
+      current[paneKey] === open ? current : { ...current, [paneKey]: open }
+    ));
+  }, []);
   const renderedWorkbenchLayout = paneChromeEnabled && activeTabState
     ? activeTabState.layout
     : "columns";
@@ -2487,6 +2570,8 @@ function Shell({
     onToggleGroup,
     onRequestRenameProject,
     onNewChatInProject,
+    onTogglePinProject,
+    onRemoveProject,
     onOpenSettings,
     onOpenApps,
     onOpenAutomations,
@@ -2506,6 +2591,9 @@ function Shell({
     sessionOrder: sidebarState.session_order,
     titleOverrides: sidebarState.title_overrides,
     projectNameOverrides: sidebarState.project_name_overrides,
+    pinnedProjectKeys: sidebarState.pinned_project_keys,
+    hiddenProjectKeys: sidebarState.hidden_project_keys,
+    projectEntries: sidebarState.project_entries,
     collapsedGroups: sidebarState.collapsed_groups,
     runningChatIds: runningChatIdList,
     updatedChatIds: updatedChatIdList,
@@ -2685,6 +2773,9 @@ function Shell({
                     setWorkbenchSplitRatios(current, activeTabKey, splitRatios)
                   ));
                 }}
+                composerRailInset={paneWorkbenchOpen[renderedActivePaneKey]
+                  ? SESSION_WORKBENCH_RAIL_WIDTH
+                  : undefined}
                 renderPane={(pane, context) => {
                   if (!paneChromeEnabled) {
                     return (
@@ -2777,6 +2868,7 @@ function Shell({
                       settingsSnapshot={settingsSnapshot}
                       onOpenModelSettings={onOpenModelSettings}
                       skills={skills}
+                      onWorkbenchOpenChange={(open) => onPaneWorkbenchOpenChange(pane.key, open)}
                     />
                   );
                 }}

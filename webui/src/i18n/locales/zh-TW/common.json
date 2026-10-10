@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "側邊欄導覽",
     "collapse": "收合側邊欄",
-    "newChat": "新增話題",
+    "home": "首頁",
+    "newChat": "新對話",
     "searchAria": "搜尋",
     "searchPlaceholder": "搜尋",
     "searchResults": "搜尋結果",
@@ -176,7 +177,8 @@
       "transcriptionProviderStatus": "供應商狀態",
       "transcriptionModel": "模型",
       "transcriptionLanguage": "語言",
-      "voiceLimits": "限制"
+      "voiceLimits": "限制",
+      "workspacePathHint": "未選擇專案的對話使用此目錄；專案資料夾在側欄「專案」中單獨管理。"
     },
     "help": {
       "theme": "在淺色與深色外觀之間切換。",
@@ -251,7 +253,8 @@
       "restartingEngine": "正在重新啟動",
       "checking": "檢查中",
       "running": "執行中",
-      "needsSetup": "需要設定"
+      "needsSetup": "需要設定",
+      "workspaceSettings": "工作區設定"
     },
     "status": {
       "loading": "正在載入設定…",
@@ -335,7 +338,7 @@
       "webSearch": "網路搜尋",
       "imageGeneration": "圖片生成",
       "voiceInput": "語音輸入",
-      "workspace": "工作區"
+      "workspace": "預設工作區"
     },
     "usage": {
       "title": "Token 用量",
@@ -1344,6 +1347,7 @@
     "showMore": "再顯示 {{count}} 個",
     "collapsed": "已隱藏 {{count}} 個話題",
     "showLess": "收起",
+    "expandGroup": "展開顯示",
     "actions": "「{{title}}」的話題操作",
     "newInProject": "在 {{project}} 中開始新話題",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "刪除",
     "newChat": "新增話題",
     "groups": {
+      "newChatInProject": "在專案中新增對話",
+      "reveal": "在檔案總管中開啟",
+      "removeProject": "移除專案",
       "pinned": "置頂",
       "all": "話題",
       "projects": "專案",
+      "addProject": "新增專案",
       "today": "今天",
       "yesterday": "昨天",
       "earlier": "更早",
-      "archived": "已封存"
+      "archived": "已封存",
+      "emptyProject": "暫無聊天",
+      "toggleProjects": "摺疊或展開專案",
+      "projectsHint": "每個專案對應本機上的一個資料夾。"
     }
   },
   "deleteConfirm": {
@@ -1417,6 +1428,11 @@
     "error": "連線錯誤"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "檢視詳細資訊",
+      "hideDetails": "隱藏",
+      "sourceCount": "{{count}} 個來源"
+    },
     "compaction": {
       "cancelled": "上下文壓縮已取消",
       "empty": "無需壓縮上下文",
@@ -1518,6 +1534,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "新增",
+        "add": "新增",
+        "files": "檔案與資料夾",
+        "filesDesc": "為這條訊息上傳圖片或檔案",
+        "project": "在專案中工作",
+        "projectDesc": "為目前的對話選擇一個專案資料夾",
+        "goal": "目標",
+        "goalDesc": "將這個請求視為長期目標持續推進",
+        "plan": "計畫模式",
+        "planDesc": "先產出執行計畫，再開始動手",
+        "draw": "繪圖",
+        "drawDesc": "使用 image-generation 技能產生圖片",
+        "skills": "技能",
+        "noSkills": "未安裝技能",
+        "plugins": "外掛",
+        "noPlugins": "未安裝外掛",
+        "mcp": "MCP",
+        "noMcp": "未設定 MCP 服務",
+        "agents": "智能體",
+        "noAgents": "目前沒有可用的智能體",
+        "agentInsert": "讓智能體「{{name}}」完成這個任務："
+      },
       "placeholderThread": "輸入訊息…",
       "placeholderHero": "任何問題都可以問…",
       "placeholderOpening": "正在開啟新話題…",
@@ -1539,6 +1578,28 @@
       "chooseAI": "選擇你的 AI",
       "switchModel": "切換此對話使用的模型",
       "manageModels": "管理模型預設",
+      "reasoningEffort": "推理強度",
+      "effort": {
+        "default": "預設",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "超高",
+        "max": "極限",
+        "adaptive": "自適應"
+      },
+      "runtime": {
+        "thisComputer": "此電腦",
+        "title": "執行環境",
+        "aria": "執行環境",
+        "host": "主機名稱",
+        "gateway": "閘道",
+        "sandbox": "沙箱",
+        "access": "存取權限",
+        "unknown": "未知",
+        "enforced": "已啟用強制隔離",
+        "notEnforced": "未啟用強制隔離"
+      },
       "context": {
         "tooltip": "上下文 {{percent}}%",
         "detailsLabel": "開啟上下文用量",
@@ -1820,6 +1881,12 @@
     "next": "下一張",
     "close": "關閉預覽"
   },
+  "askQuestion": {
+    "recommended": "建議",
+    "otherPlaceholder": "輸入其他答案",
+    "noPreference": "無偏好",
+    "submit": "提交答案"
+  },
   "filePreview": {
     "aria": "檔案預覽",
     "breadcrumb": "檔案路徑",
@@ -1837,6 +1904,31 @@
     "copied": "已複製"
   },
   "workbench": {
+    "title": "對話工作台",
+    "open": "展開工作台",
+    "collapse": "收合工作台",
+    "updatedAt": "更新於 {{time}}",
+    "overview": "概覽",
+    "emptyOverview": "尚無摘要",
+    "environment": "環境",
+    "local": "本機",
+    "fullAccess": "完整存取",
+    "restrictedAccess": "受限存取",
+    "files": "個檔案",
+    "commitPush": "提交或推送",
+    "commitPushHint": "將搭配工作台唯讀 API 提供",
+    "integrations": "技能與 MCP",
+    "emptyIntegrations": "本次工作區未使用 MCP/CLI",
+    "outputs": "產出",
+    "emptyOutputs": "尚無檔案變更",
+    "sources": "來源",
+    "emptySources": "尚無網頁來源",
+    "fileTree": "檔案",
+    "treeLoading": "載入中…",
+    "treeEmpty": "專案為空",
+    "treeEmptyFolder": "空資料夾",
+    "treeRetry": "讀取失敗，點擊重試",
+    "treeTruncated": "僅顯示前面的條目",
     "aria": "對話工作台",
     "panes": "窗格",
     "tabAria": "群組：{{title}}",
@@ -1902,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "預設工作區",
+      "clickToAdd": "點擊新增資料夾",
+      "changeFolder": "更換資料夾",
+      "picking": "正在選擇…",
+      "projectName": "專案名稱",
+      "create": "建立",
+      "cancel": "取消",
+      "defaultProject": "預設工作區（不關聯專案）",
       "manual": "貼上路徑",
       "manualPlaceholder": "/Users/name/project",
       "usePath": "使用路徑",

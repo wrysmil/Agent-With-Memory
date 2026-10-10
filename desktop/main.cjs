@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, Menu, shell, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require("electron");
 const { spawn, execFileSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -236,6 +236,19 @@ if (!gotLock) {
     app.setName(APP_NAME);
     buildMenu();
     ipcMain.on("mira:retry", () => boot());
+    ipcMain.handle("mira:pick-folder", async () => {
+      if (!mainWindow) return null;
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openDirectory", "createDirectory"],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      return result.filePaths[0];
+    });
+    ipcMain.handle("mira:reveal-in-folder", (_event, targetPath) => {
+      if (typeof targetPath !== "string" || !targetPath.trim()) return false;
+      shell.showItemInFolder(path.resolve(targetPath));
+      return true;
+    });
     createWindow();
     boot();
     app.on("activate", () => {

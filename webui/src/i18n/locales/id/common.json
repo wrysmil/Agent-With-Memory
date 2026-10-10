@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "Navigasi bilah samping",
     "collapse": "Ciutkan sidebar",
-    "newChat": "Topik baru",
+    "home": "Beranda",
+    "newChat": "Obrolan baru",
     "searchAria": "Cari",
     "searchPlaceholder": "Cari",
     "searchResults": "Hasil",
@@ -176,7 +177,8 @@
       "transcriptionProviderStatus": "Status penyedia",
       "transcriptionModel": "Model",
       "transcriptionLanguage": "Bahasa",
-      "voiceLimits": "Batas"
+      "voiceLimits": "Batas",
+      "workspacePathHint": "Obrolan tanpa proyek memakai folder ini. Folder proyek ada di bagian Proyek di bilah sisi."
     },
     "help": {
       "theme": "Beralih antara tampilan terang dan gelap.",
@@ -251,7 +253,8 @@
       "restartingEngine": "Memulai ulang",
       "checking": "Memeriksa",
       "running": "Berjalan",
-      "needsSetup": "Perlu penyiapan"
+      "needsSetup": "Perlu penyiapan",
+      "workspaceSettings": "Pengaturan ruang kerja"
     },
     "status": {
       "loading": "Memuat pengaturan...",
@@ -335,7 +338,7 @@
       "webSearch": "Pencarian web",
       "imageGeneration": "Pembuatan gambar",
       "voiceInput": "Input suara",
-      "workspace": "Ruang kerja"
+      "workspace": "Ruang kerja default"
     },
     "usage": {
       "title": "Aktivitas token",
@@ -1344,6 +1347,7 @@
     "showMore": "Tampilkan {{count}} lagi",
     "collapsed": "{{count}} topik diciutkan",
     "showLess": "Tampilkan lebih sedikit",
+    "expandGroup": "Perluas",
     "actions": "Aksi topik untuk {{title}}",
     "newInProject": "Mulai topik baru di {{project}}",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "Hapus",
     "newChat": "Topik baru",
     "groups": {
+      "newChatInProject": "Chat baru di proyek",
+      "reveal": "Tampilkan di pengelola file",
+      "removeProject": "Hapus proyek",
       "pinned": "Disematkan",
       "all": "Topik",
       "projects": "Proyek",
+      "addProject": "Tambahkan proyek",
       "today": "Hari ini",
       "yesterday": "Kemarin",
       "earlier": "Sebelumnya",
-      "archived": "Diarsipkan"
+      "archived": "Diarsipkan",
+      "emptyProject": "Belum ada obrolan",
+      "toggleProjects": "Alihkan proyek",
+      "projectsHint": "Setiap proyek adalah folder di komputer ini."
     }
   },
   "deleteConfirm": {
@@ -1417,6 +1428,11 @@
     "error": "Kesalahan koneksi"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "Lihat detail",
+      "hideDetails": "Sembunyikan",
+      "sourceCount": "{{count}} sumber"
+    },
     "compaction": {
       "cancelled": "Pemadatan konteks dibatalkan",
       "empty": "Tidak ada konteks yang perlu dipadatkan.",
@@ -1518,6 +1534,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "Tambah",
+        "add": "Tambah",
+        "files": "Berkas dan folder",
+        "filesDesc": "Lampirkan gambar atau berkas ke pesan ini",
+        "project": "Kerja dalam proyek",
+        "projectDesc": "Pilih folder untuk percakapan ini",
+        "goal": "Tujuan",
+        "goalDesc": "Jadikan permintaan ini sebagai tujuan jangka panjang",
+        "plan": "Mode rencana",
+        "planDesc": "Minta rencana eksekusi sebelum mengerjakan",
+        "draw": "Gambar",
+        "drawDesc": "Buat gambar dengan skill image-generation",
+        "skills": "Keterampilan",
+        "noSkills": "Belum ada keterampilan terpasang",
+        "plugins": "Plugin",
+        "noPlugins": "Belum ada plugin terpasang",
+        "mcp": "MCP",
+        "noMcp": "Belum ada server MCP dikonfigurasi",
+        "agents": "Agen",
+        "noAgents": "Tidak ada agen yang tersedia",
+        "agentInsert": "Jalankan ini dengan agen \"{{name}}\": "
+      },
       "placeholderThread": "Ketik pesan Anda…",
       "placeholderHero": "Apa yang sedang Anda pikirkan?",
       "placeholderOpening": "Membuka topik baru…",
@@ -1539,6 +1578,28 @@
       "chooseAI": "Pilih AI Anda",
       "switchModel": "Ganti model untuk percakapan ini",
       "manageModels": "Kelola model",
+      "reasoningEffort": "Usaha penalaran",
+      "effort": {
+        "default": "Bawaan",
+        "low": "Rendah",
+        "medium": "Sedang",
+        "high": "Tinggi",
+        "xhigh": "Sangat tinggi",
+        "max": "Maksimal",
+        "adaptive": "Adaptif"
+      },
+      "runtime": {
+        "thisComputer": "Komputer ini",
+        "title": "Lingkungan runtime",
+        "aria": "Lingkungan runtime",
+        "host": "Nama host",
+        "gateway": "Gerbang",
+        "sandbox": "Sandbox",
+        "access": "Akses",
+        "unknown": "Tidak diketahui",
+        "enforced": "Isolasi diberlakukan",
+        "notEnforced": "Isolasi tidak diberlakukan"
+      },
       "context": {
         "tooltip": "Konteks {{percent}}%",
         "detailsLabel": "Buka penggunaan konteks",
@@ -1820,6 +1881,12 @@
     "next": "Gambar berikutnya",
     "close": "Tutup pratinjau"
   },
+  "askQuestion": {
+    "recommended": "Direkomendasikan",
+    "otherPlaceholder": "Ketik jawaban lain",
+    "noPreference": "Tidak ada preferensi",
+    "submit": "Kirim jawaban"
+  },
   "filePreview": {
     "aria": "Pratinjau file",
     "breadcrumb": "Jalur file",
@@ -1837,6 +1904,31 @@
     "copied": "Tersalin"
   },
   "workbench": {
+    "title": "Ruang kerja",
+    "open": "Buka ruang kerja",
+    "collapse": "Ciutkan ruang kerja",
+    "updatedAt": "Diperbarui {{time}}",
+    "overview": "Ringkasan",
+    "emptyOverview": "Belum ada ringkasan",
+    "environment": "Lingkungan",
+    "local": "Lokal",
+    "fullAccess": "Akses penuh",
+    "restrictedAccess": "Dibatasi",
+    "files": "berkas",
+    "commitPush": "Commit atau push",
+    "commitPushHint": "Tersedia bersama API baca-saja ruang kerja",
+    "integrations": "Skill & MCP",
+    "emptyIntegrations": "Tidak ada MCP/CLI yang dipakai di sesi ini",
+    "outputs": "Keluaran",
+    "emptyOutputs": "Belum ada berkas yang berubah",
+    "sources": "Sumber",
+    "emptySources": "Belum ada sumber web",
+    "fileTree": "Berkas",
+    "treeLoading": "Memuat…",
+    "treeEmpty": "Proyek kosong",
+    "treeEmptyFolder": "Folder kosong",
+    "treeRetry": "Gagal membaca folder ini — coba lagi",
+    "treeTruncated": "Hanya menampilkan item pertama",
     "aria": "Ruang kerja percakapan",
     "panes": "Panel",
     "tabAria": "Grup: {{title}}",
@@ -1902,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "Ruang kerja bawaan",
+      "clickToAdd": "Klik untuk menambahkan folder",
+      "changeFolder": "Ganti folder",
+      "picking": "Memilih...",
+      "projectName": "Nama proyek",
+      "create": "Buat",
+      "cancel": "Batal",
+      "defaultProject": "Ruang kerja default (tanpa proyek)",
       "manual": "Tempel path",
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Gunakan path",

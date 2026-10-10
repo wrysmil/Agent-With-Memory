@@ -62,7 +62,8 @@
   "sidebar": {
     "navigation": "Điều hướng thanh bên",
     "collapse": "Thu gọn thanh bên",
-    "newChat": "Chủ đề mới",
+    "home": "Trang chủ",
+    "newChat": "Cuộc trò chuyện mới",
     "searchAria": "Tìm kiếm",
     "searchPlaceholder": "Tìm kiếm",
     "searchResults": "Kết quả",
@@ -176,7 +177,8 @@
       "transcriptionProviderStatus": "Trạng thái nhà cung cấp chuyển giọng nói",
       "transcriptionModel": "Mô hình chuyển giọng nói",
       "transcriptionLanguage": "Ngôn ngữ",
-      "voiceLimits": "Giới hạn"
+      "voiceLimits": "Giới hạn",
+      "workspacePathHint": "Cuộc trò chuyện không có dự án dùng thư mục này. Thư mục dự án nằm trong mục Dự án ở thanh bên."
     },
     "help": {
       "theme": "Chuyển giữa giao diện sáng và tối.",
@@ -251,7 +253,8 @@
       "restartingEngine": "Đang khởi động lại",
       "checking": "Đang kiểm tra",
       "running": "Đang chạy",
-      "needsSetup": "Cần thiết lập"
+      "needsSetup": "Cần thiết lập",
+      "workspaceSettings": "Cài đặt không gian làm việc"
     },
     "status": {
       "loading": "Đang tải cài đặt...",
@@ -335,7 +338,7 @@
       "webSearch": "Tìm kiếm web",
       "imageGeneration": "Tạo hình ảnh",
       "voiceInput": "Nhập bằng giọng nói",
-      "workspace": "Không gian làm việc"
+      "workspace": "Không gian làm việc mặc định"
     },
     "usage": {
       "title": "Hoạt động token",
@@ -1344,6 +1347,7 @@
     "showMore": "Hiển thị thêm {{count}}",
     "collapsed": "Đã thu gọn {{count}} chủ đề",
     "showLess": "Thu gọn",
+    "expandGroup": "Mở rộng",
     "actions": "Tác vụ cho chủ đề {{title}}",
     "newInProject": "Bắt đầu chủ đề mới trong {{project}}",
     "activity": {
@@ -1373,13 +1377,20 @@
     "delete": "Xóa",
     "newChat": "Chủ đề mới",
     "groups": {
+      "newChatInProject": "Chat moi trong du an",
+      "reveal": "Mo trong trinh quan tep",
+      "removeProject": "Xoa du an",
       "pinned": "Đã ghim",
       "all": "Chủ đề",
       "projects": "Dự án",
+      "addProject": "Thêm dự án",
       "today": "Hôm nay",
       "yesterday": "Hôm qua",
       "earlier": "Trước đó",
-      "archived": "Đã lưu trữ"
+      "archived": "Đã lưu trữ",
+      "emptyProject": "Chưa có cuộc trò chuyện nào",
+      "toggleProjects": "Thu hoặc giãn dự án",
+      "projectsHint": "Mỗi dự án là một thư mục trên máy tính này."
     }
   },
   "deleteConfirm": {
@@ -1417,6 +1428,11 @@
     "error": "Lỗi kết nối"
   },
   "thread": {
+    "activity": {
+      "viewDetails": "Xem chi tiết",
+      "hideDetails": "Ẩn",
+      "sourceCount": "{{count}} nguồn"
+    },
     "compaction": {
       "cancelled": "Đã hủy nén ngữ cảnh",
       "empty": "Không có ngữ cảnh cần nén.",
@@ -1518,6 +1534,29 @@
       }
     },
     "composer": {
+      "menu": {
+        "aria": "Thêm",
+        "add": "Thêm",
+        "files": "Tệp và thư mục",
+        "filesDesc": "Đính kèm ảnh hoặc tệp vào tin nhắn này",
+        "project": "Làm việc trong dự án",
+        "projectDesc": "Chọn thư mục cho cuộc trò chuyện này",
+        "goal": "Mục tiêu",
+        "goalDesc": "Xử lý yêu cầu này như mục tiêu dài hạn",
+        "plan": "Chế độ lập kế hoạch",
+        "planDesc": "Yêu cầu kế hoạch hành động trước khi làm",
+        "draw": "Vẽ ảnh",
+        "drawDesc": "Tạo ảnh bằng skill image-generation",
+        "skills": "Kỹ năng",
+        "noSkills": "Chưa cài đặt kỹ năng",
+        "plugins": "Plugin",
+        "noPlugins": "Chưa cài đặt plugin",
+        "mcp": "MCP",
+        "noMcp": "Chưa cấu hình máy chủ MCP",
+        "agents": "Agent",
+        "noAgents": "Không có agent nào",
+        "agentInsert": "Hãy chạy việc này với agent \"{{name}}\": "
+      },
       "placeholderThread": "Nhập tin nhắn…",
       "placeholderHero": "Bạn đang nghĩ gì?",
       "placeholderOpening": "Đang mở chủ đề mới…",
@@ -1539,6 +1578,28 @@
       "chooseAI": "Chọn AI của bạn",
       "switchModel": "Chuyển mô hình cho cuộc trò chuyện này",
       "manageModels": "Quản lý mô hình",
+      "reasoningEffort": "Mức độ suy luận",
+      "effort": {
+        "default": "Mặc định",
+        "low": "Thấp",
+        "medium": "Trung bình",
+        "high": "Cao",
+        "xhigh": "Rất cao",
+        "max": "Tối đa",
+        "adaptive": "Thích ứng"
+      },
+      "runtime": {
+        "thisComputer": "Máy tính này",
+        "title": "Môi trường chạy",
+        "aria": "Môi trường chạy",
+        "host": "Tên máy chủ",
+        "gateway": "Cổng",
+        "sandbox": "Hộp cát",
+        "access": "Quyền truy cập",
+        "unknown": "Không rõ",
+        "enforced": "Đã áp dụng cách ly",
+        "notEnforced": "Chưa áp dụng cách ly"
+      },
       "context": {
         "tooltip": "Ngữ cảnh {{percent}}%",
         "detailsLabel": "Mở mức sử dụng ngữ cảnh",
@@ -1820,6 +1881,12 @@
     "next": "Ảnh tiếp theo",
     "close": "Đóng xem trước"
   },
+  "askQuestion": {
+    "recommended": "Đề xuất",
+    "otherPlaceholder": "Nhập câu trả lời khác",
+    "noPreference": "Không có sở thích",
+    "submit": "Gửi câu trả lời"
+  },
   "filePreview": {
     "aria": "Xem trước tệp",
     "breadcrumb": "Đường dẫn tệp",
@@ -1837,6 +1904,31 @@
     "copied": "Đã sao chép"
   },
   "workbench": {
+    "title": "Bảng làm việc",
+    "open": "Mở bảng làm việc",
+    "collapse": "Thu gọn bảng làm việc",
+    "updatedAt": "Cập nhật {{time}}",
+    "overview": "Tổng quan",
+    "emptyOverview": "Chưa có tóm tắt",
+    "environment": "Môi trường",
+    "local": "Cục bộ",
+    "fullAccess": "Toàn quyền",
+    "restrictedAccess": "Hạn chế",
+    "files": "tệp",
+    "commitPush": "Commit hoặc push",
+    "commitPushHint": "Sẽ có cùng API chỉ đọc của bảng làm việc",
+    "integrations": "Kỹ năng & MCP",
+    "emptyIntegrations": "Phiên này chưa dùng MCP/CLI",
+    "outputs": "Đầu ra",
+    "emptyOutputs": "Chưa có tệp nào thay đổi",
+    "sources": "Nguồn",
+    "emptySources": "Chưa có nguồn web",
+    "fileTree": "Tệp",
+    "treeLoading": "Đang tải…",
+    "treeEmpty": "Dự án trống",
+    "treeEmptyFolder": "Thư mục trống",
+    "treeRetry": "Không đọc được thư mục này — thử lại",
+    "treeTruncated": "Chỉ hiển thị các mục đầu tiên",
     "aria": "Không gian hội thoại",
     "panes": "Khung",
     "tabAria": "Nhóm: {{title}}",
@@ -1902,7 +1994,13 @@
   },
   "workspace": {
     "dialog": {
-      "defaultProject": "Không gian làm việc mặc định",
+      "clickToAdd": "Nhap de them thu muc",
+      "changeFolder": "Doi thu muc",
+      "picking": "Dang chon...",
+      "projectName": "Ten du an",
+      "create": "Tao",
+      "cancel": "Huy",
+      "defaultProject": "Không gian làm việc mặc định (không dự án)",
       "manual": "Dán đường dẫn",
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Dùng đường dẫn",

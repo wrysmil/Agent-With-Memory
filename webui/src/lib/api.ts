@@ -31,6 +31,7 @@ import type {
   RecoveryState,
   ScratchpadPayload,
   SessionDeleteResult,
+  SessionDirectoryPayload,
   SessionHandle,
   SessionAutomationsPayload,
   SettingsPayload,
@@ -293,6 +294,22 @@ export async function fetchFilePreviewAvailability(
     API_READ_TIMEOUT_MS,
   );
   return payload.available !== false;
+}
+
+export async function fetchSessionDirectory(
+  token: string,
+  key: string,
+  path: string | null,
+  base: string = "",
+): Promise<SessionDirectoryPayload> {
+  const query = new URLSearchParams();
+  if (path) query.set("path", path);
+  return request<SessionDirectoryPayload>(
+    `${base}/api/sessions/${encodeURIComponent(key)}/files?${query}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
 }
 
 export async function fetchSessionAutomations(

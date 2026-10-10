@@ -36,7 +36,6 @@ import {
   Loader2,
   MessageCircle,
   Mic,
-  Plus,
   Quote,
   RotateCw,
   Shield,
@@ -72,6 +71,7 @@ import {
   ModelPresetBadge,
   type ModelPresetOption,
 } from "@/components/thread/ModelPresetBadge";
+import { ComposerPlusMenu } from "@/components/thread/ComposerPlusMenu";
 import {
   ComposerUsagePopover,
   type ComposerContextUsage,
@@ -89,6 +89,9 @@ import {
 import { useClipboardAndDrop } from "@/hooks/useClipboardAndDrop";
 import { useLogoFallback } from "@/hooks/useLogoFallback";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { getRuntimeHost } from "@/lib/runtime";
+import { projectNameFromPath } from "@/lib/workspace";
+import type { AgentProfile } from "@/lib/agents/types";
 import type { SendAttachment, SendOptions } from "@/hooks/useNanobotStream";
 import { useVoiceRecorder, type VoiceRecorderErrorKey } from "@/hooks/useVoiceRecorder";
 import type {
@@ -218,6 +221,7 @@ interface ThreadComposerProps {
   mcpPresets?: McpPresetInfo[];
   sessions?: ChatSummary[];
   skills?: SkillSummary[];
+  agents?: AgentProfile[];
   onStop?: () => void;
   surfaceRef?: Ref<HTMLDivElement>;
   onTranscribeAudio?: (dataUrl: string, options?: { durationMs?: number }) => Promise<string>;
@@ -923,6 +927,7 @@ export function ThreadComposer({
   mcpPresets = [],
   sessions = [],
   skills = [],
+  agents = [],
   onStop,
   surfaceRef,
   onTranscribeAudio,
@@ -1641,6 +1646,53 @@ export function ThreadComposer({
     [isStreaming, onStop, recentSlashCommands, resizeTextarea, skillQuery, value],
   );
 
+  const insertMenuToken = useCallback(
+    (token: string) => {
+      const caret = Math.min(Math.max(cursorPosition, 0), value.length);
+      const suffix = value.slice(caret);
+      const gap = token.endsWith(" ") || suffix.startsWith(" ") ? "" : " ";
+      const inserted = `${token}${gap}`;
+      const next = `${value.slice(0, caret)}${inserted}${suffix}`;
+      const nextCursor = caret + inserted.length;
+      setValue(next);
+      setCursorPosition(nextCursor);
+      setSlashMenuDismissed(true);
+      setInlineError(null);
+      resizeTextarea();
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(nextCursor, nextCursor);
+      });
+    },
+    [cursorPosition, resizeTextarea, value],
+  );
+
+  const menuPickFolder = getRuntimeHost().pickFolder ?? onPickWorkspaceFolder;
+  const canWorkInProjectFromMenu =
+    !!menuPickFolder
+    && !!onWorkspaceScopeChange
+    && !!(workspaceScope ?? workspaceDefaultScope)
+    && workspaceControls?.can_change_project !== false;
+  const workInProjectFromMenu = useCallback(async () => {
+    const base = workspaceScope ?? workspaceDefaultScope;
+    if (!base || !onWorkspaceScopeChange || !menuPickFolder) return;
+    const folder = await menuPickFolder();
+    if (!folder) return;
+    onWorkspaceScopeChange({
+      ...base,
+      project_path: folder,
+      project_name: projectNameFromPath(folder),
+      restrict_to_workspace: base.access_mode === "restricted",
+    });
+  }, [
+    menuPickFolder,
+    onWorkspaceScopeChange,
+    workspaceDefaultScope,
+    workspaceScope,
+  ]);
+
   const insertMentionCandidate = useCallback(
     (candidate: MentionCandidate, start: number, end: number) => {
       if (candidate.kind === "session") {
@@ -2165,7 +2217,6 @@ export function ThreadComposer({
     [removeChip],
   );
 
-  const attachButtonDisabled = interactionDisabled || full;
   const showVoiceButton = Boolean(onTranscribeAudio);
   const voiceRecordingStatusLabel = t("thread.composer.voice.recordingStatus", {
     time: voiceRecorder.elapsedLabel,
@@ -2436,22 +2487,21 @@ export function ThreadComposer({
               hidden
               onChange={onFilePick}
             />
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              disabled={attachButtonDisabled}
-              aria-label={t("thread.composer.attachImage")}
-              onClick={() => fileInputRef.current?.click()}
-              className={cn(
-                "thread-composer-action touch-target rounded-full text-muted-foreground hover:text-foreground",
-                isHero
-                  ? "h-8 w-8 border border-border/55 bg-card shadow-[0_2px_8px_rgba(15,23,42,0.05)] hover:bg-card"
-                  : "h-9 w-9 border border-border/55 bg-card shadow-[0_2px_8px_rgba(15,23,42,0.05)] hover:bg-card",
-              )}
-            >
-              <Plus className={cn(isHero ? "h-[18px] w-[18px]" : "h-4 w-4")} />
-            </Button>
+            <ComposerPlusMenu
+              isHero={isHero}
+              disabled={interactionDisabled}
+              filesDisabled={full}
+              skills={skills}
+              plugins={cliApps}
+              mcpPresets={mcpPresets}
+              agents={agents}
+              canWorkInProject={canWorkInProjectFromMenu}
+              onPickFiles={() => fileInputRef.current?.click()}
+              onWorkInProject={() => {
+                void workInProjectFromMenu();
+              }}
+              onInsertToken={insertMenuToken}
+            />
             {voiceRecorder.isRecording ? (
               <VoiceRecordingMeter
                 ariaLabel={voiceRecordingStatusLabel}

@@ -11,12 +11,18 @@ import {
   type SessionWorkbenchModel,
   type WorkbenchSource,
 } from "./session-workbench-model";
+import { WorkspaceFileTree } from "./WorkspaceFileTree";
 import { cn } from "@/lib/utils";
+
+// Mirrors the rail's literal `w-[19rem]` below (Tailwind can't see dynamic classes).
+export const SESSION_WORKBENCH_RAIL_WIDTH = "19rem";
 
 interface SessionWorkbenchProps {
   model: SessionWorkbenchModel;
   onOpenFilePreview?: (path: string) => void;
   onCollapse: () => void;
+  sessionKey?: string | null;
+  getToken?: () => string;
 }
 
 function formatUpdatedAt(ms: number | null, language: string): string {
@@ -85,6 +91,8 @@ export function SessionWorkbench({
   model,
   onOpenFilePreview,
   onCollapse,
+  sessionKey,
+  getToken,
 }: SessionWorkbenchProps) {
   const { t, i18n } = useTranslation();
   const updated = formatUpdatedAt(model.updatedAtMs, i18n.language);
@@ -175,6 +183,19 @@ export function SessionWorkbench({
             {t("workbench.commitPush", { defaultValue: "Commit or push" })}
           </button>
         </Section>
+
+        {sessionKey && getToken ? (
+          <Section
+            title={t("workbench.fileTree", { defaultValue: "Files" })}
+            defaultOpen={false}
+          >
+            <WorkspaceFileTree
+              sessionKey={sessionKey}
+              getToken={getToken}
+              onOpenFilePreview={onOpenFilePreview}
+            />
+          </Section>
+        ) : null}
 
         <Section
           title={t("workbench.integrations", { defaultValue: "Skills & MCP" })}

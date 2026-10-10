@@ -4253,4 +4253,27 @@ describe("ThreadShell", () => {
     expect(screen.getByRole("button", { name: "Stop response" })).toBeInTheDocument();
   });
 
+  it("reports session rail open state to the pane host", async () => {
+    window.localStorage.setItem("mira.workbench.open", "1");
+    const client = makeClient();
+    const onWorkbenchOpenChange = vi.fn();
+    render(wrap(
+      client,
+      <ThreadShell
+        session={session("rail-report")}
+        title="Rail report"
+        onToggleSidebar={() => {}}
+        onWorkbenchOpenChange={onWorkbenchOpenChange}
+      />,
+    ));
+
+    await screen.findByLabelText("Message input");
+    expect(onWorkbenchOpenChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse workbench" }));
+    expect(onWorkbenchOpenChange).toHaveBeenLastCalledWith(false);
+
+    window.localStorage.removeItem("mira.workbench.open");
+  });
+
 });

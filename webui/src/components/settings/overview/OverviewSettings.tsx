@@ -193,8 +193,8 @@ export function OverviewSettings({
           />
           <OverviewListRow
             icon={HardDrive}
-            title={tx("settings.overview.workspace", "Workspace")}
-            value={tx("settings.values.defaultWorkspace", "Default workspace")}
+            title={tx("settings.overview.workspace", "Default workspace")}
+            value={tx("settings.values.workspaceSettings", "Workspace settings")}
             caption={workspaceCaption}
             onClick={() => onSelectSection("runtime")}
           />

@@ -124,6 +124,15 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         accepts_args=True,
     ),
     BuiltinCommandSpec(
+        "/plan",
+        "Plan before acting",
+        "Ask the agent to produce a step-by-step execution plan before doing the work.",
+        "list-checks",
+        "<task>",
+        lifecycle="agent_turn_with_args",
+        accepts_args=True,
+    ),
+    BuiltinCommandSpec(
         "/trigger",
         "Create named local trigger",
         "Create a named CLI trigger bound to this chat session.",
@@ -947,6 +956,49 @@ async def cmd_goal(ctx: CommandContext) -> OutboundMessage | None:
     return None
 
 
+async def cmd_plan(ctx: CommandContext) -> OutboundMessage | None:
+    """Rewrite this turn into a plan-first request for the agent."""
+    task = ctx.args.strip()
+    if not task:
+        return OutboundMessage(
+            channel=ctx.msg.channel,
+            chat_id=ctx.msg.chat_id,
+            content="Usage: /plan <task description>",
+            metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
+        )
+    if ctx.session is None:
+        return OutboundMessage(
+            channel=ctx.msg.channel,
+            chat_id=ctx.msg.chat_id,
+            content=(
+                "A task is already running for this chat. "
+                "Use `/stop` first, then send `/plan <task description>` again."
+            ),
+            metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
+        )
+    if not ctx.is_user_turn:
+        return OutboundMessage(
+            channel=ctx.msg.channel,
+            chat_id=ctx.msg.chat_id,
+            content="Plan mode can only be started by a user `/plan <task>` command.",
+            metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
+        )
+
+    ctx.msg.metadata = {
+        **dict(ctx.msg.metadata or {}),
+        "original_command": "/plan",
+        "original_content": ctx.raw,
+        "plan_requested": True,
+    }
+    ctx.msg.content = (
+        "[Plan mode] Before doing any work, reply with a step-by-step execution plan "
+        "for the task below: intended outcome, ordered steps, risks, and how the result "
+        "will be verified. Do not modify files or run commands in this turn.\n"
+        f"Task: {task}"
+    )
+    return None
+
+
 async def cmd_pairing(ctx: CommandContext) -> OutboundMessage:
     """List, approve, deny or revoke pairing requests."""
     from nanobot.pairing import PAIRING_COMMAND_META_KEY, handle_pairing_command
@@ -1087,6 +1139,8 @@ def register_builtin_commands(router: CommandRouter) -> None:
     router.prefix("/history ", cmd_history)
     router.exact("/goal", cmd_goal)
     router.prefix("/goal ", cmd_goal)
+    router.exact("/plan", cmd_plan)
+    router.prefix("/plan ", cmd_plan)
     router.exact("/trigger", cmd_trigger)
     router.prefix("/trigger ", cmd_trigger)
     router.exact("/dream", cmd_dream)

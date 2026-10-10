@@ -457,8 +457,8 @@ describe("App layout", () => {
     expect(main).toBeInTheDocument();
     expect(main).not.toHaveAttribute("style");
     expect(screen.getByTestId("sidebar-brand-row")).toHaveClass("pt-3");
-    expect(screen.getByTestId("sidebar-brand-mark")).not.toHaveClass("mt-5");
-    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toHaveClass("mt-1");
+    expect(screen.getByTestId("sidebar-brand-row")).not.toHaveClass("pt-8");
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
 
     const asideClassNames = Array.from(container.querySelectorAll("aside")).map(
       (el) => el.className,
@@ -542,7 +542,7 @@ describe("App layout", () => {
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    const newTopicButton = within(sidebar).getByRole("button", { name: "New topic" });
+    const newTopicButton = within(sidebar).getByRole("button", { name: "New chat" });
 
     expect(newTopicButton).toHaveAttribute("aria-current", "page");
     expect(newTopicButton).not.toHaveClass("bg-sidebar-accent");
@@ -595,7 +595,7 @@ describe("App layout", () => {
     expect(screen.queryByRole("button", { name: "Temporary chat" })).not.toBeInTheDocument();
     expect(createChatSpy).not.toHaveBeenCalled();
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "New topic" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));
     expect(discardTemporaryChatSpy).not.toHaveBeenCalled();
     const secondToggle = screen.getByRole("button", { name: "Temporary chat" });
     expect(secondToggle).toHaveAttribute("aria-pressed", "false");
@@ -669,15 +669,13 @@ describe("App layout", () => {
     const heroTemporaryToggle = within(heroHeader).getByRole("button", {
       name: "Temporary chat",
     });
-    const themeToggle = within(heroHeader).getByRole("button", {
+    expect(within(heroHeader).queryByRole("button", {
       name: "Toggle theme from header",
-    });
+    })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole("button", { name: "Temporary chat" })).not.toBeInTheDocument();
     expect(within(screen.getByTestId("thread-composer-motion")).queryByRole("button", {
       name: "Temporary chat",
     })).not.toBeInTheDocument();
-    expect(heroTemporaryToggle.compareDocumentPosition(themeToggle)
-      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     const user = userEvent.setup();
     await user.hover(heroTemporaryToggle);
@@ -693,7 +691,7 @@ describe("App layout", () => {
     expect(window.location.hash).toBe("#/chat/websocket%3Aexisting-chat");
     expect(screen.queryByRole("button", { name: "Temporary chat" })).not.toBeInTheDocument();
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "New topic" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));
     const temporaryToggle = screen.getByRole("button", { name: "Temporary chat" });
     expect(temporaryToggle).toHaveClass("h-8", "w-8", "rounded-full");
     expect(within(temporaryToggle).queryByText("Temporary chat")).not.toBeInTheDocument();
@@ -1641,16 +1639,16 @@ describe("App layout", () => {
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const flowSidebar = screen.getByTestId("host-sidebar-flow");
     expect(flowSidebar).toHaveStyle({ width: "272px" });
-    expect(screen.getByTestId("sidebar-brand-row")).toHaveClass("pt-3");
-    expect(screen.getByTestId("sidebar-brand-mark")).toHaveClass("mt-5");
-    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toHaveClass("mt-1");
+    expect(screen.getByTestId("sidebar-brand-row")).toHaveClass("pt-8");
+    expect(screen.getByTestId("sidebar-brand-row")).not.toHaveClass("pt-3");
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
     expect(screen.queryByTestId("host-sidebar-toggle")).not.toBeInTheDocument();
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-    await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "56px" }));
+    await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "48px" }));
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
@@ -1705,7 +1703,7 @@ describe("App layout", () => {
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     await waitFor(() => {
-      expect(screen.getByTestId("sidebar-brand-mark")).toHaveClass("mt-5");
+      expect(screen.getByTestId("sidebar-brand-row")).toHaveClass("pt-8");
     });
     expect(document.documentElement).toHaveClass("native-host");
   });
@@ -1994,16 +1992,15 @@ describe("App layout", () => {
     });
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
-      expect(within(sidebar).getByText("Pinned")).toBeInTheDocument(),
+      expect(within(sidebar).getByText("Topics")).toBeInTheDocument(),
     );
     expect(within(sidebar).getByRole("button", { name: /^Roadmap$/ })).toBeInTheDocument();
     expect(within(sidebar).queryByRole("button", { name: /^First chat$/ })).not.toBeInTheDocument();
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Show archived" }));
     await waitFor(() =>
-      expect(within(sidebar).getByText("Archived")).toBeInTheDocument(),
+      expect(within(sidebar).getByRole("button", { name: /^First chat$/ })).toBeInTheDocument(),
     );
-    expect(within(sidebar).getByRole("button", { name: /^First chat$/ })).toBeInTheDocument();
     expect(setSidebarStateSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         view: expect.objectContaining({ show_archived: true }),
@@ -2551,7 +2548,7 @@ describe("App layout", () => {
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     const searchButton = within(sidebar).getByRole("button", { name: "Search" });
     const appsButton = within(sidebar).getByRole("button", { name: "Apps" });
-    expect(searchButton.compareDocumentPosition(appsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(appsButton.compareDocumentPosition(searchButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     await user.click(within(sidebar).getByRole("button", { name: "Settings" }));
 
     expect(
@@ -3034,7 +3031,7 @@ describe("App layout", () => {
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    fireEvent.click(within(sidebar).getByRole("button", { name: "New topic" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));
     await waitFor(() => expect(document.title).toBe("Mira"));
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
@@ -3074,10 +3071,10 @@ describe("App layout", () => {
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     expect(within(sidebar).getByText("Q2 roadmap")).toBeInTheDocument();
     expect(within(sidebar).getByText("Travel ideas")).toBeInTheDocument();
-    const newChatButton = within(sidebar).getByRole("button", { name: "New topic" });
+    const newChatButton = within(sidebar).getByRole("button", { name: "New chat" });
     const searchButton = within(sidebar).getByRole("button", { name: "Search" });
     expect(
-      newChatButton.compareDocumentPosition(searchButton) &
+      searchButton.compareDocumentPosition(newChatButton) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
@@ -3521,7 +3518,7 @@ describe("App layout", () => {
       .toBeInTheDocument();
     expect(within(researchGroup).getByRole("button", { name: "Alpha" }))
       .toBeInTheDocument();
-    expect(within(sidebar).getAllByRole("button", { name: "New topic" })).toHaveLength(2);
+    expect(within(sidebar).getAllByRole("button", { name: "New topic" })).toHaveLength(1);
   });
 
   it("keeps a named group and its remaining pane active after deleting a pane", async () => {
@@ -3691,10 +3688,10 @@ describe("App layout", () => {
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
 
-    const newChatButton = within(sidebar).getByRole("button", { name: "New topic" });
+    const newChatButton = within(sidebar).getByRole("button", { name: "New chat" });
     expect(newChatButton).toHaveAttribute(
       "title",
-      "New topic (Ctrl+Shift+O)",
+      "New chat (Ctrl+Shift+O)",
     );
     expect(newChatButton).toHaveAttribute(
       "aria-keyshortcuts",
@@ -3709,9 +3706,9 @@ describe("App layout", () => {
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
 
-    expect(within(sidebar).getByRole("button", { name: "New topic" })).toHaveAttribute(
+    expect(within(sidebar).getByRole("button", { name: "New chat" })).toHaveAttribute(
       "title",
-      "New topic (⌘⇧O)",
+      "New chat (⌘⇧O)",
     );
   });
 
@@ -3775,17 +3772,17 @@ describe("App layout", () => {
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: "Toggle theme from header" }));
-    expect(toggleThemeSpy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Toggle theme from header" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     const sidebarAside = container.querySelector("aside.lg\\:block") as HTMLElement;
-    await waitFor(() => expect(sidebarAside.style.width).toBe("56px"));
+    await waitFor(() => expect(sidebarAside.style.width).toBe("48px"));
 
     expect(screen.queryByRole("button", { name: "Start a new topic" })).not.toBeInTheDocument();
     const rail = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    expect(within(rail).getByRole("button", { name: "New topic" })).toBeInTheDocument();
-    expect(within(rail).getByRole("button", { name: "Search" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Toggle sidebar" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Skills" })).toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "New chat" })).not.toBeInTheDocument();
     expect(within(rail).queryByRole("button", { name: "View" })).not.toBeInTheDocument();
     expect(within(rail).queryByText("Existing chat")).not.toBeInTheDocument();
 
@@ -3793,11 +3790,10 @@ describe("App layout", () => {
     await waitFor(() => expect(sidebarAside.style.width).toBe("272px"));
 
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    fireEvent.click(within(sidebar).getByRole("button", { name: "New topic" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));
     expect(createChatSpy).not.toHaveBeenCalled();
     expect(screen.getByText(HERO_GREETING_PATTERN)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start a new topic" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Toggle theme from header" })).toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Settings" })).toBeInTheDocument();
 
     expect(within(sidebar).getByText("Existing chat")).toBeInTheDocument();
