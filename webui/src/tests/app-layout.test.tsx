@@ -309,7 +309,10 @@ describe("App layout", () => {
     runStatusHandlers.clear();
     sessionUpdateHandlers.clear();
     sidebarStateUpdateHandlers.clear();
-    window.history.replaceState(null, "", "/");
+    // Empty hash now resolves to the workbench home, so this chat-oriented
+    // layout suite starts on the new-topic route (equivalent to the previous
+    // default chat view) unless a case overrides the hash itself.
+    window.history.replaceState(null, "", "/#/new");
     Reflect.deleteProperty(window, "nanobotHost");
     setNavigatorPlatform("Linux x86_64");
     localStorage.removeItem("nanobot-webui.sidebar");
@@ -582,7 +585,7 @@ describe("App layout", () => {
     expect(firstToggle).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(firstToggle);
     expect(firstToggle).toHaveAttribute("aria-pressed", "true");
-    expect(window.location.hash).toBe("");
+    expect(window.location.hash).toBe("#/new");
 
     fireEvent.change(screen.getByLabelText("Message input"), {
       target: { value: "first private message" },
@@ -850,11 +853,11 @@ describe("App layout", () => {
     const projectPath = await screen.findByLabelText("Paste path");
     expect(projectPath).toHaveValue("C:\\missing-project");
     expect(projectPath).toHaveAttribute("aria-invalid", "true");
-    expect(projectPath).toHaveFocus();
+    await waitFor(() => expect(projectPath).toHaveFocus());
     expect(screen.getByRole("alert")).toHaveTextContent(
       "The gateway rejected this project or access mode. Choose an existing project or a different access mode, then try again.",
     );
-    expect(window.location.hash).toBe("");
+    expect(window.location.hash).toBe("#/new");
     consoleError.mockRestore();
   });
 
@@ -1638,7 +1641,7 @@ describe("App layout", () => {
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const flowSidebar = screen.getByTestId("host-sidebar-flow");
-    expect(flowSidebar).toHaveStyle({ width: "272px" });
+    expect(flowSidebar).toHaveStyle({ width: "472px" });
     expect(screen.getByTestId("sidebar-brand-row")).toHaveClass("pt-8");
     expect(screen.getByTestId("sidebar-brand-row")).not.toHaveClass("pt-3");
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
@@ -1648,7 +1651,7 @@ describe("App layout", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-    await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "48px" }));
+    await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "64px" }));
     expect(
       screen.getByRole("navigation", { name: "Sidebar navigation" }),
     ).toBeInTheDocument();
@@ -1657,7 +1660,7 @@ describe("App layout", () => {
       within(screen.getByRole("navigation", { name: "Sidebar navigation" }))
         .getByRole("button", { name: "Toggle sidebar" }),
     );
-    await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "272px" }));
+    await waitFor(() => expect(flowSidebar).toHaveStyle({ width: "472px" }));
   });
 
   it("aligns native settings navigation below the titlebar without extra top padding", async () => {
@@ -3776,7 +3779,7 @@ describe("App layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     const sidebarAside = container.querySelector("aside.lg\\:block") as HTMLElement;
-    await waitFor(() => expect(sidebarAside.style.width).toBe("48px"));
+    await waitFor(() => expect(sidebarAside.style.width).toBe("64px"));
 
     expect(screen.queryByRole("button", { name: "Start a new topic" })).not.toBeInTheDocument();
     const rail = screen.getByRole("navigation", { name: "Sidebar navigation" });
@@ -3787,7 +3790,7 @@ describe("App layout", () => {
     expect(within(rail).queryByText("Existing chat")).not.toBeInTheDocument();
 
     fireEvent.click(within(rail).getByRole("button", { name: "Toggle sidebar" }));
-    await waitFor(() => expect(sidebarAside.style.width).toBe("272px"));
+    await waitFor(() => expect(sidebarAside.style.width).toBe("472px"));
 
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "New chat" }));

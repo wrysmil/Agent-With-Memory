@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "パスを使用",
       "absolutePathRequired": "このマシン上の絶対フォルダーパスを入力してください。"
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "アシスタント",
+      "creative": "クリエイティブ"
+    },
+    "preview": {
+      "badge": "インターフェースプレビュー · サンプルコンテンツ"
+    },
+    "home": {
+      "eyebrow": "ワークベンチ",
+      "title": "今日は何を終わらせたいですか？",
+      "subtitle": "フリーフォームのタスクから始めるか、下の機能から選べます。",
+      "taskAria": "フリーフォームタスク",
+      "taskPlaceholder": "タスクを記述してください。例：「今週の記憶をノートにまとめる」。",
+      "previewHint": "インターフェースプレビュー：実際には送信されません。",
+      "submitHint": "アシスタントが開きます。送信前に確認が必要です。",
+      "submit": "開始",
+      "capabilitiesTitle": "機能",
+      "creativeTitle": "クリエイティブ空間",
+      "creativeDesc": "散らばった素材を記事にまとめます。",
+      "assistantTitle": "汎用アシスタント",
+      "assistantDesc": "既存のスキルとエージェントをすべて維持します。"
+    },
+    "creative": {
+      "comingSoon": "クリエイティブモジュールはまもなく公開されます。"
     }
   }
 }

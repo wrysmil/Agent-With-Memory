@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Gunakan path",
       "absolutePathRequired": "Masukkan path folder absolut di mesin ini."
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "Asisten",
+      "creative": "Kreatif"
+    },
+    "preview": {
+      "badge": "Pratinjau antarmuka · konten contoh"
+    },
+    "home": {
+      "eyebrow": "Meja kerja",
+      "title": "Apa yang ingin Anda selesaikan hari ini?",
+      "subtitle": "Mulai dengan tugas bebas, atau pilih kemampuan di bawah.",
+      "taskAria": "Tugas bebas",
+      "taskPlaceholder": "Jelaskan tugas Anda, misalnya \"ubah memori minggu ini menjadi catatan\".",
+      "previewHint": "Pratinjau antarmuka: tidak ada yang benar-benar dikirim.",
+      "submitHint": "Membuka asisten; Anda tetap mengonfirmasi pengiriman.",
+      "submit": "Mulai",
+      "capabilitiesTitle": "Kemampuan",
+      "creativeTitle": "Ruang kreatif",
+      "creativeDesc": "Ubah materi yang tersebar menjadi artikel.",
+      "assistantTitle": "Asisten umum",
+      "assistantDesc": "Mempertahankan semua skill dan agen yang ada."
+    },
+    "creative": {
+      "comingSoon": "Modul kreatif segera hadir."
     }
   }
 }

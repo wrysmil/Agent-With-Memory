@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "使用路径",
       "absolutePathRequired": "请输入这台机器上的绝对文件夹路径。"
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "助手",
+      "creative": "创作"
+    },
+    "preview": {
+      "badge": "界面预览 · 示例内容"
+    },
+    "home": {
+      "eyebrow": "知序工作台",
+      "title": "今天想完成什么？",
+      "subtitle": "一句自由任务直接开始，或从下面的能力进入。",
+      "taskAria": "自由任务",
+      "taskPlaceholder": "写下你的任务，例如「把这周的记忆整理成一篇笔记」。",
+      "previewHint": "界面预览：不会真正发送",
+      "submitHint": "点击后进入助手，仍需你确认发送。",
+      "submit": "开始",
+      "capabilitiesTitle": "能力入口",
+      "creativeTitle": "创作空间",
+      "creativeDesc": "把碎片素材整理成一篇文章。",
+      "assistantTitle": "通用助手",
+      "assistantDesc": "保留 Skill、智能体等全部已有能力。"
+    },
+    "creative": {
+      "comingSoon": "创作模块即将上线。"
     }
   }
 }

@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "경로 사용",
       "absolutePathRequired": "이 머신의 절대 폴더 경로를 입력하세요."
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "어시스턴트",
+      "creative": "크리에이티브"
+    },
+    "preview": {
+      "badge": "인터페이스 미리보기 · 샘플 콘텐츠"
+    },
+    "home": {
+      "eyebrow": "워크벤치",
+      "title": "오늘 무엇을 끝내시고 싶으신가요?",
+      "subtitle": "자유 형식 작업으로 바로 시작하거나 아래 기능에서 시작하세요.",
+      "taskAria": "자유 형식 작업",
+      "taskPlaceholder": "작업을 입력하세요. 예: \"이번 주 기억을 노트로 정리하기\".",
+      "previewHint": "인터페이스 미리보기: 실제로 전송되지 않습니다.",
+      "submitHint": "어시스턴트가 열리며, 전송은 여전히 확인이 필요합니다.",
+      "submit": "시작",
+      "capabilitiesTitle": "기능",
+      "creativeTitle": "크리에이티브 공간",
+      "creativeDesc": "흩어진 소재를 기사로 정리합니다.",
+      "assistantTitle": "범용 어시스턴트",
+      "assistantDesc": "기존 스킬과 에이전트를 모두 그대로 유지합니다."
+    },
+    "creative": {
+      "comingSoon": "크리에이티브 모듈은 곧 제공됩니다."
     }
   }
 }

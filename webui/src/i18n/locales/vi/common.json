@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Dùng đường dẫn",
       "absolutePathRequired": "Nhập đường dẫn thư mục tuyệt đối trên máy này."
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "Trợ lý",
+      "creative": "Sáng tạo"
+    },
+    "preview": {
+      "badge": "Xem trước giao diện · nội dung mẫu"
+    },
+    "home": {
+      "eyebrow": "Bàn làm việc",
+      "title": "Hôm nay bạn muốn hoàn thành điều gì?",
+      "subtitle": "Bắt đầu với một nhiệm vụ tự do hoặc chọn một tính năng bên dưới.",
+      "taskAria": "Nhiệm vụ tự do",
+      "taskPlaceholder": "Mô tả nhiệm vụ của bạn, ví dụ \"biến các ký ức tuần này thành một ghi chú\".",
+      "previewHint": "Xem trước giao diện: không có gì được gửi đi thực sự.",
+      "submitHint": "Mở trợ lý; bạn vẫn xác nhận trước khi gửi.",
+      "submit": "Bắt đầu",
+      "capabilitiesTitle": "Tính năng",
+      "creativeTitle": "Không gian sáng tạo",
+      "creativeDesc": "Biến các mảnh tư liệu rời rạc thành một bài viết.",
+      "assistantTitle": "Trợ lý tổng hợp",
+      "assistantDesc": "Giữ nguyên toàn bộ skill và agent hiện có."
+    },
+    "creative": {
+      "comingSoon": "Module sáng tạo sẽ sớm ra mắt."
     }
   }
 }

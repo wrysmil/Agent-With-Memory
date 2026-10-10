@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Use Path",
       "absolutePathRequired": "Enter an absolute folder path on this machine."
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "Assistant",
+      "creative": "Creative"
+    },
+    "preview": {
+      "badge": "Interface preview · sample content"
+    },
+    "home": {
+      "eyebrow": "Workbench",
+      "title": "What do you want to get done today?",
+      "subtitle": "Start with a free-form task, or jump in from a capability below.",
+      "taskAria": "Free-form task",
+      "taskPlaceholder": "Describe your task, e.g. \"turn this week's memories into a note\".",
+      "previewHint": "Interface preview: nothing is actually sent.",
+      "submitHint": "Opens the assistant; you still confirm sending.",
+      "submit": "Start",
+      "capabilitiesTitle": "Capabilities",
+      "creativeTitle": "Creative space",
+      "creativeDesc": "Turn scattered material into an article.",
+      "assistantTitle": "General assistant",
+      "assistantDesc": "Keeps all existing skills and agents."
+    },
+    "creative": {
+      "comingSoon": "Creative module is coming soon."
     }
   }
 }

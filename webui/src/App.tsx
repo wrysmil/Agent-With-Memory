@@ -10,6 +10,12 @@ import {
 } from "react";
 import { Eye, EyeOff, Moon, ShieldCheck, Sun, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import {
+  parseWorkspaceHash,
+  settingsSectionForView,
+  workspaceRouteHash,
+} from "@/workspace/routes";
+import { WorkspaceHome } from "@/components/workspace/WorkspaceHome";
 import { channelUiPresentation } from "@/channel-plugins/registry";
 import { Sidebar } from "@/components/Sidebar";
 import { PROJECTS_SECTION_KEY, type SidebarDeleteItem } from "@/components/ChatList";
@@ -114,19 +120,30 @@ const LEGACY_COMPLETED_RUNS_STORAGE_KEY = "nanobot-webui.sidebar.completed-runs.
 const RESTART_STARTED_KEY = "nanobot-webui.restartStartedAt";
 const RESTART_ROUTE_KEY = "nanobot-webui.restartRoute";
 const RESTART_ROUTE_TTL_MS = 5 * 60 * 1000;
-const SIDEBAR_WIDTH = 272;
-const SIDEBAR_RAIL_WIDTH = 48;
-const MOBILE_SIDEBAR_WIDTH = `min(${SIDEBAR_WIDTH}px, calc(100vw - 0.75rem))`;
+const SIDEBAR_WIDTH = 224;
+const SIDEBAR_RAIL_WIDTH = 64;
+const SIDEBAR_CHAT_WIDTH = 248;
+const MOBILE_SIDEBAR_WIDTH = `min(${SIDEBAR_WIDTH + SIDEBAR_CHAT_WIDTH}px, calc(100vw - 0.75rem))`;
 const TOKEN_REFRESH_MARGIN_MS = 30_000;
 const TOKEN_REFRESH_MIN_DELAY_MS = 5_000;
 const PAIRING_POLL_INTERVAL_MS = 5_000;
 const PAIRING_IDLE_POLL_INTERVAL_MS = 15_000;
 const PAIRING_DISMISS_SNOOZE_MS = 30_000;
-type ShellView = "chat" | "settings" | "apps" | "automations" | "skills" | "agents";
+type ShellView =
+  | "chat"
+  | "home"
+  | "creative"
+  | "article"
+  | "settings"
+  | "apps"
+  | "automations"
+  | "skills"
+  | "agents";
 type ShellRoute = {
   view: ShellView;
   activeKey: string | null;
   settingsSection: SettingsSectionKey;
+  articleId?: string;
   temporary?: boolean;
 };
 const loadSettingsView = () => import("@/components/settings/SettingsView");
@@ -134,6 +151,7 @@ const SettingsView = lazy(async () => {
   const module = await loadSettingsView();
   return { default: module.SettingsView };
 });
+const CreativeWorkspace = lazy(() => import("./components/creative/CreativeWorkspace"));
 const SessionSearchDialog = lazy(async () => {
   const module = await import("@/components/SessionSearchDialog");
   return { default: module.SessionSearchDialog };
@@ -163,37 +181,17 @@ function SurfaceLoadingFallback() {
   );
 }
 
-const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
-  "overview",
-  "appearance",
-  "models",
-  "image",
-  "voice",
-  "browser",
-  "channels",
-  "apps",
-  "automations",
-  "skills",
-  "agents",
-  "memory",
-  "identity",
-  "runtime",
-  "advanced",
-];
-
-function isSettingsSectionKey(value: string | null): value is SettingsSectionKey {
-  return SETTINGS_SECTION_KEYS.includes(value as SettingsSectionKey);
-}
-
 function defaultShellRoute(): ShellRoute {
-  return { view: "chat", activeKey: null, settingsSection: "overview" };
+  return { view: "home", activeKey: null, settingsSection: "overview" };
 }
 
-function shellViewForSettingsSection(section: SettingsSectionKey): ShellView {
-  if (section === "apps" || section === "automations" || section === "skills" || section === "agents") {
-    return section;
-  }
-  return "settings";
+/**
+ * The blank new-topic destination. Distinct from `defaultShellRoute()` (the
+ * workbench home landing): "New chat", ending a temporary chat, and recovering
+ * from a vanished session all return here rather than to the home view.
+ */
+function newChatRoute(): ShellRoute {
+  return { view: "chat", activeKey: null, settingsSection: "overview" };
 }
 
 function fallbackRestartHash(hash: string): boolean {
@@ -237,82 +235,24 @@ function readShellRoute(): ShellRoute {
     ? window.location.hash.slice(1)
     : window.location.hash;
   const hash = maybeRestoreRestartHash(currentHash);
-  if (!hash || hash === "/" || hash === "/new") return defaultShellRoute();
-
-  const [path, query = ""] = hash.split("?", 2);
-  const params = new URLSearchParams(query);
-  const rawSettingsSection = params.get("section");
-  const settingsSection = isSettingsSectionKey(rawSettingsSection)
-    ? rawSettingsSection
-    : "overview";
-  const activeKey = params.get("chat")?.trim() || null;
-
-  if (path === "/settings") {
-    return {
-      view: shellViewForSettingsSection(settingsSection),
-      activeKey,
-      settingsSection,
-    };
-  }
-  if (path === "/apps") {
-    return { view: "apps", activeKey, settingsSection: "apps" };
-  }
-  if (path === "/automations") {
-    return { view: "automations", activeKey, settingsSection: "automations" };
-  }
-  if (path === "/skills") {
-    return { view: "skills", activeKey, settingsSection: "skills" };
-  }
-  if (path === "/agents") {
-    return { view: "agents", activeKey, settingsSection: "agents" };
-  }
-  if (path.startsWith("/temporary/")) {
-    const encoded = path.slice("/temporary/".length);
-    try {
-      const chatId = decodeURIComponent(encoded).trim();
-      return chatId
-        ? {
-            view: "chat",
-            activeKey: `websocket:${chatId}`,
-            settingsSection: "overview",
-            temporary: true,
-          }
-        : defaultShellRoute();
-    } catch {
-      return defaultShellRoute();
-    }
-  }
-  if (path.startsWith("/chat/")) {
-    const encoded = path.slice("/chat/".length);
-    try {
-      const key = decodeURIComponent(encoded).trim();
-      return key
-        ? { view: "chat", activeKey: key, settingsSection: "overview" }
-        : defaultShellRoute();
-    } catch {
-      return defaultShellRoute();
-    }
-  }
-  return defaultShellRoute();
+  const route = parseWorkspaceHash(hash);
+  return {
+    view: route.view,
+    activeKey: route.chatKey ?? null,
+    settingsSection: settingsSectionForView(route.view, route.settingsSection),
+    articleId: route.articleId,
+    temporary: route.temporary,
+  };
 }
 
 function shellRouteHash(route: ShellRoute): string {
-  if (route.view === "chat") {
-    if (route.temporary && route.activeKey?.startsWith("websocket:")) {
-      const chatId = route.activeKey.slice("websocket:".length);
-      return `#/temporary/${encodeURIComponent(chatId)}`;
-    }
-    return route.activeKey
-      ? `#/chat/${encodeURIComponent(route.activeKey)}`
-      : "#/new";
-  }
-  const params = new URLSearchParams();
-  if (route.activeKey) params.set("chat", route.activeKey);
-  if (route.view === "settings" && route.settingsSection !== "overview") {
-    params.set("section", route.settingsSection);
-  }
-  const query = params.toString();
-  return `#/${route.view}${query ? `?${query}` : ""}`;
+  return workspaceRouteHash({
+    view: route.view,
+    chatKey: route.activeKey,
+    settingsSection: route.settingsSection,
+    articleId: route.articleId,
+    temporary: route.temporary,
+  });
 }
 
 function writeShellRoute(route: ShellRoute, replace = false): void {
@@ -1097,6 +1037,10 @@ function Shell({
   const pageVisible = usePageVisibility();
   const [settingsSnapshot, setSettingsSnapshot] = useState<SettingsPayload | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [composerDraftSeed, setComposerDraftSeed] = useState<{
+    text: string;
+    token: number;
+  } | null>(null);
   const [draftWorkspaceScope, setDraftWorkspaceScope] =
     useState<WorkspaceScopePayload | null>(null);
   const [workspaceOverrides, setWorkspaceOverrides] =
@@ -1360,7 +1304,7 @@ function Shell({
     const currentRoute = readShellRoute();
     if (currentRoute.temporary) {
       if (temporarySessions[activeKey]) return;
-      navigate(defaultShellRoute(), { replace: true });
+      navigate(newChatRoute(), { replace: true });
       return;
     }
     if (sessions.some((session) => session.key === activeKey)) return;
@@ -1369,7 +1313,7 @@ function Shell({
     if (pendingCreatedKey === activeKey) return;
     navigate(
       currentRoute.view === "chat"
-        ? defaultShellRoute()
+        ? newChatRoute()
         : {
             ...currentRoute,
             activeKey: null,
@@ -1592,7 +1536,7 @@ function Shell({
   }, [forkChat, navigate, sessions, sidebarState.title_overrides, t]);
 
   const onNewChat = useCallback(() => {
-    navigate(defaultShellRoute());
+    navigate(newChatRoute());
     setTemporaryChatEnabled(false);
     setDraftWorkspaceScope(null);
     setWorkspaceError(null);
@@ -1616,7 +1560,7 @@ function Shell({
         return;
       }
       setTemporaryChatEnabled(false);
-      navigate(defaultShellRoute());
+      navigate(newChatRoute());
       setDraftWorkspaceScope(normalizeWorkspaceScope({
         project_path: trimmed,
         project_name: projectName || projectNameFromPath(trimmed),
@@ -2029,14 +1973,51 @@ function Shell({
 
   const onSettingsSectionChange = useCallback(
     (section: SettingsSectionKey) => {
+      const sectionView: ShellView =
+        section === "apps"
+        || section === "automations"
+        || section === "skills"
+        || section === "agents"
+          ? section
+          : "settings";
       navigate({
-        view: shellViewForSettingsSection(section),
+        view: sectionView,
         activeKey,
         settingsSection: section,
       });
     },
     [activeKey, navigate],
   );
+
+  const onOpenHome = useCallback(() => {
+    setSessionSearchOpen(false);
+    navigate({ view: "home", activeKey: null, settingsSection: "overview" });
+    setMobileSidebarOpen(false);
+  }, [navigate]);
+
+  const onOpenAssistant = useCallback(() => {
+    setSessionSearchOpen(false);
+    navigate({ view: "chat", activeKey, settingsSection: "overview" });
+    setMobileSidebarOpen(false);
+  }, [activeKey, navigate]);
+
+  const onOpenCreative = useCallback(() => {
+    setSessionSearchOpen(false);
+    navigate({ view: "creative", activeKey: null, settingsSection: "overview" });
+    setMobileSidebarOpen(false);
+  }, [navigate]);
+
+  const onWorkspaceSubmitTask = useCallback(
+    (text: string) => {
+      setComposerDraftSeed({ text, token: Date.now() });
+      navigate({ view: "chat", activeKey: null, settingsSection: "overview" });
+    },
+    [navigate],
+  );
+
+  const onDraftSeedConsumed = useCallback(() => {
+    setComposerDraftSeed(null);
+  }, []);
 
   const onBackToChat = useCallback(() => {
     setMobileSidebarOpen(false);
@@ -2123,7 +2104,7 @@ function Shell({
       temporarySessionsRef.current = {};
       setTemporarySessions({});
       if (readShellRoute().temporary) {
-        navigate(defaultShellRoute(), { replace: true });
+        navigate(newChatRoute(), { replace: true });
       }
     });
   }, [client, navigate]);
@@ -2572,6 +2553,10 @@ function Shell({
     onNewChatInProject,
     onTogglePinProject,
     onRemoveProject,
+    activeView: view === "article" ? "creative" : view,
+    onOpenHome,
+    onOpenAssistant,
+    onOpenCreative,
     onOpenSettings,
     onOpenApps,
     onOpenAutomations,
@@ -2603,7 +2588,17 @@ function Shell({
     archivedCount: sidebarArchivedTabKeys.length,
     defaultWorkspacePath: workspaces?.default_scope.project_path ?? null,
   };
-  const hostSidebarFlowWidth = hostSidebarOpen ? SIDEBAR_WIDTH : SIDEBAR_RAIL_WIDTH;
+  const hostSidebarFlowWidth = !hostSidebarOpen
+    ? SIDEBAR_RAIL_WIDTH
+    : view === "chat"
+      ? SIDEBAR_WIDTH + SIDEBAR_CHAT_WIDTH
+      : SIDEBAR_WIDTH;
+  const isSettingsLikeView =
+    view === "settings"
+    || view === "apps"
+    || view === "automations"
+    || view === "skills"
+    || view === "agents";
 
   useEffect(() => {
     document.documentElement.classList.toggle("native-host", showHostChrome);
@@ -2810,6 +2805,8 @@ function Shell({
                         settingsSnapshot={settingsSnapshot}
                         onOpenModelSettings={onOpenModelSettings}
                         skills={skills}
+                        draftSeed={composerDraftSeed}
+                        onDraftSeedConsumed={onDraftSeedConsumed}
                       />
                     );
                   }
@@ -2875,7 +2872,30 @@ function Shell({
               />
               </div>
             </div>
-            {view !== "chat" && (
+            {view === "home" ? (
+              <div className="absolute inset-0 flex flex-col">
+                <WorkspaceHome
+                  preview={false}
+                  onSubmitTask={onWorkspaceSubmitTask}
+                  onOpenAssistant={onOpenAssistant}
+                  onOpenCreative={onOpenCreative}
+                  onOpenCapability={(capabilityView) => {
+                    if (capabilityView === "apps") onOpenApps();
+                    else if (capabilityView === "skills") onOpenSkills();
+                    else if (capabilityView === "automations") onOpenAutomations();
+                    else if (capabilityView === "agents") onOpenAgents();
+                  }}
+                />
+              </div>
+            ) : null}
+            {(view === "creative" || view === "article") ? (
+              <div className="absolute inset-0 overflow-y-auto bg-background">
+                <Suspense fallback={null}>
+                  <CreativeWorkspace />
+                </Suspense>
+              </div>
+            ) : null}
+            {isSettingsLikeView && (
               <div className="absolute inset-0 flex flex-col">
                 <Suspense fallback={<SurfaceLoadingFallback />}>
                   <SettingsView

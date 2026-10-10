@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Utiliser le chemin",
       "absolutePathRequired": "Saisissez un chemin absolu de dossier sur cette machine."
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "Assistant",
+      "creative": "Création"
+    },
+    "preview": {
+      "badge": "Aperçu de l'interface · contenu d'exemple"
+    },
+    "home": {
+      "eyebrow": "Espace de travail",
+      "title": "Que voulez-vous accomplir aujourd'hui ?",
+      "subtitle": "Commencez par une tâche libre ou choisissez une capacité ci-dessous.",
+      "taskAria": "Tâche libre",
+      "taskPlaceholder": "Décrivez votre tâche, par ex. « transforme les souvenirs de la semaine en une note ».",
+      "previewHint": "Aperçu de l'interface : rien n'est réellement envoyé.",
+      "submitHint": "Ouvre l'assistant ; l'envoi reste à confirmer.",
+      "submit": "Commencer",
+      "capabilitiesTitle": "Capacités",
+      "creativeTitle": "Espace création",
+      "creativeDesc": "Transformez des éléments épars en un article.",
+      "assistantTitle": "Assistant général",
+      "assistantDesc": "Conserve toutes les compétences et agents existants."
+    },
+    "creative": {
+      "comingSoon": "Le module création arrive bientôt."
     }
   }
 }

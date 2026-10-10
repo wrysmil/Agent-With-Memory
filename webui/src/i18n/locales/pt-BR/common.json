@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/nome/projeto",
       "usePath": "Usar caminho",
       "absolutePathRequired": "Informe um caminho absoluto de pasta nesta máquina."
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "Assistente",
+      "creative": "Criativo"
+    },
+    "preview": {
+      "badge": "Pré-visualização da interface · conteúdo de exemplo"
+    },
+    "home": {
+      "eyebrow": "Painel de trabalho",
+      "title": "O que você quer concluir hoje?",
+      "subtitle": "Comece com uma tarefa livre ou escolha uma capacidade abaixo.",
+      "taskAria": "Tarefa livre",
+      "taskPlaceholder": "Descreva sua tarefa, por exemplo, \"transforme as memórias desta semana em uma nota\".",
+      "previewHint": "Pré-visualização da interface: nada é enviado de verdade.",
+      "submitHint": "Abre o assistente; você ainda confirma o envio.",
+      "submit": "Começar",
+      "capabilitiesTitle": "Capacidades",
+      "creativeTitle": "Espaço criativo",
+      "creativeDesc": "Transforme material disperso em um artigo.",
+      "assistantTitle": "Assistente geral",
+      "assistantDesc": "Mantém todas as skills e agentes existentes."
+    },
+    "creative": {
+      "comingSoon": "O módulo criativo chega em breve."
     }
   }
 }

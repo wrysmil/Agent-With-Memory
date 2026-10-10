@@ -2088,7 +2088,7 @@ function SessionActivityIndicator({
           aria-label={label}
           className="grid h-4 w-4 shrink-0 place-items-center"
         >
-          <span className="h-3 w-3 animate-spin rounded-full border border-blue-500/25 border-t-blue-500 [animation-duration:1.4s] motion-reduce:animate-none dark:border-blue-400/25 dark:border-t-blue-400" />
+          <span className="h-3 w-3 animate-spin rounded-full border border-primary/25 border-t-primary [animation-duration:1.4s] motion-reduce:animate-none" />
         </span>
       </SidebarItemTooltip>
     );

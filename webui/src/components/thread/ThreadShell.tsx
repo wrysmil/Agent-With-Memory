@@ -428,6 +428,8 @@ interface ThreadShellProps {
   onOpenModelSettings?: () => void;
   skills?: SkillSummary[];
   onWorkbenchOpenChange?: (open: boolean) => void;
+  draftSeed?: { text: string; token: number } | null;
+  onDraftSeedConsumed?: () => void;
 }
 
 function toModelBadgeLabel(modelName: string | null): string | null {
@@ -731,6 +733,8 @@ export function ThreadShell({
   onOpenModelSettings,
   skills = [],
   onWorkbenchOpenChange,
+  draftSeed = null,
+  onDraftSeedConsumed,
 }: ThreadShellProps) {
   const { t } = useTranslation();
   const chatId = session?.chatId ?? null;
@@ -1733,6 +1737,8 @@ export function ThreadShell({
           runtimeHostname={workspaceHostname}
           transcriptionProvider={settingsSnapshot?.transcription?.provider}
           ingressLimits={ingressLimits}
+          draftSeed={draftSeed}
+          onDraftSeedConsumed={onDraftSeedConsumed}
         />
       )}
     </>

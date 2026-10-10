@@ -241,6 +241,9 @@ interface ThreadComposerProps {
   quotedContext?: string | null;
   focusRequest?: number;
   onQuotedContextChange?: (text: string | null) => void;
+  /** One-shot text seeded from outside (e.g. the workspace home input). */
+  draftSeed?: { text: string; token: number } | null;
+  onDraftSeedConsumed?: () => void;
 }
 
 const COMMAND_ICONS: Record<string, LucideIcon> = {
@@ -946,6 +949,8 @@ export function ThreadComposer({
   quotedContext = null,
   focusRequest = 0,
   onQuotedContextChange,
+  draftSeed = null,
+  onDraftSeedConsumed,
 }: ThreadComposerProps) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
@@ -1520,6 +1525,20 @@ export function ThreadComposer({
       el.style.height = `${Math.min(el.scrollHeight, 260)}px`;
     });
   }, [clear, pendingQueueKey]);
+
+  const consumedDraftSeedTokenRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (!draftSeed || draftSeed.token === consumedDraftSeedTokenRef.current) return;
+    consumedDraftSeedTokenRef.current = draftSeed.token;
+    if (disabled) return;
+    secondEnterPromptIdRef.current = null;
+    setValue(draftSeed.text);
+    setCursorPosition(draftSeed.text.length);
+    setSlashMenuDismissed(false);
+    setCliAppMenuDismissed(false);
+    resizeTextarea();
+    onDraftSeedConsumed?.();
+  }, [disabled, draftSeed, onDraftSeedConsumed, resizeTextarea]);
 
   const appendTranscription = useCallback((text: string) => {
     const transcript = text.trim();

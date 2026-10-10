@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "Usar ruta",
       "absolutePathRequired": "Introduce una ruta absoluta de carpeta en esta máquina."
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "Asistente",
+      "creative": "Creativo"
+    },
+    "preview": {
+      "badge": "Vista previa de la interfaz · contenido de ejemplo"
+    },
+    "home": {
+      "eyebrow": "Panel de trabajo",
+      "title": "¿Qué quieres lograr hoy?",
+      "subtitle": "Empieza con una tarea libre o elige una capacidad de abajo.",
+      "taskAria": "Tarea libre",
+      "taskPlaceholder": "Describe tu tarea, por ejemplo: «convierte los recuerdos de esta semana en una nota».",
+      "previewHint": "Vista previa de la interfaz: nada se envía de verdad.",
+      "submitHint": "Abre el asistente; todavía debes confirmar el envío.",
+      "submit": "Empezar",
+      "capabilitiesTitle": "Capacidades",
+      "creativeTitle": "Espacio creativo",
+      "creativeDesc": "Convierte material disperso en un artículo.",
+      "assistantTitle": "Asistente general",
+      "assistantDesc": "Conserva todas las habilidades y agentes existentes."
+    },
+    "creative": {
+      "comingSoon": "El módulo creativo llegará pronto."
     }
   }
 }

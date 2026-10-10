@@ -2005,6 +2005,32 @@
       "manualPlaceholder": "/Users/name/project",
       "usePath": "使用路徑",
       "absolutePathRequired": "請輸入這台機器上的絕對資料夾路徑。"
+    },
+    "brand": "知序",
+    "nav": {
+      "assistant": "助手",
+      "creative": "創作"
+    },
+    "preview": {
+      "badge": "介面預覽 · 範例內容"
+    },
+    "home": {
+      "eyebrow": "知序工作台",
+      "title": "今天想完成什麼？",
+      "subtitle": "一句自由任務直接開始，或從下面的能力進入。",
+      "taskAria": "自由任務",
+      "taskPlaceholder": "寫下你的任務，例如「把這週的記憶整理成一篇筆記」。",
+      "previewHint": "介面預覽：不會真正傳送",
+      "submitHint": "點擊後進入助手，仍需你確認傳送。",
+      "submit": "開始",
+      "capabilitiesTitle": "能力入口",
+      "creativeTitle": "創作空間",
+      "creativeDesc": "把碎片素材整理成一篇文章。",
+      "assistantTitle": "通用助手",
+      "assistantDesc": "保留 Skill、智能體等全部已有能力。"
+    },
+    "creative": {
+      "comingSoon": "創作模組即將上線。"
     }
   }
 }

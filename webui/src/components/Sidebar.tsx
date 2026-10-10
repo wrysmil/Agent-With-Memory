@@ -1,20 +1,7 @@
-import {
-  type ReactNode,
-  type RefObject,
-  useRef,
-  useState,
-} from "react";
+import { useState } from "react";
 import {
   Archive,
-  Blocks,
-  Bot,
-  Brain,
-  CalendarClock,
-  ChevronDown,
-  Home,
-  Menu,
   Search,
-  Settings,
   SquarePen,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -27,8 +14,9 @@ import {
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import {
   SIDEBAR_SELECTION_ACTION_ITEM_CLASS,
-  SidebarSelectionHighlight,
 } from "@/components/SidebarSelectionHighlight";
+import { WorkspaceNavigation } from "@/components/workspace/WorkspaceNavigation";
+import type { WorkspaceView } from "@/components/workspace/contracts";
 import { Button } from "@/components/ui/button";
 import type {
   ChatSummary,
@@ -57,22 +45,23 @@ interface SidebarProps {
   onCreateTab?: (paneKey: string) => void;
   onDetachPane?: (tabKey: string, paneKey: string) => void;
   onDissolveTab?: (tabKey: string) => void;
-  onAttachPane?: (
-    paneKey: string,
-    tabKey: string,
-  ) => void;
+  onAttachPane?: (paneKey: string, tabKey: string) => void;
   onToggleGroup: (groupId: string) => void;
   onRequestRenameProject: (projectKey: string, label: string) => void;
   onNewChatInProject: (projectPath: string, projectName: string) => void;
   onTogglePinProject?: (projectKey: string) => void;
   onRemoveProject?: (projectKey: string, label: string) => void;
+  activeView: WorkspaceView;
+  onOpenHome: () => void;
+  onOpenAssistant: () => void;
+  onOpenCreative: () => void;
   onOpenSettings: () => void;
   onOpenApps: () => void;
   onOpenSkills: () => void;
   onOpenAutomations: () => void;
   onOpenAgents: () => void;
-  onSettingsIntent?: () => void;
   onOpenSearch: () => void;
+  onSettingsIntent?: () => void;
   activeUtility?: "apps" | "skills" | "automations" | "agents" | null;
   onToggleArchived: () => void;
   onCollapse: () => void;
@@ -120,97 +109,62 @@ export function Sidebar(props: SidebarProps) {
   const { t } = useTranslation();
   const [menuPortalContainer, setMenuPortalContainer] =
     useState<HTMLElement | null>(null);
-  const collapsed = Boolean(props.collapsed);
-  const toggleLabel = t("thread.header.toggleSidebar");
   const newChatShortcut = newChatShortcutLabel();
-  const activeActionRef = useRef<HTMLButtonElement>(null);
-  const activeRailRef = useRef<HTMLButtonElement>(null);
-  const selectionActiveId = props.newChatActive
-    ? "new-chat"
-    : props.activeUtility
-      ? `utility:${props.activeUtility}`
-      : null;
-  const selectionTargetRef = props.newChatActive || !props.activeUtility
-    ? activeActionRef
-    : activeRailRef;
-  const topInset = props.hostChromeInset ? "pt-8" : "pt-2";
+
+  const activeView = props.activeView;
 
   return (
-    <nav
-      ref={props.containActionMenus ? setMenuPortalContainer : undefined}
-      aria-label={t("sidebar.navigation")}
-      className={cn(
-        "h-full w-full min-w-0 text-sidebar-foreground",
-        props.hostChromeInset ? "bg-transparent" : "bg-sidebar",
-      )}
-    >
-      <SidebarSelectionHighlight
-        targetRef={selectionTargetRef}
-        activeId={selectionActiveId}
-        scope="actions"
-        className="relative flex h-full w-full min-w-0 flex-row"
-      >
-      <div
-        data-testid="sidebar-rail"
-        className={cn("flex w-12 shrink-0 flex-col items-center gap-1 pb-3", topInset)}
-      >
-        {collapsed ? (
-          <RailButton
-            label={toggleLabel}
-            onClick={() => props.onExpand?.()}
-            icon={<Menu className="h-4 w-4" />}
-          />
-        ) : (
-          <RailButton
-            label={t("sidebar.home")}
-            onClick={props.onNewChat}
-            active={props.newChatActive}
-            selectionRef={activeRailRef}
-            icon={<Home className="h-4 w-4" />}
-          />
-        )}
-        <RailButton
-          label={t("sidebar.apps")}
-          onClick={props.onOpenApps}
-          onIntent={props.onSettingsIntent}
-          active={props.activeUtility === "apps"}
-          selectionRef={activeRailRef}
-          icon={<Blocks className="h-4 w-4" />}
-        />
-        <RailButton
-          label={t("sidebar.skills.title")}
-          onClick={props.onOpenSkills}
-          onIntent={props.onSettingsIntent}
-          active={props.activeUtility === "skills"}
-          selectionRef={activeRailRef}
-          icon={<Brain className="h-4 w-4" />}
-        />
-        <RailButton
-          label={t("sidebar.automations", { defaultValue: "Automations" })}
-          onClick={props.onOpenAutomations}
-          onIntent={props.onSettingsIntent}
-          active={props.activeUtility === "automations"}
-          selectionRef={activeRailRef}
-          icon={<CalendarClock className="h-4 w-4" />}
-        />
-        <RailButton
-          label={t("sidebar.agents", { defaultValue: "Agents" })}
-          onClick={props.onOpenAgents}
-          onIntent={props.onSettingsIntent}
-          active={props.activeUtility === "agents"}
-          selectionRef={activeRailRef}
-          icon={<Bot className="h-4 w-4" />}
-        />
-        <div className="min-h-0 flex-1" />
-        <RailButton
-          label={t("sidebar.settings")}
-          onClick={props.onOpenSettings}
-          onIntent={props.onSettingsIntent}
-          icon={<Settings className="h-4 w-4" />}
-        />
-      </div>
-      {!collapsed && (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <WorkspaceNavigation
+      activeView={activeView}
+      collapsed={Boolean(props.collapsed)}
+      preview={false}
+      newChatActive={props.newChatActive}
+      activeUtility={props.activeUtility ?? null}
+      hostChromeInset={props.hostChromeInset}
+      onToggleCollapsed={() => {
+        if (props.collapsed) props.onExpand?.();
+        else props.onCollapse();
+      }}
+      onNavigate={(route) => {
+        switch (route.view) {
+          case "home":
+            props.onOpenHome();
+            break;
+          case "chat":
+            props.onOpenAssistant();
+            break;
+          case "creative":
+            props.onOpenCreative();
+            break;
+          case "apps":
+            props.onOpenApps();
+            break;
+          case "skills":
+            props.onOpenSkills();
+            break;
+          case "automations":
+            props.onOpenAutomations();
+            break;
+          case "agents":
+            props.onOpenAgents();
+            break;
+          case "settings":
+            props.onOpenSettings();
+            break;
+          default:
+            break;
+        }
+      }}
+      connectionStatus={
+        <div className="flex items-center gap-1 text-xs">
+          <ConnectionBadge />
+        </div>
+      }
+      chatNavigation={({ activeActionRef }) => (
+        <div
+          ref={props.containActionMenus ? setMenuPortalContainer : undefined}
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
+        >
           <div
             data-testid="sidebar-brand-row"
             className={cn(
@@ -218,14 +172,9 @@ export function Sidebar(props: SidebarProps) {
               props.hostChromeInset ? "pt-8" : "pt-3",
             )}
           >
-            <span className="truncate text-[15px] font-semibold text-sidebar-foreground">
-              Mira
+            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-sidebar-foreground">
+              {t("sidebar.recent")}
             </span>
-            <ChevronDown
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
-              aria-hidden
-            />
-            <span className="min-w-0 flex-1" />
             <Button
               variant="ghost"
               size="icon"
@@ -234,15 +183,6 @@ export function Sidebar(props: SidebarProps) {
               className="host-no-drag h-7 w-7 rounded-lg text-muted-foreground/85 hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
             >
               <Search className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={t("sidebar.collapse")}
-              onClick={props.onCollapse}
-              className="host-no-drag h-7 w-7 rounded-lg text-muted-foreground/85 hover:bg-sidebar-accent/75 hover:text-sidebar-foreground"
-            >
-              <Menu className="h-3.5 w-3.5" />
             </Button>
           </div>
           <div className="space-y-1.5 px-2 pb-2 pt-1">
@@ -319,47 +259,7 @@ export function Sidebar(props: SidebarProps) {
           </div>
         </div>
       )}
-      </SidebarSelectionHighlight>
-    </nav>
-  );
-}
-
-function RailButton({
-  label,
-  icon,
-  onClick,
-  active = false,
-  onIntent,
-  selectionRef,
-}: {
-  label: string;
-  icon: ReactNode;
-  onClick: () => void;
-  active?: boolean;
-  onIntent?: () => void;
-  selectionRef?: RefObject<HTMLButtonElement>;
-}) {
-  return (
-    <Button
-      ref={active ? selectionRef : undefined}
-      type="button"
-      variant={null}
-      size="icon"
-      aria-label={label}
-      aria-current={active ? "page" : undefined}
-      title={label}
-      onClick={() => onClick()}
-      onFocus={onIntent}
-      onPointerEnter={onIntent}
-      className={cn(
-        "host-no-drag h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-        active
-          ? "bg-sidebar-foreground/[0.08] text-sidebar-foreground dark:bg-white/[0.1]"
-          : "text-muted-foreground/80 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/[0.06]",
-      )}
-    >
-      {icon}
-    </Button>
+    />
   );
 }
 
@@ -374,13 +274,13 @@ function SidebarActionButton({
   selectionRef,
 }: {
   label: string;
-  icon: ReactNode;
+  icon: React.ReactNode;
   onClick: () => void;
   active?: boolean;
   className?: string;
   shortcut?: string;
   ariaKeyShortcuts?: string;
-  selectionRef?: RefObject<HTMLButtonElement>;
+  selectionRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const title = shortcut ? `${label} (${shortcut})` : undefined;
 
